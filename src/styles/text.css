@@ -9,4 +9,18 @@
 		font-weight: 500;
 		color: var(--color-text-description);
 	}
+
+	.field {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		justify-content: stretch;
+		gap: 0.25rem;
+	}
+
+	.field-title {
+		font-weight: 700;
+		font-size: 1rem;
+		color: var(--color-base-content);
+	}
 }

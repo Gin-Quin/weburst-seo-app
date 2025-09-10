@@ -48,6 +48,7 @@
 	/* Custom colors */
 	--color-background: #fcfcfc;
 	--color-border: #eeeeee;
+	--color-purple: #8c52ff;
 
 	/* border radius */
 	--radius-selector: 1rem;
@@ -92,6 +93,8 @@
 	--text-xl: 1.5rem;
 	--text-2xl: 1.75rem;
 	--text-3xl: 2rem;
+	--text-4xl: 2.25rem;
+	--text-5xl: 2.5rem;
 }
 
 *:focus,

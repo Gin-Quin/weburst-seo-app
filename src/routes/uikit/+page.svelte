@@ -1,7 +1,6 @@
 <script lang="ts">
 	import IconDownloadSimple from "phosphor-icons-svelte/IconDownloadSimpleRegular.svelte";
 	import IconArrowUpRegular from "phosphor-icons-svelte/IconArrowUpRegular.svelte";
-	import IconInfoRegular from "phosphor-icons-svelte/IconInfoRegular.svelte";
 	import Alert from "$lib/ui/Alert.svelte";
 </script>
 

@@ -32,6 +32,9 @@
 	.text-error {
 		color: var(--color-error-content);
 	}
+	.text-purple {
+		color: var(--color-purple);
+	}
 
 	.bg-base-100 {
 		background-color: var(--color-base-10);
@@ -107,5 +110,8 @@
 	}
 	.bg-error-content {
 		background-color: var(--color-error-content);
+	}
+	.bg-purple {
+		background-color: var(--color-purple);
 	}
 }
