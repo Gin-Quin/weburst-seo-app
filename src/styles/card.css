@@ -1,0 +1,27 @@
+@layer utilities {
+	.card {
+		border-radius: 1.25rem;
+		border: 1px solid;
+		border-color: var(--color-border);
+	}
+
+	.card > header {
+		@apply col;
+		gap: 0.25rem;
+		width: 100%;
+		padding-inline: 1.25rem;
+		padding-block: 0.75rem;
+		border-bottom: 1px solid var(--color-border);
+
+		/*& + main {
+			padding-block-start: 0.75rem;
+		}*/
+	}
+
+	.card > main {
+		@apply col;
+		width: 100%;
+		padding-inline: 1.25rem;
+		padding-block: 0.75rem;
+	}
+}

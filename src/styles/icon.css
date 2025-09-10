@@ -1,0 +1,11 @@
+@utility icon {
+	font-size: 1.5em;
+}
+
+@utility icon-small {
+	font-size: 1em;
+}
+
+@utility icon-large {
+	font-size: 2em;
+}

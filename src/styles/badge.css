@@ -1,0 +1,21 @@
+@layer utilities {
+	.badge {
+		@aaply center text-small;
+		font-weight: 500;
+		gap: 0.15rem;
+		height: 1.625rem;
+		padding-inline: 0.4rem;
+		border-radius: 0.3125rem;
+		border: none;
+	}
+
+	.badge-info-magenta {
+		background-color: var(--color-info-magenta);
+		color: var(--color-info-magenta-content);
+	}
+
+	.badge-info-purple {
+		background-color: var(--color-info-magenta);
+		color: var(--color-info-magenta-content);
+	}
+}

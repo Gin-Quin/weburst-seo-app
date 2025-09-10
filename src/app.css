@@ -1,0 +1,143 @@
+@import "tailwindcss";
+
+@plugin "daisyui" {
+	theme: "weburst";
+}
+
+@import "./styles/color.css";
+@import "./styles/button.css";
+@import "./styles/icon.css";
+@import "./styles/input.css";
+@import "./styles/text.css";
+@import "./styles/card.css";
+@import "./styles/badge.css";
+@import "./styles/menu.css";
+
+@plugin "daisyui/theme" {
+	name: "weburst";
+	default: true; /* set as default */
+	prefersdark: false; /* set as default dark mode (prefers-color-scheme:dark) */
+	color-scheme: light; /* color of browser-provided UI */
+
+	--color-base-100: white;
+	--color-base-200: #fcfcfc;
+	--color-base-300: #faf8ff;
+	--color-base-content: #111111;
+	--color-primary: #9453f4;
+	--color-primary-content: #fff;
+	--color-secondary: #faf8ff;
+	--color-secondary-content: #000;
+	--color-accent: #00ff19;
+	--color-neutral: #111111;
+	--color-neutral-content: #fff;
+	--color-info: #e9f6ff;
+	--color-info-content: #1c596f;
+	--color-info-purple: #f2e9ff;
+	--color-info-purple-content: #401c6f;
+	--color-info-magenta: #ffe6f4;
+	--color-info-magenta-content: #ab0d7c;
+	--color-info: #e9f6ff;
+	--color-info-content: #1c596f;
+	--color-success: #e9ffee;
+	--color-success-content: #1c6f2f;
+	--color-warning: #fff4e6;
+	--color-warning-content: #ab6e0d;
+	--color-error: #fcf4f5;
+	--color-error-content: #ff5255;
+
+	/* Custom colors */
+	--color-background: #fcfcfc;
+	--color-border: #eeeeee;
+
+	/* border radius */
+	--radius-selector: 1rem;
+	--radius-field: 0.25rem;
+	--radius-box: 0.5rem;
+
+	/* base sizes */
+	--size-selector: 0.25rem;
+	--size-field: 0.25rem;
+
+	/* border size */
+	--border: 1px;
+
+	/* effects */
+	--depth: 1;
+	--noise: 0;
+}
+
+@theme {
+	--font-display: "Satoshi", "sans-serif";
+	--font-primary: "Satoshi";
+	--font-secondary: "Inter";
+
+	--color-text-description: #6b6b6b;
+	--color-border: #eff0f2;
+
+	--spacing: 0.25rem;
+	--spacing-small: 0.5rem;
+	--spacing-medium: 1rem;
+	--spacing-large: 2rem;
+
+	--radius: 2.5rem;
+	--radius-small: 0.5rem;
+
+	--text-xs: 0.75rem;
+	--text-sm: 0.875rem;
+	--text-small: 0.875rem;
+	--text-md: 1rem;
+	--text-medium: 1rem;
+	--text-lg: 1.25rem;
+	--text-large: 1.25rem;
+	--text-xl: 1.5rem;
+	--text-2xl: 1.75rem;
+	--text-3xl: 2rem;
+}
+
+*:focus,
+*:focus-within {
+	outline: none;
+}
+
+*:focus-visible,
+label:focus-within,
+select:focus-within {
+	border-color: var(--color-primary) !important;
+}
+
+@utility center {
+	@apply flex justify-center items-center;
+}
+
+@utility rounded-base {
+	border-radius: var(--rounded-base);
+}
+
+@utility row {
+	@apply flex flex-row;
+}
+
+@utility col {
+	@apply flex flex-col;
+}
+
+@utility bold {
+	@apply font-bold;
+}
+
+@utility text-base {
+	font-size: 1rem;
+	line-height: 1em;
+	letter-spacing: 0.003em;
+}
+
+@utility text-h1 {
+	font-size: 2rem;
+	font-weight: bold;
+	line-height: 1.2;
+	margin-bottom: 1rem;
+}
+
+html {
+	font-family: var(--font-primary);
+}

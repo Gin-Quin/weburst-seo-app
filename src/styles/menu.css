@@ -1,0 +1,18 @@
+@layer utilities {
+	.menu {
+		@apply text-xs bold px-0 py-1;
+		border: 1px solid var(--color-border);
+		border-radius: 0.75rem;
+		overflow: hidden;
+
+		& a {
+			border-radius: 0 !important;
+		}
+	}
+
+	.menu-active {
+		color: var(--color-success-content) !important;
+		background-color: var(--color-success) !important;
+		box-shadow: none !important;
+	}
+}

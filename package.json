@@ -1,0 +1,38 @@
+{
+	"name": "weburst-seo-app",
+	"private": true,
+	"version": "0.0.1",
+	"type": "module",
+	"scripts": {
+		"dev": "nodemon --watch .git/HEAD --exec 'vite dev'",
+		"build": "vite build",
+		"preview": "vite preview",
+		"prepare": "svelte-kit sync || echo ''",
+		"postinstall": "bun scripts/postinstall.ts",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"db:push": "drizzle-kit push",
+		"db:generate": "drizzle-kit generate",
+		"db:migrate": "drizzle-kit migrate",
+		"db:studio": "drizzle-kit studio",
+		"turso:dev": "turso dev --db-file ./data/$(git branch --show-current).db"
+	},
+	"devDependencies": {
+		"@libsql/client": "^0.15.15",
+		"@sveltejs/adapter-auto": "^6.0.0",
+		"@sveltejs/kit": "^2.22.0",
+		"@sveltejs/vite-plugin-svelte": "^6.0.0",
+		"@tailwindcss/vite": "^4.0.0",
+		"@types/node": "^22",
+		"daisyui": "^5.1.9",
+		"drizzle-kit": "^0.31.4",
+		"drizzle-orm": "^0.44.5",
+		"nodemon": "^3.1.10",
+		"phosphor-icons-svelte": "^2.1.0",
+		"svelte": "^5.0.0",
+		"svelte-check": "^4.0.0",
+		"tailwindcss": "^4.0.0",
+		"typescript": "^5.0.0",
+		"vite": "^7.0.4"
+	}
+}

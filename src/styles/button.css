@@ -1,0 +1,20 @@
+@layer utilities {
+	.btn {
+		@apply row gap-2.5 px-3 py-1.75 rounded-small;
+
+		&:not(.btn-primary, .btn-secondary) {
+			background-color: inherit;
+			border-color: var(--color-border);
+		}
+	}
+
+	.btn-large,
+	.btn-primary,
+	.btn-secondary {
+		@apply rounded px-8 center gap-2.5 h-14;
+	}
+
+	.btn-medium {
+		@apply rounded px-5 center gap-2.5 h-7;
+	}
+}

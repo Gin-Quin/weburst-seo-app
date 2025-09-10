@@ -1,0 +1,12 @@
+@layer utilities {
+	.title {
+		@apply text-xl bold;
+		letter-spacing: 0;
+	}
+
+	.description {
+		@apply text-small;
+		font-weight: 500;
+		color: var(--color-text-description);
+	}
+}
