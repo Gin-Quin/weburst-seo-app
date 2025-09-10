@@ -39,6 +39,7 @@
 		"@types/bun": "latest"
 	},
 	"dependencies": {
-		"@clickhouse/client": "^1.12.1"
+		"@clickhouse/client": "^1.12.1",
+		"@paralleldrive/cuid2": "^2.2.2"
 	}
 }
