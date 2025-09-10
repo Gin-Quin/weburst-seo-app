@@ -1,0 +1,18 @@
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: weburst-seo-clickhouse
+    restart: always
+    environment:
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=password
+    ports:
+      - "8125:8123" # HTTP
+      - "9005:9000" # Native TCP
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./clickhouse/config.d:/etc/clickhouse-server/config.d
+      - ./clickhouse/config/users.xml:/etc/clickhouse-server/users.xml
+
+volumes:
+  clickhouse_data:

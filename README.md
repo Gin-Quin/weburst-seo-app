@@ -54,3 +54,12 @@ bun run build
 ```
 
 You can preview the production build with `bun run preview`.
+
+## Clickhouse
+
+Go to [http://localhost:8125/] to access the Clickhouse server.
+
+To connect to the database, use the following credentials:
+
+- User: default
+- Password: password
