@@ -1,7 +1,7 @@
 <script lang="ts">
 	import IconDownloadSimple from "phosphor-icons-svelte/IconDownloadSimpleRegular.svelte";
 	import IconArrowUpRegular from "phosphor-icons-svelte/IconArrowUpRegular.svelte";
-	import Alert from "$lib/ui/Alert.svelte";
+	import Alert from "$lib/components/Alert.svelte";
 </script>
 
 <div class="col gap-10 p-10">

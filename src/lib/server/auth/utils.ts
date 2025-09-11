@@ -1,165 +1,163 @@
-import { nanoid } from "nanoid";
-import { createId } from "@paralleldrive/cuid2";
 import { db } from "$lib/server/db";
-import { magicLinkTokens, users, oauthAccounts } from "$lib/server/db/schema";
-import { eq, and } from "drizzle-orm";
-import type { RequestEvent } from "@sveltejs/kit";
-import { lucia } from "./lucia";
-
-export function generateId(): string {
-	return createId();
-}
+import { authenticationTokens, sessions, users, type User } from "$lib/server/db/schema";
+import { MINUTE, MONTH } from "$lib/timeUnits";
+import { createId } from "@paralleldrive/cuid2";
+import { and, eq } from "drizzle-orm";
+import { nanoid } from "nanoid";
 
 export function generateToken(): string {
 	return nanoid(32);
 }
 
-export async function createMagicLinkToken(email: string) {
-	const token = generateToken();
-	const id = generateId();
-	const expiresAt = Date.now() + 1000 * 60 * 15; // 15 minutes
+export function generateCode(): string {
+	return new Array(6)
+		.fill(0)
+		.map(() => Math.floor(Math.random() * 10))
+		.join("");
+}
 
-	await db.insert(magicLinkTokens).values({
+export async function createAuthenticationCodes(
+	email: string,
+): Promise<{ magicLinkToken: string; code: string }> {
+	const id = createId();
+	const code = generateCode();
+	const magicLinkToken = generateToken();
+	const expiresAt = Date.now() + 15 * MINUTE;
+
+	await db.delete(authenticationTokens).where(eq(authenticationTokens.email, email));
+
+	await db.insert(authenticationTokens).values({
 		id,
 		email,
-		token,
 		expiresAt,
+		code,
+		magicLinkToken,
 	});
 
-	return token;
+	return { code, magicLinkToken };
 }
 
-export async function verifyMagicLinkToken(token: string) {
-	const result = await db
+export async function getUserFromBearerToken(token: string): Promise<User | null> {
+	const session = await db.query.sessions.findFirst({
+		where: eq(sessions.id, token),
+	});
+	if (!session) {
+		console.log(`Session ${token} not found`);
+		return null;
+	}
+	return getUserById(session.userId);
+}
+
+export async function createSession(userId: string): Promise<string> {
+	const bearer = createId();
+
+	await db.insert(sessions).values({
+		id: bearer,
+		userId,
+		expiresAt: Date.now() + 3 * MONTH,
+	});
+
+	return bearer;
+}
+
+export async function getBearerTokenFromMagicLinkToken(
+	email: string,
+	token: string,
+): Promise<string | null> {
+	console.log("getBearerTokenFromMagicLinkToken called");
+	const [verification] = await db
 		.select()
-		.from(magicLinkTokens)
-		.where(eq(magicLinkTokens.token, token))
+		.from(authenticationTokens)
+		.where(
+			and(eq(authenticationTokens.email, email), eq(authenticationTokens.magicLinkToken, token)),
+		)
 		.limit(1);
 
-	if (result.length === 0) {
+	if (!verification) {
+		console.log("Verification not found");
 		return null;
 	}
 
-	const magicLink = result[0];
-
-	if (Date.now() > magicLink.expiresAt) {
-		await db
-			.delete(magicLinkTokens)
-			.where(eq(magicLinkTokens.id, magicLink.id));
+	if (Date.now() > verification.expiresAt) {
+		console.log("Token expired");
+		await db.delete(authenticationTokens).where(eq(authenticationTokens.id, verification.id));
 		return null;
 	}
 
-	return magicLink;
-}
-
-export async function createUserFromEmail(
-	email: string,
-	firstName?: string,
-	lastName?: string,
-) {
-	const userId = generateId();
-
-	await db.insert(users).values({
-		id: userId,
-		email,
-		firstName: firstName || email.split("@")[0],
-		lastName: lastName || "",
-		role: "manager", // Default role
-		emailVerified: true,
-		createdAt: Date.now(),
-		updatedAt: Date.now(),
-	});
-
-	return userId;
-}
-
-export async function getUserByEmail(email: string) {
-	const result = await db
-		.select()
+	const [user] = await db
+		.select({ id: users.id })
 		.from(users)
 		.where(eq(users.email, email))
 		.limit(1);
 
-	return result.length > 0 ? result[0] : null;
+	if (!user) {
+		console.log("User not found");
+		return null;
+	}
+
+	void db.delete(authenticationTokens).where(eq(authenticationTokens.id, verification.id));
+
+	return await createSession(user.id);
 }
 
-export async function createSessionAndSetCookie(
-	userId: string,
-	event: RequestEvent,
-) {
-	const session = await lucia.createSession(userId, {});
-	const sessionCookie = lucia.createSessionCookie(session.id);
-
-	event.cookies.set(sessionCookie.name, sessionCookie.value, {
-		path: ".",
-		...sessionCookie.attributes,
-	});
-
-	return session;
-}
-
-export async function invalidateSession(sessionId: string) {
-	await lucia.invalidateSession(sessionId);
-}
-
-export async function getUserFromOAuth(
-	providerId: string,
-	providerUserId: string,
-) {
-	const result = await db
-		.select({ user: users })
-		.from(oauthAccounts)
-		.where(
-			and(
-				eq(oauthAccounts.providerId, providerId),
-				eq(oauthAccounts.providerUserId, providerUserId),
-			),
-		)
-		.innerJoin(users, eq(oauthAccounts.userId, users.id))
+export async function getBearerTokenFromCode(email: string, code: string): Promise<string | null> {
+	console.log("getBearerTokenFromCode called");
+	const [verification] = await db
+		.select()
+		.from(authenticationTokens)
+		.where(and(eq(authenticationTokens.email, email)))
 		.limit(1);
 
-	return result.length > 0 ? result[0].user : null;
+	console.log("verification:", verification);
+
+	if (!verification) {
+		console.log("Verification not found");
+		return null;
+	}
+
+	if (Date.now() > verification.expiresAt || verification.codeAttempts > 5) {
+		console.log("Token expired or max attempts reached");
+		await db.delete(authenticationTokens).where(eq(authenticationTokens.id, verification.id));
+		return null;
+	}
+
+	if (code !== verification.code) {
+		console.log("Invalid code");
+		await db
+			.update(authenticationTokens)
+			.set({ codeAttempts: verification.codeAttempts + 1 })
+			.where(eq(authenticationTokens.id, verification.id));
+		return null;
+	}
+
+	const [user] = await db
+		.select({ id: users.id })
+		.from(users)
+		.where(eq(users.email, email))
+		.limit(1);
+
+	if (!user) {
+		console.log("User not found");
+		return null;
+	}
+
+	return await createSession(user.id);
 }
 
-export async function createUserFromOAuth(
-	providerId: string,
-	providerUserId: string,
-	email: string,
-	firstName: string,
-	lastName: string,
-) {
-	const userId = generateId();
-
-	await db.transaction(async (tx) => {
-		await tx.insert(users).values({
-			id: userId,
-			email,
-			firstName,
-			lastName,
-			role: "manager", // Default role
-			emailVerified: true,
-			createdAt: Date.now(),
-			updatedAt: Date.now(),
-		});
-
-		await tx.insert(oauthAccounts).values({
-			providerId,
-			providerUserId,
-			userId,
-		});
+export async function getUserByEmail(email: string) {
+	const user = await db.query.users.findFirst({
+		where: eq(users.email, email),
 	});
-
-	return userId;
+	return user ?? null;
 }
 
-export async function linkOAuthAccount(
-	userId: string,
-	providerId: string,
-	providerUserId: string,
-) {
-	await db.insert(oauthAccounts).values({
-		providerId,
-		providerUserId,
-		userId,
+export async function getUserById(id: string) {
+	const user = await db.query.users.findFirst({
+		where: eq(users.id, id),
 	});
+	if (!user) {
+		console.log(`User ${id} not found`);
+		return null;
+	}
+	return user;
 }

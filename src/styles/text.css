@@ -23,4 +23,9 @@
 		font-size: 1rem;
 		color: var(--color-base-content);
 	}
+
+	.field-error {
+		font-weight: 600;
+		color: var(--color-error-content);
+	}
 }

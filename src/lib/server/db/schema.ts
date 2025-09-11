@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import type { UserId } from "lucia";
 
 export const users = sqliteTable("users", {
@@ -14,6 +14,7 @@ export const users = sqliteTable("users", {
 	createdAt: integer("created_at").notNull().default(Date.now()),
 	updatedAt: integer("updated_at").notNull().default(Date.now()),
 });
+export type User = typeof users.$inferSelect;
 
 export const sessions = sqliteTable("sessions", {
 	id: text("id").primaryKey(),
@@ -23,6 +24,7 @@ export const sessions = sqliteTable("sessions", {
 		.references(() => users.id, { onDelete: "cascade" }),
 	expiresAt: integer("expires_at").notNull(),
 });
+export type Session = typeof sessions.$inferSelect;
 
 export const oauthAccounts = sqliteTable("oauth_accounts", {
 	providerId: text("provider_id").primaryKey(),
@@ -32,32 +34,12 @@ export const oauthAccounts = sqliteTable("oauth_accounts", {
 		.references(() => users.id, { onDelete: "cascade" }),
 });
 
-export const emailVerificationTokens = sqliteTable(
-	"email_verification_tokens",
-	{
-		id: text("id").primaryKey(),
-		userId: text("user_id")
-			.notNull()
-			.references(() => users.id, { onDelete: "cascade" }),
-		email: text("email").notNull(),
-		token: text("token").notNull().unique(),
-		expiresAt: integer("expires_at").notNull(),
-	},
-);
-
-export const passwordResetTokens = sqliteTable("password_reset_tokens", {
-	id: text("id").primaryKey(),
-	userId: text("user_id")
-		.notNull()
-		.references(() => users.id, { onDelete: "cascade" }),
-	token: text("token").notNull().unique(),
-	expiresAt: integer("expires_at").notNull(),
-});
-
-export const magicLinkTokens = sqliteTable("magic_link_tokens", {
+export const authenticationTokens = sqliteTable("authorization_tokens", {
 	id: text("id").primaryKey(),
 	email: text("email").notNull(),
-	token: text("token").notNull().unique(),
+	code: text("code").notNull(),
+	codeAttempts: integer("code_attempts").notNull().default(0),
+	magicLinkToken: text("magic_link_code").notNull(),
 	expiresAt: integer("expires_at").notNull(),
 });
 
@@ -66,11 +48,10 @@ export const projects = sqliteTable("projects", {
 	clientName: text("client_name").notNull(),
 	domain: text("domain").notNull(),
 	websiteUrl: text("website_url").notNull(),
-	type: text("type")
-		.$type<"audit" | "redesign" | "subscription" | "prospect">()
-		.notNull(),
+	type: text("type").$type<"audit" | "redesign" | "subscription" | "prospect">().notNull(),
 	keywordAnalysisPerMonth: integer("keyword_analysis_per_month").notNull(),
 });
+export type Project = typeof projects.$inferSelect;
 
 // ------------------------- RELATIONS ------------------------- //
 
@@ -81,8 +62,6 @@ export const usersRelations = relations(users, ({ one, many }) => ({
 	}),
 	sessions: many(sessions),
 	oauthAccounts: many(oauthAccounts),
-	emailVerificationTokens: many(emailVerificationTokens),
-	passwordResetTokens: many(passwordResetTokens),
 }));
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
@@ -98,26 +77,6 @@ export const oauthAccountsRelations = relations(oauthAccounts, ({ one }) => ({
 		references: [users.id],
 	}),
 }));
-
-export const emailVerificationTokensRelations = relations(
-	emailVerificationTokens,
-	({ one }) => ({
-		user: one(users, {
-			fields: [emailVerificationTokens.userId],
-			references: [users.id],
-		}),
-	}),
-);
-
-export const passwordResetTokensRelations = relations(
-	passwordResetTokens,
-	({ one }) => ({
-		user: one(users, {
-			fields: [passwordResetTokens.userId],
-			references: [users.id],
-		}),
-	}),
-);
 
 export const projectsRelations = relations(projects, ({ many }) => ({
 	users: many(users),

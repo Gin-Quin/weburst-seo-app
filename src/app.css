@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@import "./shadcn.css";
+
 @plugin "daisyui" {
 	theme: "weburst";
 }
@@ -95,6 +97,10 @@
 	--text-3xl: 2rem;
 	--text-4xl: 2.25rem;
 	--text-5xl: 2.5rem;
+}
+
+* {
+	box-sizing: border-box;
 }
 
 *:focus,

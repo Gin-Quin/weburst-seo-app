@@ -1,35 +1,19 @@
-import { lucia } from "$lib/server/auth/lucia";
-import type { Handle } from "@sveltejs/kit";
+import type { HandleFetch } from "@sveltejs/kit";
 
-export const handle: Handle = async ({ event, resolve }) => {
-	const sessionId = event.cookies.get(lucia.sessionCookieName);
-	
-	if (!sessionId) {
-		event.locals.user = null;
-		event.locals.session = null;
-		return resolve(event);
-	}
+export const handleFetch: HandleFetch = async ({ request, fetch }) => {
+	console.log("Handling fetch request:", request);
+	console.log("Localstorage:", localStorage);
+	const token = localStorage.getItem("bearer");
 
-	const { session, user } = await lucia.validateSession(sessionId);
-	
-	if (session && session.fresh) {
-		const sessionCookie = lucia.createSessionCookie(session.id);
-		event.cookies.set(sessionCookie.name, sessionCookie.value, {
-			path: ".",
-			...sessionCookie.attributes
+	if (token) {
+		console.log("Token found:", token);
+		request = new Request(request, {
+			headers: {
+				...Object.fromEntries(request.headers),
+				Authorization: `Bearer ${token}`,
+			},
 		});
 	}
-	
-	if (!session) {
-		const sessionCookie = lucia.createBlankSessionCookie();
-		event.cookies.set(sessionCookie.name, sessionCookie.value, {
-			path: ".",
-			...sessionCookie.attributes
-		});
-	}
-	
-	event.locals.user = user;
-	event.locals.session = session;
-	
-	return resolve(event);
+
+	return fetch(request);
 };
