@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { goto } from "$app/navigation";
 	import Loader from "$lib/components/Loader.svelte";
-	import { context } from "$lib/stores/context.svelte";
+	import { context, setContextUser } from "$lib/stores/context.svelte";
+	import { cubicIn } from "svelte/easing";
 	import { fade } from "svelte/transition";
-	import { getCurrentUser } from "../login/actions.remote";
-	import { cubicIn, cubicInOut } from "svelte/easing";
+	import { getCurrentUser } from "../(api)/login.remote";
 
 	let { children } = $props();
 
@@ -22,8 +22,7 @@
 					// localStorage.removeItem("bearer");
 					goto("/login");
 				} else {
-					localStorage.setItem("user", JSON.stringify(user));
-					context.user = user;
+					setContextUser(user);
 				}
 			});
 		} else {

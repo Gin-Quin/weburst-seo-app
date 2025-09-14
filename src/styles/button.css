@@ -4,7 +4,7 @@
 
 		&:not(.btn-primary, .btn-secondary) {
 			background-color: inherit;
-			border-color: var(--color-border);
+			border-color: var(--input);
 		}
 	}
 

@@ -14,6 +14,7 @@
 @import "./styles/card.css";
 @import "./styles/badge.css";
 @import "./styles/menu.css";
+@import "./styles/modals.css";
 
 @plugin "daisyui/theme" {
 	name: "weburst";
@@ -51,6 +52,8 @@
 	--color-background: #fcfcfc;
 	--color-border: #eeeeee;
 	--color-purple: #8c52ff;
+	--color-text-light: #656565;
+	--color-neutral-fade: rgba(0, 0, 0, 0.2);
 
 	/* border radius */
 	--radius-selector: 1rem;
@@ -90,17 +93,21 @@
 	--text-small: 0.875rem;
 	--text-md: 1rem;
 	--text-medium: 1rem;
-	--text-lg: 1.25rem;
-	--text-large: 1.25rem;
-	--text-xl: 1.5rem;
-	--text-2xl: 1.75rem;
-	--text-3xl: 2rem;
-	--text-4xl: 2.25rem;
+	--text-lg: 1.125rem;
+	--text-large: 1.125rem;
+	--text-xl: 1.25rem;
+	--text-2xl: 1.5rem;
+	--text-3xl: 1.75rem;
+	--text-4xl: 2rem;
 	--text-5xl: 2.5rem;
 }
 
 * {
 	box-sizing: border-box;
+}
+
+html {
+	overflow-y: scroll;
 }
 
 *:focus,

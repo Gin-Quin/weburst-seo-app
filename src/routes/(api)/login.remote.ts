@@ -1,42 +1,18 @@
-import { command, getRequestEvent, query } from "$app/server";
+import { command, query } from "$app/server";
 import {
 	createAuthenticationCodes,
 	getBearerTokenFromCode,
 	getBearerTokenFromMagicLinkToken,
 	getUserByEmail,
-	getUserById,
 } from "$lib/server/auth/utils";
 import { db } from "$lib/server/db";
-import { sessions, type User } from "$lib/server/db/schema";
+import { sessions } from "$lib/server/db/schema";
 import { sendSignInEmail } from "$lib/server/email";
 import { eq } from "drizzle-orm";
 import * as v from "valibot";
+import { getRequestBearerToken, getRequestUser } from "./utilities";
 
-const getRequestBearerToken = (): string | null => {
-	const { request } = getRequestEvent();
-	return request.headers.get("authorization")?.slice("Bearer ".length) ?? null;
-};
-
-const getRequestUserId = async (): Promise<string | null> => {
-	const bearerToken = getRequestBearerToken();
-	console.log("Getting current user with bearer token:", bearerToken);
-
-	if (!bearerToken) return null;
-
-	const session = await db.query.sessions.findFirst({
-		where: eq(sessions.id, bearerToken),
-	});
-
-	console.log("Found session:", session);
-
-	return session?.userId ?? null;
-};
-
-export const getCurrentUser = query(async (): Promise<User | null> => {
-	const userId = await getRequestUserId();
-	if (!userId) return null;
-	return await getUserById(userId);
-});
+export const getCurrentUser = query(getRequestUser);
 
 export const clearServerSession = command(async () => {
 	const bearerToken = getRequestBearerToken();

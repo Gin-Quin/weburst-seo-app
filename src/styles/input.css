@@ -5,6 +5,11 @@
 		height: 3.5rem;
 		padding-inline: 1.25rem;
 		font-size: 1rem;
+
+		&:is(:disabled, [disabled]),
+		&:has(> input[disabled]) {
+			border-color: var(--input-color);
+		}
 	}
 
 	.checkbox {

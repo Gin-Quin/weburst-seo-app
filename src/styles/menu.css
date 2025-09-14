@@ -1,6 +1,6 @@
 @layer utilities {
 	.menu {
-		@apply text-xs bold px-0 py-1;
+		@apply text-sm bold px-0 py-1;
 		border: 1px solid var(--color-border);
 		border-radius: 0.75rem;
 		overflow: hidden;

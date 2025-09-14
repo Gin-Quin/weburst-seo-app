@@ -5,7 +5,7 @@
 	import { defineContent } from "$lib/i18n/locale.svelte";
 	import IconEnvelopeRegular from "phosphor-icons-svelte/IconEnvelopeRegular.svelte";
 	import IconSignInRegular from "phosphor-icons-svelte/IconSignInRegular.svelte";
-	import { sendMagicLink, verifyCode } from "./actions.remote";
+	import { sendMagicLink, verifyCode } from "../(api)/login.remote";
 
 	type MagicLinkResponse = Awaited<ReturnType<typeof sendMagicLink>>;
 
@@ -109,7 +109,6 @@
 					{#if stage == "email"}
 						<div class="field">
 							<div class="field-title">{$content.email}</div>
-
 							<label class="input w-full">
 								<IconEnvelopeRegular class="icon" />
 								<input

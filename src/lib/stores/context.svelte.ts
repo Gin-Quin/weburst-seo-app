@@ -9,3 +9,8 @@ export type Context =
 	  };
 
 export const context = $state<Context>({ user: null });
+
+export const setContextUser = (user: User | null) => {
+	context.user = user;
+	localStorage.setItem("user", JSON.stringify(user));
+};

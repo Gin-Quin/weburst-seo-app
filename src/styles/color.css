@@ -35,6 +35,9 @@
 	.text-purple {
 		color: var(--color-purple);
 	}
+	.text-light {
+		color: var(--color-text-light);
+	}
 
 	.bg-base-100 {
 		background-color: var(--color-base-100);
@@ -113,5 +116,8 @@
 	}
 	.bg-purple {
 		background-color: var(--color-purple);
+	}
+	.bg-neutral-fade {
+		background-color: var(--color-neutral-fade);
 	}
 }

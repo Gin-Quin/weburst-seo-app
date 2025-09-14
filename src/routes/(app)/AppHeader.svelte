@@ -1,21 +1,38 @@
 <script lang="ts">
+	import { goto } from "$app/navigation";
 	import WeBurstLogo from "$lib/assets/images/WeBurst.png";
+	import Avatar from "$lib/components/Avatar.svelte";
 	import { defineContent } from "$lib/i18n/locale.svelte";
 	import { context } from "$lib/stores/context.svelte";
-	import { getInitials } from "$lib/strings/getInitials";
-	import IconPlusRegular from "phosphor-icons-svelte/IconPlusRegular.svelte";
 	import IconCaretDownRegular from "phosphor-icons-svelte/IconCaretDownRegular.svelte";
-	import { clearServerSession } from "../login/actions.remote";
-	import { goto } from "$app/navigation";
+	import IconGearRegular from "phosphor-icons-svelte/IconGearRegular.svelte";
+	import IconPlusRegular from "phosphor-icons-svelte/IconPlusRegular.svelte";
+	import IconSignOutRegular from "phosphor-icons-svelte/IconSignOutRegular.svelte";
+	import UserSettingsDialog from "./UserSettingsDialog.svelte";
+	import { clearServerSession } from "../(api)/login.remote";
+
+	let userSettingsDialog: HTMLDialogElement;
 
 	const content = defineContent({
 		en: {
 			createProject: "New project",
+			settings: "Settings",
 			logOut: "Log out",
+			roles: {
+				admin: "Admin",
+				leader: "Project Leader",
+				manager: "Member",
+			},
 		},
 		fr: {
 			createProject: "Créer un projet",
+			settings: "Paramètres",
 			logOut: "Se déconnecter",
+			roles: {
+				admin: "Admin",
+				leader: "Chef de projet",
+				manager: "Membre",
+			},
 		},
 	});
 
@@ -28,6 +45,8 @@
 	}
 </script>
 
+<UserSettingsDialog bind:ref={userSettingsDialog} />
+
 <div
 	class="AppHeader h-24 row w-full justify-between items-center gap-5 px-10 bg-base-100"
 >
@@ -39,17 +58,13 @@
 			{$content.createProject}
 		</button>
 
-		<div class="dropdown">
+		<div class="dropdown dropdown-bottom dropdown-end">
 			<div
 				tabindex="0"
 				role="button"
 				class="row center h-12 gap-3 p-1 cursor-pointer active:translate-y-[1px]"
 			>
-				<div class="avatar avatar-placeholder">
-					<div class="bg-neutral text-neutral-content w-10 rounded-full">
-						{getInitials(context.user!.firstName, context.user!.lastName)}
-					</div>
-				</div>
+				<Avatar />
 
 				{context.user!.firstName}
 				{context.user!.lastName}
@@ -61,9 +76,35 @@
 
 			<ul
 				tabindex="0"
-				class="dropdown-content menu bg-base-100 rounded-box z-1 w-52 p-2 shadow-sm"
+				class="dropdown-content menu bg-base-100 rounded-box z-1 w-[18.75rem] shadow-md"
 			>
-				<li><a onclick={logout}>{$content.logOut}</a></li>
+				<header class="col gap-3 center p-4 text-light">
+					<Avatar />
+
+					<div class="col center">
+						<span class="text-lg">
+							{$content.roles[context.user!.role]}
+						</span>
+						<span class="text-md font-medium">
+							{context.user!.email}
+						</span>
+					</div>
+				</header>
+
+				<hr class="mb-1 text-border" />
+
+				<li>
+					<a onclick={() => userSettingsDialog.showModal()}>
+						<IconGearRegular class="icon" />
+						{$content.settings}
+					</a>
+				</li>
+				<li>
+					<a onclick={logout}>
+						<IconSignOutRegular class="icon" />
+						{$content.logOut}
+					</a>
+				</li>
 			</ul>
 		</div>
 	</div>
@@ -76,5 +117,9 @@
 
 	.dropdown:focus-within .Caret {
 		transform: rotate(180deg);
+	}
+
+	.dropdown-content {
+		transform: translateY(0.75rem);
 	}
 </style>

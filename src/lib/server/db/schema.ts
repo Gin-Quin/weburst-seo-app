@@ -2,19 +2,29 @@ import { relations } from "drizzle-orm";
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import type { UserId } from "lucia";
 
-export const users = sqliteTable("users", {
+export type Role = "admin" | "leader" | "manager";
+
+const usersSchema = {
 	id: text("id").primaryKey(),
 	firstName: text("first_name").notNull(),
 	lastName: text("last_name").notNull(),
-	role: text("role").$type<"admin" | "leader" | "manager">().notNull(),
+	role: text("role").$type<Role>().notNull(),
 	email: text("email").unique().notNull(),
 	projectId: text("project_id"),
 	hashedPassword: text("hashed_password"),
 	emailVerified: integer("email_verified", { mode: "boolean" }).default(false),
 	createdAt: integer("created_at").notNull().default(Date.now()),
 	updatedAt: integer("updated_at").notNull().default(Date.now()),
-});
+} as const;
+
+export const users = sqliteTable("users", usersSchema);
 export type User = typeof users.$inferSelect;
+
+export const deletedUsers = sqliteTable("deleted_users", {
+	...usersSchema,
+	deletedAt: integer("deleted_at").notNull().default(Date.now()),
+});
+export type DeletedUser = typeof deletedUsers.$inferSelect;
 
 export const sessions = sqliteTable("sessions", {
 	id: text("id").primaryKey(),
