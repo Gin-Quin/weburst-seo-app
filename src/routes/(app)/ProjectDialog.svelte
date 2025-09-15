@@ -192,10 +192,18 @@
 					<div class="field-title">{$content.leaders}</div>
 					{#each leaderIds as leaderId, index (leaderId)}
 						<div class="row items-center w-full gap-2">
-							<SelectUser bind:userId={leaderIds[index]} class="grow" />
+							<SelectUser
+								bind:userId={leaderIds[index]}
+								class="grow"
+								exclude={leaderIds.filter((id) => id !== leaderId)}
+							/>
 							<button
 								class="row center icon h-[3.5rem] w-[3.5rem] rounded-full! cursor-pointer"
-								onclick={() => leaderIds.splice(index, 1)}
+								onclick={(event) => {
+									event.preventDefault();
+									event.stopPropagation();
+									leaderIds.splice(index, 1);
+								}}
 							>
 								<IconTrashRegular />
 							</button>

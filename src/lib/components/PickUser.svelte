@@ -40,11 +40,11 @@
 		<label class="select {className}">
 			<IconUserCheckRegular class="icon" />
 			<select class="select {className}" bind:value={pickedUser}>
-				{#each users as user}
-					<option disabled value={null}>
-						{$content.selectUser}
-					</option>
+				<option disabled value={null}>
+					{$content.selectUser}
+				</option>
 
+				{#each users as user}
 					<option value={user.id}>
 						{user.firstName}
 						{user.lastName}

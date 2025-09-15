@@ -14,17 +14,19 @@
 	import UserDialog from "./UserDialog.svelte";
 	import { userRoles } from "$lib/i18n/contents/users";
 
-	let userDialog: HTMLDialogElement;
 	let openProjectDialog: (project?: Project) => void;
+	let openUserDialog: (mode?: "account" | "create") => void;
 
 	const content = defineContent({
 		en: {
 			createProject: "New project",
+			createUser: "New user",
 			settings: "Settings",
 			logOut: "Log out",
 		},
 		fr: {
-			createProject: "Créer un projet",
+			createProject: "Nouveau projet",
+			createUser: "Nouvel utilisateur",
 			settings: "Paramètres",
 			logOut: "Se déconnecter",
 		},
@@ -40,7 +42,7 @@
 </script>
 
 <ProjectDialog bind:openProjectDialog />
-<UserDialog bind:ref={userDialog} />
+<UserDialog bind:openUserDialog />
 
 <div
 	class="AppHeader h-24 row w-full justify-between items-center gap-5 px-10 bg-base-100"
@@ -48,6 +50,16 @@
 	<img src={WeBurstLogo} alt="Weburst Logo" class="h-14" />
 
 	<div class="Actions row items-center gap-4">
+		{#if context.user!.role == "admin"}
+			<button
+				class="btn btn-large h-12! px-6!"
+				onclick={() => openUserDialog("create")}
+			>
+				<IconPlusRegular class="icon" />
+				{$content.createUser}
+			</button>
+		{/if}
+
 		<button
 			class="btn btn-primary h-12! px-6!"
 			onclick={() => openProjectDialog()}
@@ -92,7 +104,7 @@
 				<hr class="mb-1 text-border" />
 
 				<li>
-					<a onclick={() => userDialog.showModal()}>
+					<a onclick={() => openUserDialog()}>
 						<IconGearRegular class="icon" />
 						{$content.settings}
 					</a>

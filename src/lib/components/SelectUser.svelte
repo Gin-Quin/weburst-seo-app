@@ -5,7 +5,12 @@
 	let {
 		class: className = "",
 		userId = $bindable(),
-	}: { class?: string; userId: string } = $props();
+		exclude = [],
+	}: {
+		class?: string;
+		userId: string;
+		exclude?: string[];
+	} = $props();
 </script>
 
 <label class="select {className}">
@@ -14,7 +19,7 @@
 		<svelte:boundary>
 			{#snippet pending()}{/snippet}
 
-			{#each await listUsers() as user}
+			{#each (await listUsers()).filter((user) => !exclude.includes(user.id)) as user}
 				<option value={user.id}>
 					{user.firstName}
 					{user.lastName}
