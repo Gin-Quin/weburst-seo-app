@@ -12,11 +12,12 @@
 		"postinstall": "bun scripts/postinstall.ts",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-		"migrate": "bun db:generate && bun db:migrate",
+		"migrate": "bun db:generate && bun db:push",
 		"db:push": "drizzle-kit push",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
 		"db:studio": "drizzle-kit studio",
+		"db:reset": "rm -rf ./drizzle/* && bun migrate && bun run scripts/createLocalAdmin.ts",
 		"clickhouse:migrate": "bun scripts/clickhouse:migrate.ts",
 		"typesafe-i18n": "typesafe-i18n",
 		"add:component": "bun x shadcn-svelte@latest add button"

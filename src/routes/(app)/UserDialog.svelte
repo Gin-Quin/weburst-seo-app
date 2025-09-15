@@ -6,7 +6,7 @@
 	import IconUserCheckRegular from "phosphor-icons-svelte/IconUserCheckRegular.svelte";
 	import { updateCurrentUser } from "../(api)/users.remote";
 	import { UpdateCurrentUser } from "../(api)/users.schema";
-	import { onMount } from "svelte";
+	import { userRoles } from "$lib/i18n/contents/users";
 
 	let {
 		ref = $bindable(),
@@ -23,11 +23,6 @@
 			role: "Profile Type",
 			save: "Save",
 			cancel: "Cancel",
-			roles: {
-				admin: "Admin",
-				leader: "Project Leader",
-				manager: "Member",
-			},
 		},
 		fr: {
 			title: "Paramètres du compte",
@@ -37,11 +32,6 @@
 			role: "Type de profil",
 			save: "Enregistrer",
 			cancel: "Annuler",
-			roles: {
-				admin: "Admin",
-				leader: "Chef de projet",
-				manager: "Membre",
-			},
 		},
 	});
 
@@ -135,7 +125,7 @@
 						<input
 							class="grow"
 							name="role"
-							value={context.user!.role}
+							value={$userRoles[context.user!.role]}
 							placeholder={$content.role}
 							disabled
 							required

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { db } from "../db";
 import { projects, type Project } from "../db/schema";
 
@@ -24,20 +24,9 @@ export async function createProject(input: ProjectInsert): Promise<Project> {
  * Get a project by its id.
  */
 export async function getProjectById(id: string): Promise<Project | null> {
-	const [row] = await db.select().from(projects).where(eq(projects.id, id)).limit(1);
+	const [row] = await db.select().from(projects).where(and(eq(projects.id, id), isNotNull(projects.deletedAt))).limit(1);
 
 	return row ?? null;
-}
-
-/**
- * List projects with optional pagination.
- */
-export async function listProjects(
-	params: { limit?: number; offset?: number } = {},
-): Promise<Project[]> {
-	const { limit = 100, offset = 0 } = params;
-
-	return db.select().from(projects).limit(limit).offset(offset);
 }
 
 /**
@@ -49,7 +38,7 @@ export async function updateProject(id: string, updates: ProjectUpdate): Promise
 		return getProjectById(id);
 	}
 
-	const [updated] = await db.update(projects).set(updates).where(eq(projects.id, id)).returning();
+	const [updated] = await db.update(projects).set(updates).where(and(eq(projects.id, id), isNotNull(projects.deletedAt))).returning();
 
 	return updated ?? null;
 }
@@ -59,6 +48,5 @@ export async function updateProject(id: string, updates: ProjectUpdate): Promise
  * - Returns the deleted row, or null if not found.
  */
 export async function deleteProject(id: string): Promise<Project | null> {
-	const [deleted] = await db.delete(projects).where(eq(projects.id, id)).returning();
-	return deleted ?? null;
+	return updateProject(id, { deletedAt: Date.now() })
 }

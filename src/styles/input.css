@@ -23,4 +23,21 @@
 			border-color: transparent;
 		}
 	}
+
+	label.select {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		gap: 0.5rem;
+		padding-inline-end: 0;
+
+		& > .select {
+			border-color: transparent;
+			height: 100%;
+			width: auto;
+			flex-grow: 1;
+			padding: 0;
+			margin: 0;
+		}
+	}
 }

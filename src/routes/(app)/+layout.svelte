@@ -5,6 +5,7 @@
 	import { cubicIn } from "svelte/easing";
 	import { fade } from "svelte/transition";
 	import { getCurrentUser } from "../(api)/login.remote";
+	import AppHeader from "./AppHeader.svelte";
 
 	let { children } = $props();
 
@@ -35,6 +36,10 @@
 	<Loader class="h-[100dvh] center" />
 {:else}
 	<div in:fade={{ duration: 400, easing: cubicIn }}>
-		{@render children()}
+		<AppHeader />
+
+		<main>
+			{@render children()}
+		</main>
 	</div>
 {/if}

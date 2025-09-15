@@ -1,13 +1,13 @@
 import { command, query } from "$app/server";
 import {
-	createAuthenticationCodes,
-	getBearerTokenFromCode,
-	getBearerTokenFromMagicLinkToken,
-	getUserByEmail,
+    createAuthenticationCodes,
+    getBearerTokenFromCode,
+    getBearerTokenFromMagicLinkToken,
+    getUserByEmail,
 } from "$lib/server/auth/utils";
 import { db } from "$lib/server/db";
 import { sessions } from "$lib/server/db/schema";
-import { sendSignInEmail } from "$lib/server/email";
+import { sendSignInEmail } from "$lib/server/email/signIn";
 import { eq } from "drizzle-orm";
 import * as v from "valibot";
 import { getRequestBearerToken, getRequestUser } from "./utilities";

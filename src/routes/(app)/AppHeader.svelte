@@ -3,36 +3,30 @@
 	import WeBurstLogo from "$lib/assets/images/WeBurst.png";
 	import Avatar from "$lib/components/Avatar.svelte";
 	import { defineContent } from "$lib/i18n/locale.svelte";
+	import type { Project } from "$lib/server/db/schema";
 	import { context } from "$lib/stores/context.svelte";
 	import IconCaretDownRegular from "phosphor-icons-svelte/IconCaretDownRegular.svelte";
 	import IconGearRegular from "phosphor-icons-svelte/IconGearRegular.svelte";
 	import IconPlusRegular from "phosphor-icons-svelte/IconPlusRegular.svelte";
 	import IconSignOutRegular from "phosphor-icons-svelte/IconSignOutRegular.svelte";
-	import UserSettingsDialog from "./UserSettingsDialog.svelte";
 	import { clearServerSession } from "../(api)/login.remote";
+	import ProjectDialog from "./ProjectDialog.svelte";
+	import UserDialog from "./UserDialog.svelte";
+	import { userRoles } from "$lib/i18n/contents/users";
 
-	let userSettingsDialog: HTMLDialogElement;
+	let userDialog: HTMLDialogElement;
+	let openProjectDialog: (project?: Project) => void;
 
 	const content = defineContent({
 		en: {
 			createProject: "New project",
 			settings: "Settings",
 			logOut: "Log out",
-			roles: {
-				admin: "Admin",
-				leader: "Project Leader",
-				manager: "Member",
-			},
 		},
 		fr: {
 			createProject: "Créer un projet",
 			settings: "Paramètres",
 			logOut: "Se déconnecter",
-			roles: {
-				admin: "Admin",
-				leader: "Chef de projet",
-				manager: "Membre",
-			},
 		},
 	});
 
@@ -45,7 +39,8 @@
 	}
 </script>
 
-<UserSettingsDialog bind:ref={userSettingsDialog} />
+<ProjectDialog bind:openProjectDialog />
+<UserDialog bind:ref={userDialog} />
 
 <div
 	class="AppHeader h-24 row w-full justify-between items-center gap-5 px-10 bg-base-100"
@@ -53,7 +48,10 @@
 	<img src={WeBurstLogo} alt="Weburst Logo" class="h-14" />
 
 	<div class="Actions row items-center gap-4">
-		<button class="btn btn-primary h-12! px-6!">
+		<button
+			class="btn btn-primary h-12! px-6!"
+			onclick={() => openProjectDialog()}
+		>
 			<IconPlusRegular class="icon" />
 			{$content.createProject}
 		</button>
@@ -83,7 +81,7 @@
 
 					<div class="col center">
 						<span class="text-lg">
-							{$content.roles[context.user!.role]}
+							{$userRoles[context.user!.role]}
 						</span>
 						<span class="text-md font-medium">
 							{context.user!.email}
@@ -94,7 +92,7 @@
 				<hr class="mb-1 text-border" />
 
 				<li>
-					<a onclick={() => userSettingsDialog.showModal()}>
+					<a onclick={() => userDialog.showModal()}>
 						<IconGearRegular class="icon" />
 						{$content.settings}
 					</a>

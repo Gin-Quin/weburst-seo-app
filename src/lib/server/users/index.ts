@@ -32,14 +32,13 @@ export async function getUserById(id: string): Promise<User | null> {
  * List users with optional pagination.
  */
 export async function listUsers(
-	params: { limit?: number; offset?: number; email?: string; role?: Role; projectId?: string } = {},
+	params: { limit?: number; offset?: number; email?: string; role?: Role } = {},
 ): Promise<User[]> {
-	const { limit = 100, offset = 0, email, role, projectId } = params;
+	const { limit = 100, offset = 0, email, role } = params;
 
 	const conditions = [];
 	if (email) conditions.push(eq(users.email, email));
 	if (role) conditions.push(eq(users.role, role));
-	if (projectId) conditions.push(eq(users.projectId, projectId));
 
 	if (conditions.length) {
 		return db
@@ -117,14 +116,13 @@ export async function getUserByEmail(email: string): Promise<User | null> {
 }
 
 export async function listDeletedUsers(
-	params: { limit?: number; offset?: number; email?: string; role?: Role; projectId?: string } = {},
+	params: { limit?: number; offset?: number; email?: string; role?: Role } = {},
 ): Promise<DeletedUser[]> {
-	const { limit = 100, offset = 0, email, role, projectId } = params;
+	const { limit = 100, offset = 0, email, role } = params;
 
 	const conditions = [];
 	if (email) conditions.push(eq(deletedUsers.email, email));
 	if (role) conditions.push(eq(deletedUsers.role, role));
-	if (projectId) conditions.push(eq(deletedUsers.projectId, projectId));
 
 	if (conditions.length) {
 		return db
