@@ -108,6 +108,10 @@
 
 html {
 	overflow-y: scroll;
+
+	&:has(dialog[open]) {
+		overflow-y: hidden;
+	}
 }
 
 *:focus,
@@ -156,4 +160,8 @@ select:focus-within {
 
 html {
 	font-family: var(--font-primary);
+}
+
+.modal-box {
+	max-height: 90dvh;
 }

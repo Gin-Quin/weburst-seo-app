@@ -5,8 +5,15 @@
     {
       "idx": 0,
       "version": "6",
-      "when": 1757947949125,
-      "tag": "0000_nice_the_captain",
+      "when": 1758025088016,
+      "tag": "0000_fluffy_rocket_racer",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1758025095993,
+      "tag": "0001_flat_captain_stacy",
       "breakpoints": true
     }
   ]

@@ -34,7 +34,6 @@
 
 {#await listUsers() then userList}
 	{@const users = userList.filter((user) => !exclude.includes(user.id))}
-	{console.log({ users })}
 
 	{#if users.length > 0}
 		<label class="select {className}">

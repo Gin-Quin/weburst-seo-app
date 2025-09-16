@@ -14,9 +14,6 @@
 	import UserDialog from "./UserDialog.svelte";
 	import { userRoles } from "$lib/i18n/contents/users";
 
-	let openProjectDialog: (project?: Project) => void;
-	let openUserDialog: (mode?: "account" | "create") => void;
-
 	const content = defineContent({
 		en: {
 			createProject: "New project",
@@ -41,9 +38,6 @@
 	}
 </script>
 
-<ProjectDialog bind:openProjectDialog />
-<UserDialog bind:openUserDialog />
-
 <div
 	class="AppHeader h-24 row w-full justify-between items-center gap-5 px-10 bg-base-100"
 >
@@ -53,7 +47,7 @@
 		{#if context.user!.role == "admin"}
 			<button
 				class="btn btn-large h-12! px-6!"
-				onclick={() => openUserDialog("create")}
+				onclick={() => context.openUserDialog?.("create")}
 			>
 				<IconPlusRegular class="icon" />
 				{$content.createUser}
@@ -62,7 +56,7 @@
 
 		<button
 			class="btn btn-primary h-12! px-6!"
-			onclick={() => openProjectDialog()}
+			onclick={() => context.openProjectDialog?.()}
 		>
 			<IconPlusRegular class="icon" />
 			{$content.createProject}
@@ -104,7 +98,7 @@
 				<hr class="mb-1 text-border" />
 
 				<li>
-					<a onclick={() => openUserDialog()}>
+					<a onclick={() => context.openUserDialog?.("account")}>
 						<IconGearRegular class="icon" />
 						{$content.settings}
 					</a>

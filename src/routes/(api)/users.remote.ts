@@ -1,4 +1,4 @@
-import { query } from "$app/server";
+import { command, query } from "$app/server";
 import type { User } from "$lib/server/db/schema";
 import { createUser, deleteUser, listUsers as listAllUsers, updateUser } from "$lib/server/users";
 import { createId } from "@paralleldrive/cuid2";
@@ -15,10 +15,13 @@ export const deleteCurrentUser = query(async (): Promise<User | null> => {
 	return currentUser && deleteUser(currentUser.id);
 });
 
-export const createUserByAdmin = query(CreateUser, async (input): Promise<User | null> => {
+export const createUserByAdmin = command(CreateUser, async (input): Promise<void> => {
 	const currentUser = await getRequestUser();
-	if (currentUser?.role !== "admin") return null;
-	return await createUser({ ...input, id: createId() });
+	if (currentUser?.role !== "admin") {
+		throw new Error("Unauthorized");
+	}
+	await createUser({ ...input, id: createId() });
+	await listUsers().refresh();
 });
 
 export const listUsers = query(async (): Promise<User[]> => {

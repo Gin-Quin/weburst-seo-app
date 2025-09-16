@@ -1,7 +1,7 @@
 <script lang="ts">
-	import "../app.css";
 	import favicon from "$lib/assets/favicon.svg";
 	import { onMount } from "svelte";
+	import "../app.css";
 
 	let { children } = $props();
 
@@ -15,7 +15,6 @@
 				// If there's a bearer token, add the Authorization header
 				const [url, init = {}] = args;
 				const headers = new Headers(init.headers);
-				console.log("Setting bearer headers", headers);
 				headers.set("Authorization", `Bearer ${bearer}`);
 
 				args[1] = {

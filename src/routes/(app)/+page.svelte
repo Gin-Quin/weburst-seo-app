@@ -4,6 +4,7 @@
 	import { defineContent } from "$lib/i18n/locale.svelte";
 	import { context } from "$lib/stores/context.svelte";
 	import { listProjects } from "../(api)/projects.remote";
+	import type { ProjectInfo } from "../(api)/projects.remote";
 
 	const content = defineContent({
 		en: {
@@ -28,7 +29,7 @@
 		</header>
 
 		<div class="projects">
-			{#await listProjects({})}
+			{#await listProjects()}
 				<Loader />
 			{:then projects}
 				{#if projects.length == 0}

@@ -2,7 +2,14 @@
 	.btn {
 		@apply row gap-2.5 px-3 py-1.75 rounded-small;
 
-		&:not(.btn-primary, .btn-secondary) {
+		&:not(
+			.btn-primary,
+			.btn-secondary,
+			.btn-info,
+			.btn-error,
+			.btn-warning,
+			.btn-success
+		) {
 			background-color: inherit;
 			border-color: var(--input);
 		}
@@ -10,8 +17,39 @@
 
 	.btn-large,
 	.btn-primary,
-	.btn-secondary {
+	.btn-secondary,
+	.btn-info,
+	.btn-error,
+	.btn-warning,
+	.btn-success {
 		@apply rounded px-8 center gap-2.5 h-14;
+	}
+
+	.btn-info,
+	.btn-error,
+	.btn-warning,
+	.btn-success {
+		border-color: currentColor;
+	}
+
+	.btn-error {
+		background-color: var(--color-error-content);
+		color: var(--color-error);
+	}
+
+	.btn-warning {
+		background-color: var(--color-warning-content);
+		color: var(--color-warning);
+	}
+
+	.btn-info {
+		background-color: var(--color-info-content);
+		color: var(--color-info);
+	}
+
+	.btn-success {
+		background-color: var(--color-success-content);
+		color: var(--color-success);
 	}
 
 	.btn-medium {

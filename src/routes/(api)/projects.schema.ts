@@ -33,16 +33,6 @@ export type CreateProject = v.InferOutput<typeof CreateProject>;
 export const GetProjectById = v.string();
 export type GetProjectById = v.InferOutput<typeof GetProjectById>;
 
-// listProjects(params?: { ownerIds?: string[]; name?: string; types?: ProjectType[] })
-export const ListProjects = v.optional(
-	v.object({
-		ownerIds: v.optional(v.array(v.string())),
-		name: v.optional(v.string()),
-		types: v.optional(v.array(ProjectType)),
-	}),
-);
-export type ListProjects = v.InferOutput<typeof ListProjects>;
-
 // updateProject(id: string, updates: ProjectUpdate)
 export const ProjectUpdate = v.partial(
 	v.object({
@@ -51,7 +41,7 @@ export const ProjectUpdate = v.partial(
 		websiteUrl: v.string(),
 		type: ProjectType,
 		keywordAnalysisFrequency: KeywordAnalysisFrequency,
-		leaderId: v.string(),
+		leaderIds: v.array(v.string()),
 	}),
 );
 export type ProjectUpdate = v.InferOutput<typeof ProjectUpdate>;

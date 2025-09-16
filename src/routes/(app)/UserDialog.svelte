@@ -1,12 +1,12 @@
 <script lang="ts">
+	import { userRoles } from "$lib/i18n/contents/users";
 	import { defineContent } from "$lib/i18n/locale.svelte";
 	import { context, setContextUser } from "$lib/stores/context.svelte";
 	import IconEnvelopeRegular from "phosphor-icons-svelte/IconEnvelopeRegular.svelte";
-	import IconUserRegular from "phosphor-icons-svelte/IconUserRegular.svelte";
 	import IconUserCheckRegular from "phosphor-icons-svelte/IconUserCheckRegular.svelte";
+	import IconUserRegular from "phosphor-icons-svelte/IconUserRegular.svelte";
 	import { createUserByAdmin, updateCurrentUser } from "../(api)/users.remote";
 	import { CreateUser, UpdateCurrentUser } from "../(api)/users.schema";
-	import { userRoles } from "$lib/i18n/contents/users";
 
 	let {
 		ref = $bindable(),
@@ -91,20 +91,6 @@
 		}
 		updating = false;
 		ref?.close();
-	}
-
-	function cancel() {
-		if (createMode) {
-			newUser = {
-				firstName: "",
-				lastName: "",
-				email: "",
-				role: "user",
-			};
-		} else {
-			updates.firstName = context.user!.firstName;
-			updates.lastName = context.user!.lastName;
-		}
 	}
 </script>
 
@@ -234,7 +220,12 @@
 			{/if}
 
 			<div class="row gap-3 pt-2">
-				<button class="btn btn-large grow" disabled={updating} onclick={cancel}>
+				<button
+					class="btn btn-large grow"
+					disabled={updating}
+					type="button"
+					onclick={() => ref?.close()}
+				>
 					{$content.cancel}
 				</button>
 				<button

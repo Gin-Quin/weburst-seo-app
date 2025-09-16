@@ -6,6 +6,9 @@
 	import { fade } from "svelte/transition";
 	import { getCurrentUser } from "../(api)/login.remote";
 	import AppHeader from "./AppHeader.svelte";
+	import ConfirmDialog from "./ConfirmDialog.svelte";
+	import ProjectDialog from "./ProjectDialog.svelte";
+	import UserDialog from "./UserDialog.svelte";
 
 	let { children } = $props();
 
@@ -20,7 +23,7 @@
 			getCurrentUser().then((user) => {
 				if (!user) {
 					console.log("User from bearer not found");
-					// localStorage.removeItem("bearer");
+					localStorage.removeItem("bearer");
 					goto("/login");
 				} else {
 					setContextUser(user);
@@ -32,9 +35,14 @@
 	});
 </script>
 
+<ConfirmDialog bind:openConfirmDialog={context.openConfirmDialog} />
+
 {#if loading}
 	<Loader class="h-[100dvh] center" />
 {:else}
+	<ProjectDialog bind:openProjectDialog={context.openProjectDialog} />
+	<UserDialog bind:openUserDialog={context.openUserDialog} />
+
 	<div in:fade={{ duration: 400, easing: cubicIn }}>
 		<AppHeader />
 
