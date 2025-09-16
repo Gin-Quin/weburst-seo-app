@@ -1,10 +1,10 @@
 import { building, dev } from "$app/environment";
 import { env } from "$env/dynamic/private";
-import { createClient } from "@libsql/client";
+import { createClient, type Client } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 import * as schema from "./schema";
 
-export let db: ReturnType<typeof drizzle>;
+export let db: ReturnType<typeof drizzle<typeof schema, Client>>;
 
 if (building) {
 	db = {} as any;
