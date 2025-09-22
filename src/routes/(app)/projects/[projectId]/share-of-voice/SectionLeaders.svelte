@@ -1,12 +1,17 @@
 <script lang="ts">
 	import { defineContent } from "$lib/i18n/locale.svelte";
 	import * as Table from "$lib/components/ui/table/index.js";
-	import type { AggregatedKeywordAnalysis } from "$lib/server/clickhouse/services/keywords";
+	import type {
+		AggregatedKeywordAnalysis,
+		AggregatedKeywordAnalysisData,
+	} from "$lib/server/clickhouse/services/keywords";
 	import { formatPercent } from "$lib/numbers/formatPercent";
 	import IconArrowUpRegular from "phosphor-icons-svelte/IconArrowUpRegular.svelte";
 	import IconArrowDownRegular from "phosphor-icons-svelte/IconArrowDownRegular.svelte";
 	import IconEyeBold from "phosphor-icons-svelte/IconEyeBold.svelte";
 	import type { SvelteSet } from "svelte/reactivity";
+	import { context } from "$lib/stores/context.svelte";
+	import Trend from "$lib/components/Trend.svelte";
 
 	const content = defineContent({
 		en: {
@@ -27,10 +32,14 @@
 	let {
 		analysisResultsWithTrend,
 		visibleDomains,
+		client,
 	}: {
-		analysisResultsWithTrend: AggregatedKeywordAnalysis | null;
+		analysisResultsWithTrend: AggregatedKeywordAnalysis;
 		visibleDomains: SvelteSet<string>;
+		client: AggregatedKeywordAnalysisData;
 	} = $props();
+
+	const { data, totalVolume } = $derived(analysisResultsWithTrend);
 </script>
 
 <div class="card col justify-stretch">
@@ -44,76 +53,62 @@
 	</header>
 
 	<main class="col justify-stretch w-full grow overflow-auto">
-		{#if analysisResultsWithTrend == null}
-			NO RESULT YET. START AN ANALYSIS.
-		{:else}
-			{@const { data, totalVolume } = analysisResultsWithTrend}
+		<Table.Root>
+			<Table.Header>
+				<Table.Row class="border-none h-9">
+					<Table.Head></Table.Head>
+					<Table.Head>
+						{$content.domain}
+					</Table.Head>
+					<Table.Head class="text-center">
+						{$content.shareOfVoice}
+					</Table.Head>
+					<Table.Head class="text-center">
+						<IconEyeBold class="icon m-auto" />
+					</Table.Head>
+				</Table.Row>
+			</Table.Header>
 
-			<Table.Root>
-				<Table.Header>
-					<Table.Row class="border-none h-9">
-						<Table.Head></Table.Head>
-						<Table.Head>
-							{$content.domain}
-						</Table.Head>
-						<Table.Head class="text-center">
-							{$content.shareOfVoice}
-						</Table.Head>
-						<Table.Head class="text-center">
-							<IconEyeBold class="icon m-auto" />
-						</Table.Head>
-					</Table.Row>
-				</Table.Header>
-
-				<Table.Body>
-					{#each data.slice(0, 100) as row, index (row.domain)}
-						<Table.Row
-							class="border-none h-9 cursor-pointer"
-							onclick={() => {
-								if (visibleDomains.has(row.domain)) {
-									visibleDomains.delete(row.domain);
-								} else {
-									visibleDomains.add(row.domain);
-								}
-							}}
+			<Table.Body>
+				{#each data.slice(0, 100) as row, index (row.domain)}
+					<Table.Row
+						class="border-none h-9 cursor-pointer"
+						onclick={() => {
+							if (visibleDomains.has(row.domain)) {
+								visibleDomains.delete(row.domain);
+							} else {
+								visibleDomains.add(row.domain);
+							}
+						}}
+					>
+						<Table.Cell>
+							<div class="center size-8 bg-base-300 rounded-full">
+								{index + 1}
+							</div>
+						</Table.Cell>
+						<Table.Cell
+							class=" {row.domain == client.domain
+								? 'text-primary text-sm'
+								: 'text-xs'}"
 						>
-							<Table.Cell>
-								<div class="center size-8 bg-base-300 rounded-full">
-									{index + 1}
-								</div>
-							</Table.Cell>
-							<Table.Cell class="text-xs">{row.domain}</Table.Cell>
-							<Table.Cell class="h-full center gap-1 text-center">
-								{formatPercent(row.volume / totalVolume, {
-									maximumFractionDigits: 0,
-								})}
-								{#if row.trend && row.trend >= 0.1}
-									<div class="badge badge-success">
-										<IconArrowUpRegular class="text-small" />
-										<span class="text-xs">
-											{formatPercent(row.trend)}
-										</span>
-									</div>
-								{:else if row.trend && row.trend < -0.1}
-									<div class="badge badge-warning">
-										<IconArrowDownRegular class="text-small" />
-										<span class="text-xs">
-											{formatPercent(row.trend)}
-										</span>
-									</div>
-								{/if}
-							</Table.Cell>
-							<Table.Cell class="text-center">
-								<input
-									type="checkbox"
-									class="checkbox"
-									checked={visibleDomains.has(row.domain)}
-								/>
-							</Table.Cell>
-						</Table.Row>
-					{/each}
-				</Table.Body>
-			</Table.Root>
-		{/if}
+							{row.domain}
+						</Table.Cell>
+						<Table.Cell class="h-full center gap-1 text-center">
+							{formatPercent(row.volume / totalVolume, {
+								maximumFractionDigits: 0,
+							})}
+							<Trend trend={row.trend} size="xs" />
+						</Table.Cell>
+						<Table.Cell class="text-center">
+							<input
+								type="checkbox"
+								class="checkbox"
+								checked={visibleDomains.has(row.domain)}
+							/>
+						</Table.Cell>
+					</Table.Row>
+				{/each}
+			</Table.Body>
+		</Table.Root>
 	</main>
 </div>

@@ -63,6 +63,7 @@ export type AggregatedKeywordAnalysisData = {
 	domain: string;
 	volume: number;
 	topThreeKeywordCount: number;
+	topTenKeywordCount: number;
 	trend?: number;
 };
 
@@ -162,10 +163,11 @@ export namespace KeywordsService {
 				format: "JSON",
 			});
 			const result = await response.json<{ id: string }>();
-			if (result.data.length === 0) {
+			const latestSetId = result.data[0]?.id;
+			if (!latestSetId) {
 				throw new Error(`No keyword set found for project ${projectId}`);
 			}
-			setId = result.data[0]?.id;
+			setId = latestSetId;
 		}
 
 		console.log(`👀 Fetching keywords for set '${setId}'`);
@@ -480,7 +482,7 @@ export namespace KeywordsService {
 
 		const result = await response.json<{ total: string }>();
 
-		return parseInt(result.data[0]?.total ?? 0, 10);
+		return parseInt(result.data[0]?.total ?? "0", 10);
 	}
 
 	/**
@@ -501,7 +503,7 @@ export namespace KeywordsService {
 
 		const result = await response.json<{ total: string }>();
 
-		return parseInt(result.data[0]?.total, 10);
+		return parseInt(result.data[0]?.total ?? "0", 10);
 	}
 
 	/**
@@ -551,12 +553,16 @@ export namespace KeywordsService {
 			dataByDomain[item.domain] ??= {
 				domain: item.domain,
 				topThreeKeywordCount: 0,
+				topTenKeywordCount: 0,
 				volume: 0,
 			};
 			if (item.position <= 3) {
-				dataByDomain[item.domain].topThreeKeywordCount += 1;
+				dataByDomain[item.domain]!.topThreeKeywordCount += 1;
 			}
-			dataByDomain[item.domain].volume += weightedVolume;
+			if (item.position <= 10) {
+				dataByDomain[item.domain]!.topTenKeywordCount += 1;
+			}
+			dataByDomain[item.domain]!.volume += weightedVolume;
 		}
 
 		return {
@@ -577,7 +583,10 @@ export namespace KeywordsService {
 		projectId: string;
 	}): Promise<AggregatedKeywordAnalysis | null> {
 		const allAnalysis = await getAllProjectAnalysis(projectId);
-		const currentAnalysisId = allAnalysis[0].id;
+		const currentAnalysisId = allAnalysis[0]?.id;
+		if (!currentAnalysisId) {
+			return null;
+		}
 
 		const lastMonthAnalysisId = getLastMonthAnalysisId({ allAnalysis });
 
@@ -626,7 +635,8 @@ export namespace KeywordsService {
 		allAnalysis: Array<KeywordAnalysisIdAndDate>;
 	}): string | undefined {
 		if (allAnalysis.length <= 1) return undefined;
-		const mostRecentAnalysisAt = allAnalysis[0].createdAt;
+		const mostRecentAnalysisAt = allAnalysis[0]?.createdAt;
+		if (!mostRecentAnalysisAt) return undefined;
 		const analysisOnemonthAgo = allAnalysis.find(
 			(analysis) =>
 				new Date(analysis.createdAt).getTime() <=

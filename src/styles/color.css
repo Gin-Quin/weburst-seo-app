@@ -3,10 +3,10 @@
 		color: var(--color-base-content);
 	}
 	.text-primary {
-		color: var(--color-primary-content);
+		color: var(--color-primary);
 	}
 	.text-secondary {
-		color: var(--color-secondary-content);
+		color: var(--color-secondary);
 	}
 	.text-accent {
 		color: var(--color-accent);
@@ -40,6 +40,9 @@
 	}
 	.text-gray-1 {
 		color: var(--color-gray-1);
+	}
+	.text-gray-2 {
+		color: var(--color-gray-2);
 	}
 
 	.bg-base-100 {
@@ -125,5 +128,8 @@
 	}
 	.bg-gray-1 {
 		background-color: var(--color-gray-1);
+	}
+	.bg-gray-2 {
+		background-color: var(--color-gray-2);
 	}
 }

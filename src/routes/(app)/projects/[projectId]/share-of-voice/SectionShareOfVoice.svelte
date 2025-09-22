@@ -8,11 +8,15 @@
 	import { scaleUtc } from "d3-scale";
 	import { curveNatural } from "d3-shape";
 	import { Area, AreaChart, LinearGradient } from "layerchart";
-	import type { AggregatedKeywordAnalysis } from "$lib/server/clickhouse/services/keywords";
+	import type {
+		AggregatedKeywordAnalysis,
+		AggregatedKeywordAnalysisData,
+	} from "$lib/server/clickhouse/services/keywords";
 	import type { SvelteSet } from "svelte/reactivity";
 	import { context } from "$lib/stores/context.svelte";
 	import { formatPercent } from "$lib/numbers/formatPercent";
 	import IconArrowDownRegular from "phosphor-icons-svelte/IconArrowDownRegular.svelte";
+	import Trend from "$lib/components/Trend.svelte";
 
 	type PieChartData = {
 		domain: string;
@@ -50,10 +54,14 @@
 	let {
 		analysisResultsWithTrend,
 		visibleDomains,
+		client,
 	}: {
-		analysisResultsWithTrend: AggregatedKeywordAnalysis | null;
+		analysisResultsWithTrend: AggregatedKeywordAnalysis;
 		visibleDomains: SvelteSet<string>;
+		client: AggregatedKeywordAnalysisData;
 	} = $props();
+
+	const { data, totalVolume } = $derived(analysisResultsWithTrend);
 
 	let chartType = $state<"line" | "pie">(
 		context.project!.type == "audit" ? "pie" : "line",
@@ -93,11 +101,11 @@
 			pieChartData.push({
 				domain,
 				volume,
-				color: chartColors[index % chartColors.length],
+				color: chartColors[index % chartColors.length]!,
 			});
 			pieChartConfig[domain] = {
 				label: domain,
-				color: chartColors[index % chartColors.length],
+				color: chartColors[index % chartColors.length]!,
 			};
 
 			index += 1;
@@ -149,149 +157,126 @@
 	</header>
 
 	<main class="col justify-stretch w-full grow">
-		{#if analysisResultsWithTrend == null}
-			NO RESULTS YET
-		{:else}
-			{@const { data, totalVolume } = analysisResultsWithTrend}
-			{@const client = data.find(
-				(item) => item.domain === context.project!.domain,
-			) ?? {
-				domain: context.project!.domain,
-				volume: 0,
-				trend: 0,
-			}}
+		{#if chartType == "line"}
+			<div class="row justify-between items-center">
+				<div class="row items-center gap-2">
+					<div class="text-4xl font-bold">
+						{formatPercent(client.volume / totalVolume, {
+							maximumFractionDigits: 0,
+						})}
+					</div>
+					<Trend trend={client.trend} />
+				</div>
+			</div>
 
-			{#if chartType == "line"}
-				<div class="row justify-between items-center">
-					<div class="row items-center gap-2">
-						<div class="text-4xl font-bold">
-							{formatPercent(client.volume / totalVolume, {
-								maximumFractionDigits: 0,
-							})}
-						</div>
+			<div class="Graph w-full grow">
+				<Chart.Container config={chartConfig} class="h-full">
+					<AreaChart
+						data={chartData}
+						x="date"
+						xScale={scaleUtc()}
+						yPadding={[0, 25]}
+						series={[
+							{
+								key: "mobile",
+								label: "Mobile",
+								color: "var(--color-mobile)",
+							},
+							{
+								key: "desktop",
+								label: "Desktop",
+								color: "var(--color-desktop)",
+							},
+						]}
+						seriesLayout="stack"
+						props={{
+							area: {
+								curve: curveNatural,
+								"fill-opacity": 0.4,
+								line: { class: "stroke-1" },
+								motion: "tween",
+							},
+							xAxis: {
+								format: (v: Date) =>
+									v.toLocaleDateString("en-US", { month: "short" }),
+							},
+							yAxis: { format: () => "" },
+						}}
+					>
+						{#snippet tooltip()}
+							<Chart.Tooltip
+								indicator="dot"
+								labelFormatter={(v: Date) => {
+									return v.toLocaleDateString("en-US", {
+										month: "long",
+									});
+								}}
+							/>
+						{/snippet}
+						{#snippet marks({ series, getAreaProps })}
+							{#each series as s, i (s.key)}
+								<LinearGradient
+									stops={[
+										s.color ?? "",
+										"color-mix(in lch, " + s.color + " 10%, transparent)",
+									]}
+									vertical
+								>
+									{#snippet children({ gradient })}
+										<Area {...getAreaProps(s, i)} fill={gradient} />
+									{/snippet}
+								</LinearGradient>
+							{/each}
+						{/snippet}
+					</AreaChart>
+				</Chart.Container>
+			</div>
+		{:else if chartType == "pie"}
+			{@const { pieChartData, pieChartConfig } = getPieChartData({
+				data,
+				totalVolume,
+				visibleDomains,
+			})}
+
+			<div class="Graph w-full grow">
+				<Chart.Container
+					config={pieChartConfig}
+					class="mx-auto aspect-square h-full center"
+				>
+					<div class="absolute col center">
 						{#if client.trend && client.trend >= 0.1}
-							<div class="badge badge-success">
+							<div class="badge badge-success translate-y-[-0.5rem]">
 								<IconArrowUpRegular class="text-small" />
 								{formatPercent(client.trend)}
 							</div>
 						{:else if client.trend && client.trend <= -0.1}
-							<div class="badge badge-warning">
+							<div class="badge badge-warning translate-y-[-0.5rem]">
 								<IconArrowDownRegular class="text-small" />
 								{formatPercent(Math.abs(client.trend))}
 							</div>
 						{/if}
-					</div>
-				</div>
-
-				<div class="Graph w-full grow">
-					<Chart.Container config={chartConfig} class="h-full">
-						<AreaChart
-							data={chartData}
-							x="date"
-							xScale={scaleUtc()}
-							yPadding={[0, 25]}
-							series={[
-								{
-									key: "mobile",
-									label: "Mobile",
-									color: "var(--color-mobile)",
-								},
-								{
-									key: "desktop",
-									label: "Desktop",
-									color: "var(--color-desktop)",
-								},
-							]}
-							seriesLayout="stack"
-							props={{
-								area: {
-									curve: curveNatural,
-									"fill-opacity": 0.4,
-									line: { class: "stroke-1" },
-									motion: "tween",
-								},
-								xAxis: {
-									format: (v: Date) =>
-										v.toLocaleDateString("en-US", { month: "short" }),
-								},
-								yAxis: { format: () => "" },
-							}}
-						>
-							{#snippet tooltip()}
-								<Chart.Tooltip
-									indicator="dot"
-									labelFormatter={(v: Date) => {
-										return v.toLocaleDateString("en-US", {
-											month: "long",
-										});
-									}}
-								/>
-							{/snippet}
-							{#snippet marks({ series, getAreaProps })}
-								{#each series as s, i (s.key)}
-									<LinearGradient
-										stops={[
-											s.color ?? "",
-											"color-mix(in lch, " + s.color + " 10%, transparent)",
-										]}
-										vertical
-									>
-										{#snippet children({ gradient })}
-											<Area {...getAreaProps(s, i)} fill={gradient} />
-										{/snippet}
-									</LinearGradient>
-								{/each}
-							{/snippet}
-						</AreaChart>
-					</Chart.Container>
-				</div>
-			{:else if chartType == "pie"}
-				{@const { pieChartData, pieChartConfig } = getPieChartData({
-					data,
-					totalVolume,
-					visibleDomains,
-				})}
-
-				<div class="Graph w-full grow">
-					<Chart.Container
-						config={pieChartConfig}
-						class="mx-auto aspect-square h-full center"
-					>
-						<div class="absolute col center">
-							{#if client.trend && client.trend >= 0.1}
-								<div class="badge badge-success translate-y-[-0.5rem]">
-									<IconArrowUpRegular class="text-small" />
-									{formatPercent(client.trend)}
-								</div>
-							{:else if client.trend && client.trend <= -0.1}
-								<div class="badge badge-warning translate-y-[-0.5rem]">
-									<IconArrowDownRegular class="text-small" />
-									{formatPercent(Math.abs(client.trend))}
-								</div>
-							{/if}
-							<div class="text-5xl font-bold">
-								{formatPercent(client.volume / totalVolume, {
-									maximumFractionDigits: 0,
-								})}
-							</div>
+						<div class="text-5xl font-bold">
+							{formatPercent(client.volume / totalVolume, {
+								maximumFractionDigits: 0,
+							})}
 						</div>
+					</div>
 
-						<PieChart
-							data={pieChartData}
-							key="domain"
-							value="volume"
-							c="color"
-							innerRadius={0.75}
-							padding={28}
-							props={{ pie: { motion: "tween" } }}
-						>
-							{#snippet tooltip()}
-								<Chart.Tooltip hideLabel />
-							{/snippet}
-						</PieChart>
-					</Chart.Container>
-				</div>
-			{/if}
+					<PieChart
+						data={pieChartData}
+						key="domain"
+						value="volume"
+						c="color"
+						innerRadius={0.75}
+						padding={28}
+						props={{ pie: { motion: "tween" } }}
+					>
+						{#snippet tooltip()}
+							<Chart.Tooltip hideLabel />
+						{/snippet}
+					</PieChart>
+				</Chart.Container>
+			</div>
 		{/if}
 	</main>
 </div>

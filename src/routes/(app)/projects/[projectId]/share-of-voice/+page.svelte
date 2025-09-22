@@ -32,6 +32,8 @@
 			analysisStartedSuccess:
 				"Analysis started. Wait a few minutes for the results to be ready.",
 			analysisStartedError: "An error occurred while starting the analysis.",
+			noAnalysisResults:
+				"No data available. Add keywords and start an analysis.",
 		},
 		fr: {
 			addKeywords: "Ajouter des mots-clés",
@@ -43,6 +45,8 @@
 				"Analyse démarrée. Les résultats seront prêts dans quelques minutes.",
 			analysisStartedError:
 				"Une erreur est survenue lors du lancement de l'analyse.",
+			noAnalysisResults:
+				"Aucune donnée disponible. Ajoutez des mots-clés et lancez une analyse.",
 		},
 	});
 
@@ -70,6 +74,7 @@
 		if (response !== null) {
 			lastAnalysisStatus = response;
 		}
+		const wasRunning = analysisRunning;
 		analysisRunning =
 			!!response &&
 			response.completedTasks + response.failedTasks < response.totalTasks;
@@ -78,6 +83,10 @@
 			fetchLastAnalysisStatus,
 			intervalDuration,
 		);
+
+		if (wasRunning && !analysisRunning) {
+			analysisResultsWithTrendQuery.refresh();
+		}
 	}
 
 	function startAnalysis() {
@@ -131,15 +140,35 @@
 	{#await analysisResultsWithTrendQuery}
 		<Loader />
 	{:then analysisResultsWithTrend}
-		<div class="grid grid-cols-[1.6fr_1fr] gap-5">
-			<SectionShareOfVoice {analysisResultsWithTrend} {visibleDomains} />
-			<SectionLeaders {analysisResultsWithTrend} {visibleDomains} />
-		</div>
+		{#if analysisResultsWithTrend == null}
+			<div class="center text-xl text-light bold">
+				{$content.noAnalysisResults}
+			</div>
+		{:else}
+			{@const client = analysisResultsWithTrend.data.find(
+				(item) => item.domain === context.project!.domain,
+			) ?? {
+				domain: context.project!.domain,
+				topThreeKeywordCount: 0,
+				topTenKeywordCount: 0,
+				volume: 0,
+				trend: 0,
+			}}
 
-		<!-- <div class="grid grid-cols-[1fr_1.8fr] gap-5">
-			<SectionPotential />
-			<SectionCompetitiveMapping />
-		</div> -->
+			<div class="grid grid-cols-[1.6fr_1fr] gap-5">
+				<SectionShareOfVoice
+					{analysisResultsWithTrend}
+					{visibleDomains}
+					{client}
+				/>
+				<SectionLeaders {analysisResultsWithTrend} {visibleDomains} {client} />
+			</div>
+
+			<div class="grid grid-cols-[1fr_1.8fr] gap-5">
+				<SectionPotential {analysisResultsWithTrend} {client} />
+				<SectionCompetitiveMapping />
+			</div>
+		{/if}
 	{:catch error}
 		<div class="text-error bold">
 			{String(error)}
@@ -150,7 +179,8 @@
 <style>
 	.Page {
 		height: calc(100dvh - var(--app-header-height));
+		min-height: 800px;
 		grid-template-columns: 1fr;
-		grid-template-rows: 2.5rem 1fr;
+		grid-template-rows: 2.5rem 1fr 1fr;
 	}
 </style>
