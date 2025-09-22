@@ -13,14 +13,18 @@
 	}
 
 	.checkbox {
-		border-radius: 0.125rem;
+		border-radius: 0.125rem !important;
 		color: var(--color-base-content);
 		width: 1.25rem;
 		height: 1.25rem;
+		border-color: currentColor;
+		border-radius: 0.0625rem;
+		box-shadow: none;
 
 		&:checked {
 			background-color: var(--color-accent);
-			border-color: transparent;
+			border-color: var(--color-accent);
+			box-shadow: none;
 		}
 	}
 

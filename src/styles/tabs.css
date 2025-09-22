@@ -1,0 +1,24 @@
+@layer utilities {
+	.tabs {
+		@apply tabs-box h-10 center p-0 flex-nowrap;
+		gap: 1px;
+		border-radius: 1.25rem;
+		background-color: var(--color-gray-1);
+
+		> .tab {
+			@aaply px-5;
+			border-radius: 2.5rem;
+			background-color: transparent;
+			font-size: 0.9375rem;
+			font-weight: 500;
+			transition:
+				background-color 0.2s ease,
+				color 0.2s ease;
+
+			&.tab-active {
+				background-color: var(--color-primary);
+				color: var(--color-base-100);
+			}
+		}
+	}
+}

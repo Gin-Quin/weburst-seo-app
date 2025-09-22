@@ -39,6 +39,7 @@
 		"daisyui": "^5.1.9",
 		"drizzle-kit": "^0.31.4",
 		"drizzle-orm": "^0.44.5",
+		"layerchart": "2.0.0-next.27",
 		"nodemon": "^3.1.10",
 		"phosphor-icons-svelte": "^2.1.0",
 		"svelte": "^5.0.0",
@@ -54,10 +55,19 @@
 		"@clickhouse/client": "^1.12.1",
 		"@lucia-auth/adapter-drizzle": "^1.1.0",
 		"@paralleldrive/cuid2": "^2.2.2",
+		"@types/d3-scale": "^4.0.9",
+		"@types/d3-shape": "^3.1.7",
 		"@types/nodemailer": "^7.0.1",
+		"@types/papaparse": "^5.3.16",
 		"arctic": "^3.7.0",
+		"axios": "^1.12.2",
+		"d3-scale": "^4.0.2",
+		"d3-shape": "^3.2.0",
 		"lucia": "^3.2.2",
 		"nanoid": "^5.1.5",
-		"valibot": "^1.1.0"
+		"papaparse": "^5.5.3",
+		"svelte-sonner": "^1.0.5",
+		"valibot": "^1.1.0",
+		"xlsx": "^0.18.5"
 	}
 }

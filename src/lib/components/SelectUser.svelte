@@ -1,6 +1,6 @@
 <script lang="ts">
 	import IconUserCheckRegular from "phosphor-icons-svelte/IconUserCheckRegular.svelte";
-	import { listUsers } from "../../routes/(api)/users.remote";
+	import { listUsers } from "../../routes/api/users.remote";
 
 	let {
 		class: className = "",

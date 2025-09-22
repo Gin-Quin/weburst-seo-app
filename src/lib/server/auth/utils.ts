@@ -64,7 +64,6 @@ export async function getBearerTokenFromMagicLinkToken(
 	email: string,
 	token: string,
 ): Promise<string | null> {
-	console.log("getBearerTokenFromMagicLinkToken called");
 	const [verification] = await db
 		.select()
 		.from(authenticationTokens)
@@ -101,14 +100,11 @@ export async function getBearerTokenFromMagicLinkToken(
 }
 
 export async function getBearerTokenFromCode(email: string, code: string): Promise<string | null> {
-	console.log("getBearerTokenFromCode called");
 	const [verification] = await db
 		.select()
 		.from(authenticationTokens)
 		.where(and(eq(authenticationTokens.email, email)))
 		.limit(1);
-
-	console.log("verification:", verification);
 
 	if (!verification) {
 		console.log("Verification not found");

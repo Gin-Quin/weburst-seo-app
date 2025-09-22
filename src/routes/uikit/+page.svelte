@@ -2,6 +2,7 @@
 	import IconDownloadSimple from "phosphor-icons-svelte/IconDownloadSimpleRegular.svelte";
 	import IconArrowUpRegular from "phosphor-icons-svelte/IconArrowUpRegular.svelte";
 	import Alert from "$lib/components/Alert.svelte";
+	import FileInput from "$lib/components/FileInput.svelte";
 </script>
 
 <div class="col gap-10 p-10">
@@ -71,7 +72,23 @@
 				<IconArrowUpRegular class="text-small" />
 				3%
 			</div>
+			<div class="badge badge-info-purple">
+				<IconArrowUpRegular class="text-small" />
+				3%
+			</div>
 			<div class="badge badge-success">
+				<IconArrowUpRegular class="text-small" />
+				12%
+			</div>
+			<div class="badge badge-info">
+				<IconArrowUpRegular class="text-small" />
+				12%
+			</div>
+			<div class="badge badge-error">
+				<IconArrowUpRegular class="text-small" />
+				12%
+			</div>
+			<div class="badge badge-warning">
 				<IconArrowUpRegular class="text-small" />
 				12%
 			</div>
@@ -112,5 +129,11 @@
 			>
 			<Alert type="success" title="Title">You received 3 notifications</Alert>
 		</div>
+	</div>
+
+	<div class="col gap-2">
+		<div class="text-h1 font-bold">File input</div>
+
+		<FileInput />
 	</div>
 </div>

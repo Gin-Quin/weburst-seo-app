@@ -9,13 +9,48 @@
 		border: none;
 	}
 
+	.badge-primary {
+		background-color: var(--color-primary-content);
+		color: var(--color-primary);
+	}
+
+	.badge-secondary {
+		background-color: var(--color-secondary-content);
+		color: var(--color-secondary);
+	}
+
+	.badge-accent {
+		background-color: var(--color-accent-content);
+		color: var(--color-accent);
+	}
+
+	.badge-info {
+		background-color: var(--color-info-content);
+		color: var(--color-info);
+	}
+
+	.badge-success {
+		background-color: var(--color-success-content);
+		color: var(--color-success);
+	}
+
+	.badge-warning {
+		background-color: var(--color-warning-content);
+		color: var(--color-warning);
+	}
+
+	.badge-error {
+		background-color: var(--color-error-content);
+		color: var(--color-error);
+	}
+
 	.badge-info-magenta {
-		background-color: var(--color-info-magenta);
-		color: var(--color-info-magenta-content);
+		background-color: var(--color-info-magenta-content);
+		color: var(--color-info-magenta);
 	}
 
 	.badge-info-purple {
-		background-color: var(--color-info-magenta);
-		color: var(--color-info-magenta-content);
+		background-color: var(--color-info-purple-content);
+		color: var(--color-info-purple);
 	}
 }

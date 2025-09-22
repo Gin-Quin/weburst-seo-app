@@ -4,7 +4,7 @@
 	import Loader from "$lib/components/Loader.svelte";
 	import { defineContent } from "$lib/i18n/locale.svelte";
 	import { onMount } from "svelte";
-	import { verifyMagicLink } from "../../(api)/login.remote";
+	import { verifyMagicLink } from "../../api/login.remote";
 
 	const content = defineContent({
 		en: {

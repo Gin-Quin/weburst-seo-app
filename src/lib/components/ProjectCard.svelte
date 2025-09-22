@@ -4,13 +4,13 @@
 	import { defineContent } from "$lib/i18n/locale.svelte";
 	import type { User } from "$lib/server/db/schema";
 	import { context } from "$lib/stores/context.svelte";
-	import IconDotsThreeVerticalRegular from "phosphor-icons-svelte/IconDotsThreeVerticalRegular.svelte";
+	import IconDotsThreeVerticalBold from "phosphor-icons-svelte/IconDotsThreeVerticalBold.svelte";
 	import IconPencilSimpleRegular from "phosphor-icons-svelte/IconPencilSimpleRegular.svelte";
 	import IconTrashRegular from "phosphor-icons-svelte/IconTrashRegular.svelte";
 	import {
 		deleteProject,
 		type ProjectInfo,
-	} from "../../routes/(api)/projects.remote";
+	} from "../../routes/api/projects.remote";
 	import Avatar from "./Avatar.svelte";
 
 	const content = defineContent({
@@ -33,11 +33,8 @@
 		onEdit = (project) => context.openProjectDialog?.(project),
 		onDelete = (project) =>
 			context.openConfirmDialog?.({
-				message: $content.confirmDeleteProject(project.domain),
-				then: async () => {
-					console.log("Deleting project", project.id);
-					await deleteProject(project.id);
-				},
+				title: $content.confirmDeleteProject(project.domain),
+				then: () => deleteProject(project.id),
 			}),
 	}: {
 		project: ProjectInfo;
@@ -47,11 +44,11 @@
 </script>
 
 <button
-	class="ProjectCard cursor-pointer card px-6! py-5! col! justify-stretch items-start"
+	class="ProjectCard cursor-pointer card px-6! py-5! col! justify-stretch items-start bg-gray-1"
 	onclick={() => goto(`/projects/${project.id}`)}
 >
 	<div class="row justify-between w-full">
-		<div class="row center bg-base-100 px-3 h-7 rounded-sm bold text-sm">
+		<div class="badge badge-info">
 			{$projectTypes[project.type]}
 		</div>
 
@@ -63,8 +60,8 @@
 				event.stopImmediatePropagation();
 			}}
 		>
-			<div tabindex="0" role="button" class="cursor-pointer p-1 z-10">
-				<IconDotsThreeVerticalRegular class="text-2xl" />
+			<div tabindex="0" role="button" class="cursor-pointer z-10">
+				<IconDotsThreeVerticalBold class="text-4xl text-accent" />
 			</div>
 			<ul
 				tabindex="0"
@@ -94,7 +91,7 @@
 
 		<div class="col gap-2 text-end">
 			{#each project.leaders as leader, index (leader.email)}
-				<span class="row items-center gap-2 text-xs">
+				<span class="row items-center gap-2 text-sm font-medium">
 					<Avatar user={leader as unknown as User} size="mini" />
 					{leader.firstName}
 					{leader.lastName}
@@ -107,6 +104,6 @@
 <style>
 	.ProjectCard {
 		height: 20rem;
-		background: #f8f8f8;
+		background: var(--color-base-200);
 	}
 </style>

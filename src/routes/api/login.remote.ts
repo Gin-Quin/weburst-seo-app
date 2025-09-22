@@ -1,9 +1,9 @@
 import { command, query } from "$app/server";
 import {
-    createAuthenticationCodes,
-    getBearerTokenFromCode,
-    getBearerTokenFromMagicLinkToken,
-    getUserByEmail,
+	createAuthenticationCodes,
+	getBearerTokenFromCode,
+	getBearerTokenFromMagicLinkToken,
+	getUserByEmail,
 } from "$lib/server/auth/utils";
 import { db } from "$lib/server/db";
 import { sessions } from "$lib/server/db/schema";
@@ -16,7 +16,6 @@ export const getCurrentUser = query(getRequestUser);
 
 export const clearServerSession = command(async () => {
 	const bearerToken = getRequestBearerToken();
-	console.log("Getting current user with bearer token:", bearerToken);
 
 	if (!bearerToken) return null;
 

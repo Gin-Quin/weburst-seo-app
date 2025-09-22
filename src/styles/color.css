@@ -38,6 +38,9 @@
 	.text-light {
 		color: var(--color-text-light);
 	}
+	.text-gray-1 {
+		color: var(--color-gray-1);
+	}
 
 	.bg-base-100 {
 		background-color: var(--color-base-100);
@@ -119,5 +122,8 @@
 	}
 	.bg-neutral-fade {
 		background-color: var(--color-neutral-fade);
+	}
+	.bg-gray-1 {
+		background-color: var(--color-gray-1);
 	}
 }

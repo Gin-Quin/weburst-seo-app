@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { defineContent } from "$lib/i18n/locale.svelte";
 	import IconUserCheckRegular from "phosphor-icons-svelte/IconUserCheckRegular.svelte";
-	import { listUsers } from "../../routes/(api)/users.remote";
+	import { listUsers } from "../../routes/api/users.remote";
 
 	const content = defineContent({
 		en: {

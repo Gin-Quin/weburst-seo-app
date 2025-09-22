@@ -1,7 +1,7 @@
 import { relations } from "drizzle-orm";
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import type { UserId } from "lucia";
-import type { KeywordAnalysisFrequency } from "../../../routes/(api)/projects.schema";
+import type { KeywordAnalysisFrequency } from "../../../routes/api/projects.schema";
 
 export type Role = "admin" | "user";
 
@@ -59,23 +59,22 @@ export const projects = sqliteTable("projects", {
 	clientName: text("client_name").notNull(),
 	domain: text("domain").notNull(),
 	websiteUrl: text("website_url").notNull(),
-	type: text("type").$type<"audit" | "redesign" | "subscription" | "prospect">().notNull(),
-	keywordAnalysisFrequency: text("keyword_analysis_frequency").$type<KeywordAnalysisFrequency>().notNull(),
+	type: text("type").$type<"audit" | "prospect">().notNull(),
+	keywordAnalysisFrequency: text("keyword_analysis_frequency")
+		.$type<KeywordAnalysisFrequency>()
+		.notNull(),
 	deletedAt: integer("deleted_at"),
 });
 export type Project = typeof projects.$inferSelect;
 
-export const usersToProjects = sqliteTable(
-	"users_to_projects",
-	{
-		userId: text("user_id")
-			.notNull()
-			.references(() => users.id, { onDelete: "cascade" }),
-		projectId: text("project_id")
-			.notNull()
-			.references(() => projects.id, { onDelete: "cascade" }),
-	},
-);
+export const usersToProjects = sqliteTable("users_to_projects", {
+	userId: text("user_id")
+		.notNull()
+		.references(() => users.id, { onDelete: "cascade" }),
+	projectId: text("project_id")
+		.notNull()
+		.references(() => projects.id, { onDelete: "cascade" }),
+});
 
 // ------------------------- RELATIONS ------------------------- //
 

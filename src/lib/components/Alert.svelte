@@ -24,20 +24,20 @@
 >
 	<div class="col h-full">
 		{#if type === "info"}
-			<div class="text-2xl center w-10 h-10 bg-info rounded-full">
-				<IconWarningCircleRegular class="text-info" />
+			<div class="text-2xl center w-10 h-10 bg-info-content rounded-full">
+				<IconWarningCircleRegular class="text-[var(--color-info)]" />
 			</div>
 		{:else if type === "success"}
-			<div class="text-2xl center w-10 h-10 bg-success rounded-full">
-				<IconCheckCircleRegular class="text-success" />
+			<div class="text-2xl center w-10 h-10 bg-success-content rounded-full">
+				<IconCheckCircleRegular class="text-[var(--color-success)]" />
 			</div>
 		{:else if type === "warning"}
-			<div class="text-2xl center w-10 h-10 bg-warning rounded-full">
-				<IconWarningRegular class="text-warning" />
+			<div class="text-2xl center w-10 h-10 bg-warning-content rounded-full">
+				<IconWarningRegular class="text-[var(--color-warning)]" />
 			</div>
 		{:else if type === "error"}
-			<div class="text-2xl center w-10 h-10 bg-error rounded-full">
-				<IconWarningCircleRegular class="text-error" />
+			<div class="text-2xl center w-10 h-10 bg-error-content rounded-full">
+				<IconWarningCircleRegular class="text-[var(--color-error)]" />
 			</div>
 		{/if}
 	</div>

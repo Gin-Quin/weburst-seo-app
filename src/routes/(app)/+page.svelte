@@ -3,8 +3,9 @@
 	import ProjectCard from "$lib/components/ProjectCard.svelte";
 	import { defineContent } from "$lib/i18n/locale.svelte";
 	import { context } from "$lib/stores/context.svelte";
-	import { listProjects } from "../(api)/projects.remote";
-	import type { ProjectInfo } from "../(api)/projects.remote";
+	import { onMount } from "svelte";
+	import { fade } from "svelte/transition";
+	import { listProjects } from "../api/projects.remote";
 
 	const content = defineContent({
 		en: {
@@ -18,31 +19,41 @@
 			noProjects: "Aucun projet trouvé.",
 		},
 	});
+
+	let mounted = $state(false);
+
+	onMount(() => {
+		mounted = true;
+	});
 </script>
 
-<div class="px-10 py-8">
-	<main class="col gap-5 bg-base-100 px-10 py-8 rounded-[1.25rem]">
-		<header class="PageHeader col gap-1 justify-center h-[5rem] text-2xl bold">
-			{context.user!.role === "admin"
-				? $content.allProjects
-				: $content.myProjects}
-		</header>
+{#if mounted}
+	<div class="px-10 py-8" in:fade={{ duration: 300 }}>
+		<main class="col gap-5 bg-base-100 px-10 py-8 rounded-[1.25rem]">
+			<header
+				class="PageHeader col gap-1 justify-center h-[5rem] text-2xl bold"
+			>
+				{context.user!.role === "admin"
+					? $content.allProjects
+					: $content.myProjects}
+			</header>
 
-		<div class="projects">
-			{#await listProjects()}
-				<Loader />
-			{:then projects}
-				{#if projects.length == 0}
-					<p>{$content.noProjects}</p>
-				{:else}
-					{#each projects as project (project.id)}
-						<ProjectCard {project} />
-					{/each}
-				{/if}
-			{/await}
-		</div>
-	</main>
-</div>
+			<div class="projects">
+				{#await listProjects()}
+					<Loader />
+				{:then projects}
+					{#if projects.length == 0}
+						<p>{$content.noProjects}</p>
+					{:else}
+						{#each projects as project (project.id)}
+							<ProjectCard {project} />
+						{/each}
+					{/if}
+				{/await}
+			</div>
+		</main>
+	</div>
+{/if}
 
 <style>
 	.PageHeader {

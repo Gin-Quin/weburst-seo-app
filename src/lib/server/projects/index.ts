@@ -38,14 +38,11 @@ export async function getProjectById(id: string): Promise<Project | null> {
  * - Returns the updated row, or null if not found.
  */
 export async function updateProject(id: string, updates: ProjectUpdate): Promise<Project | null> {
-	console.log("Updating Project", id, updates);
-
 	if (!updates || Object.keys(updates).length === 0) {
 		console.log("No project updates provided");
 		return getProjectById(id);
 	}
 	const [updated] = await db.update(projects).set(updates).where(eq(projects.id, id)).returning();
-	console.log("Project updated:", updated);
 	return updated ?? null;
 }
 

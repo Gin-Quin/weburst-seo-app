@@ -15,9 +15,9 @@ CREATE TABLE `deleted_users` (
 	`email` text NOT NULL,
 	`hashed_password` text,
 	`email_verified` integer DEFAULT false,
-	`created_at` integer DEFAULT 1758025088013 NOT NULL,
-	`updated_at` integer DEFAULT 1758025088013 NOT NULL,
-	`deleted_at` integer DEFAULT 1758025088013 NOT NULL
+	`created_at` integer DEFAULT 1758182433411 NOT NULL,
+	`updated_at` integer DEFAULT 1758182433411 NOT NULL,
+	`deleted_at` integer DEFAULT 1758182433411 NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE `projects` (
@@ -45,8 +45,8 @@ CREATE TABLE `users` (
 	`email` text NOT NULL,
 	`hashed_password` text,
 	`email_verified` integer DEFAULT false,
-	`created_at` integer DEFAULT 1758025088013 NOT NULL,
-	`updated_at` integer DEFAULT 1758025088013 NOT NULL
+	`created_at` integer DEFAULT 1758182433411 NOT NULL,
+	`updated_at` integer DEFAULT 1758182433411 NOT NULL
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `users_email_unique` ON `users` (`email`);--> statement-breakpoint

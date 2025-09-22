@@ -1,12 +1,7 @@
 import * as v from "valibot";
 
 // Shared enums/schemas
-export const ProjectType = v.union([
-	v.literal("audit"),
-	v.literal("redesign"),
-	v.literal("subscription"),
-	v.literal("prospect"),
-]);
+export const ProjectType = v.union([v.literal("audit"), v.literal("prospect")]);
 export type ProjectType = v.InferOutput<typeof ProjectType>;
 
 export const KeywordAnalysisFrequency = v.union([

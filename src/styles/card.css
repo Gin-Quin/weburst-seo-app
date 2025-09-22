@@ -3,6 +3,7 @@
 		border-radius: 1.25rem;
 		border: 1px solid;
 		border-color: var(--color-border);
+		background-color: var(--color-base-100);
 	}
 
 	.card > header {

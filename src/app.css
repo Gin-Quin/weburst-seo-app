@@ -15,6 +15,8 @@
 @import "./styles/badge.css";
 @import "./styles/menu.css";
 @import "./styles/modals.css";
+@import "./styles/tabs.css";
+@import "./styles/table.css";
 
 @plugin "daisyui/theme" {
 	name: "weburst";
@@ -33,20 +35,20 @@
 	--color-accent: #00ff19;
 	--color-neutral: #111111;
 	--color-neutral-content: #fff;
-	--color-info: #e9f6ff;
-	--color-info-content: #1c596f;
-	--color-info-purple: #f2e9ff;
-	--color-info-purple-content: #401c6f;
-	--color-info-magenta: #ffe6f4;
-	--color-info-magenta-content: #ab0d7c;
-	--color-info: #e9f6ff;
-	--color-info-content: #1c596f;
-	--color-success: #e9ffee;
-	--color-success-content: #1c6f2f;
-	--color-warning: #fff4e6;
-	--color-warning-content: #ab6e0d;
-	--color-error: #fcf4f5;
-	--color-error-content: #ff5255;
+	--color-info: #1c596f;
+	--color-info-content: #e9f6ff;
+	--color-info-purple: #8c52ff;
+	--color-info-purple-content: #f2e9ff;
+	--color-info-magenta: #ab0d7c;
+	--color-info-magenta-content: #ffe6f4;
+	--color-info: #1c596f;
+	--color-info-content: #e9f6ff;
+	--color-success: #1c6f2f;
+	--color-success-content: #e9ffee;
+	--color-warning: #ab6e0d;
+	--color-warning-content: #fff4e6;
+	--color-error: #ff5255;
+	--color-error-content: #fcf4f5;
 
 	/* Custom colors */
 	--color-background: #fcfcfc;
@@ -54,6 +56,8 @@
 	--color-purple: #8c52ff;
 	--color-text-light: #656565;
 	--color-neutral-fade: rgba(0, 0, 0, 0.2);
+	--color-gray-1: #f8f8f8;
+	--color-gray-2: #f5f5f5;
 
 	/* border radius */
 	--radius-selector: 1rem;
@@ -104,6 +108,7 @@
 
 * {
 	box-sizing: border-box;
+	min-height: 0;
 }
 
 html {

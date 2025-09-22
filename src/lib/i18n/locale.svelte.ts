@@ -16,3 +16,7 @@ export function defineContent<T>(
 ): Readable<T> {
 	return derived(locale, ($locale) => content[$locale]);
 }
+
+export function getLocale(): Locale {
+	return currentLocale;
+}

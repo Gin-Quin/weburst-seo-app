@@ -3,11 +3,11 @@
 	import { defineContent } from "$lib/i18n/locale.svelte";
 	import type { User } from "$lib/server/db/schema";
 	import { listUsers } from "$lib/server/users";
+	import IconEnvelopeRegular from "phosphor-icons-svelte/IconEnvelopeRegular.svelte";
 	import IconUserCheckRegular from "phosphor-icons-svelte/IconUserCheckRegular.svelte";
 	import IconUserRegular from "phosphor-icons-svelte/IconUserRegular.svelte";
-	import IconEnvelopeRegular from "phosphor-icons-svelte/IconEnvelopeRegular.svelte";
-	import type { CreateUser } from "../../routes/(api)/users.schema";
 	import { onMount } from "svelte";
+	import type { CreateUser } from "../../routes/api/users.schema";
 
 	const content = defineContent({
 		en: {

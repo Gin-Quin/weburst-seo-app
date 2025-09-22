@@ -14,9 +14,8 @@
 
 <div class="avatar avatar-placeholder">
 	<div
-		class="bg-neutral-fade text-neutral-content rounded-full bold {size ==
-		'mini'
-			? 'size-6 text-[0.625rem]'
+		class="bg-info-purple text-info-purple rounded-full bold {size == 'mini'
+			? 'size-7 text-[0.75rem]'
 			: 'size-14 text-md'}"
 	>
 		{user ? getInitials(user.firstName, user.lastName) : ""}

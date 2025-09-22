@@ -1,8 +1,5 @@
-import {
-	getClickhouseClient,
-	getClickhouseDatabase,
-} from "../src/lib/server/clickhouse";
 import { clickhouseMigrations } from "../src/lib/server/clickhouse/migrations";
+import { getClickhouseClient, getClickhouseDatabase } from "./clickhouse";
 
 if (import.meta.main) {
 	migrateClickhouse();
@@ -13,11 +10,6 @@ async function migrateClickhouse() {
 	console.log(`⛵ Applying Clickhouse migrations for database ${database}`);
 
 	const clickhouse = getClickhouseClient({ database: "default" });
-
-	if (clickhouse instanceof Error) {
-		console.error(clickhouse);
-		process.exit(1);
-	}
 
 	// create database if not exists
 	await clickhouse.command({
@@ -52,6 +44,7 @@ async function migrateClickhouse() {
 			console.log(`✔︎ Applied migration ${migration.name}`);
 		} catch (error) {
 			console.error(`❌ Error applying migration ${migration.name}: ${error}`);
+			process.exit(1);
 		}
 	}
 

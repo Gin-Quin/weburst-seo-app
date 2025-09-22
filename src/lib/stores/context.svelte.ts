@@ -1,11 +1,18 @@
 import type { User } from "$lib/server/db/schema";
-import type { ProjectInfo } from "../../routes/(api)/projects.remote";
+import type { ProjectInfo } from "../../routes/api/projects.remote";
 
 export type Context = {
 	user: User | null;
+	project?: ProjectInfo;
+	projects?: ProjectInfo[];
 	openProjectDialog?: (project?: ProjectInfo) => void;
 	openUserDialog?: (mode?: "account" | "create") => void;
-	openConfirmDialog?: (input: { message: string; then: () => void }) => void;
+	openConfirmDialog?: (input: {
+		title: string;
+		description?: string;
+		color?: "info" | "success" | "warning" | "error" | "primary" | "secondary" | "accent";
+		then: () => unknown;
+	}) => void;
 };
 
 export const context = $state<Context>({ user: null });

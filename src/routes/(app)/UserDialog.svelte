@@ -5,8 +5,8 @@
 	import IconEnvelopeRegular from "phosphor-icons-svelte/IconEnvelopeRegular.svelte";
 	import IconUserCheckRegular from "phosphor-icons-svelte/IconUserCheckRegular.svelte";
 	import IconUserRegular from "phosphor-icons-svelte/IconUserRegular.svelte";
-	import { createUserByAdmin, updateCurrentUser } from "../(api)/users.remote";
-	import { CreateUser, UpdateCurrentUser } from "../(api)/users.schema";
+	import { createUserByAdmin, updateCurrentUser } from "../api/users.remote";
+	import { CreateUser, UpdateCurrentUser } from "../api/users.schema";
 
 	let {
 		ref = $bindable(),

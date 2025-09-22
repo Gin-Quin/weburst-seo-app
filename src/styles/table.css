@@ -1,0 +1,23 @@
+@layer utilities {
+	thead {
+		> tr {
+			th {
+				@apply font-bold! text-sm py-0 h-full;
+			}
+			&:hover > th {
+				background: none !important;
+			}
+		}
+	}
+
+	tbody {
+		> tr {
+			td {
+				@apply font-bold text-sm py-0 h-full;
+			}
+			&:hover > td {
+				background: var(--color-base-300) !important;
+			}
+		}
+	}
+}

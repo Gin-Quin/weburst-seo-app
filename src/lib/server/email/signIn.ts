@@ -1,11 +1,11 @@
-import { env } from "$env/dynamic/private";
+import { env as PUBLIC } from "$env/dynamic/public";
 import { sendEmail } from "./sendEmail";
 
 export async function sendSignInEmail(
 	to: string,
 	{ code, magicLinkToken }: { code: string; magicLinkToken: string },
 ) {
-	const magicLink = `${env.PUBLIC_BASE_URL}/auth/verify-magic-link?email=${to}&token=${magicLinkToken}`;
+	const magicLink = `${PUBLIC.PUBLIC_BASE_URL}/login/verify-magic-link?email=${to}&token=${magicLinkToken}`;
 
 	await sendEmail({
 		from: "noreply@app.weburst.fr",

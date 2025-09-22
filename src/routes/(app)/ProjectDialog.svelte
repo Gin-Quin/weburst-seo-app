@@ -14,9 +14,9 @@
 	import IconRepeatRegular from "phosphor-icons-svelte/IconRepeatRegular.svelte";
 	import IconTrashRegular from "phosphor-icons-svelte/IconTrashRegular.svelte";
 	import IconUserRegular from "phosphor-icons-svelte/IconUserRegular.svelte";
-	import type { ProjectInfo } from "../(api)/projects.remote";
-	import { createProject, updateProject } from "../(api)/projects.remote";
-	import type { CreateProject } from "../(api)/projects.schema";
+	import type { ProjectInfo } from "../api/projects.remote";
+	import { createProject, updateProject } from "../api/projects.remote";
+	import type { CreateProject } from "../api/projects.schema";
 
 	const content = defineContent({
 		en: {
