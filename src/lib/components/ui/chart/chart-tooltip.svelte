@@ -23,6 +23,7 @@
 		labelKey,
 		label,
 		labelFormatter = defaultFormatter,
+		valueFormatter = defaultFormatter,
 		labelClassName,
 		formatter,
 		nameKey,
@@ -39,6 +40,8 @@
 		labelFormatter?: // eslint-disable-next-line @typescript-eslint/no-explicit-any
 		| ((value: any, payload: TooltipPayload[]) => string | number | Snippet)
 			| null;
+		valueFormatter?: // eslint-disable-next-line @typescript-eslint/no-explicit-any
+		((value: number, payload: TooltipPayload[]) => string | number) | null;
 		formatter?: Snippet<
 			[
 				{
@@ -59,6 +62,7 @@
 		if (hideLabel || !tooltipCtx.payload?.length) return null;
 
 		const [item] = tooltipCtx.payload;
+		if (!item) return null;
 		const key = labelKey ?? item?.label ?? item?.name ?? "value";
 
 		const itemConfig = getPayloadConfigFromPayload(chart.config, item, key);
@@ -93,7 +97,7 @@
 <TooltipPrimitive.Root variant="none">
 	<div
 		class={cn(
-			"border-border/50 bg-background grid min-w-[9rem] items-start gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs shadow-xl",
+			"border-border/50 bg-background grid min-w-[9rem] items-start gap-1.5 rounded-[0.5rem] border px-2.5 py-1.5 text-xs shadow-xl",
 			className,
 		)}
 		{...restProps}
@@ -160,7 +164,9 @@
 								<span
 									class="text-foreground font-mono font-medium tabular-nums"
 								>
-									{item.value.toLocaleString()}
+									{valueFormatter
+										? valueFormatter(item.value, tooltipCtx.payload)
+										: item.value.toLocaleString()}
 								</span>
 							{/if}
 						</div>

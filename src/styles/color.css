@@ -15,22 +15,22 @@
 		color: var(--color-neutral-content);
 	}
 	.text-info {
-		color: var(--color-info-content);
+		color: var(--color-info);
 	}
 	.text-info-purple {
-		color: var(--color-info-purple-content);
+		color: var(--color-info-purple);
 	}
 	.text-info-magenta {
-		color: var(--color-info-magenta-content);
+		color: var(--color-info-magenta);
 	}
 	.text-success {
-		color: var(--color-success-content);
+		color: var(--color-success);
 	}
 	.text-warning {
-		color: var(--color-warning-content);
+		color: var(--color-warning);
 	}
 	.text-error {
-		color: var(--color-error-content);
+		color: var(--color-error);
 	}
 	.text-purple {
 		color: var(--color-purple);

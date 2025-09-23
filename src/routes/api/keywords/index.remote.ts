@@ -43,3 +43,21 @@ export const getAnalysisResultsWithTrend = query(
 		return await KeywordsService.aggregateAnalysisResultsWithTrend({ projectId });
 	},
 );
+
+export const getAllAggregatedAnalysisResults = query(
+	v.object({
+		projectId: v.string(),
+	}),
+	async ({ projectId }) => {
+		return await KeywordsService.getAllAggregatedAnalysisResults({ projectId });
+	},
+);
+
+export const getKeywordClusters = query(
+	v.object({
+		projectId: v.string(),
+	}),
+	async ({ projectId }) => {
+		return await KeywordsService.getKeywordClusters({ projectId });
+	},
+);

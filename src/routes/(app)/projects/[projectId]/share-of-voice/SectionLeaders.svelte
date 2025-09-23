@@ -6,11 +6,8 @@
 		AggregatedKeywordAnalysisData,
 	} from "$lib/server/clickhouse/services/keywords";
 	import { formatPercent } from "$lib/numbers/formatPercent";
-	import IconArrowUpRegular from "phosphor-icons-svelte/IconArrowUpRegular.svelte";
-	import IconArrowDownRegular from "phosphor-icons-svelte/IconArrowDownRegular.svelte";
 	import IconEyeBold from "phosphor-icons-svelte/IconEyeBold.svelte";
 	import type { SvelteSet } from "svelte/reactivity";
-	import { context } from "$lib/stores/context.svelte";
 	import Trend from "$lib/components/Trend.svelte";
 
 	const content = defineContent({

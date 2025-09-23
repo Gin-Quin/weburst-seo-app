@@ -113,10 +113,15 @@
 
 html {
 	overflow-y: scroll;
+	min-height: 100dvh;
 
 	&:has(dialog[open]) {
 		overflow-y: hidden;
 	}
+}
+
+body {
+	min-height: 100dvh;
 }
 
 *:focus,

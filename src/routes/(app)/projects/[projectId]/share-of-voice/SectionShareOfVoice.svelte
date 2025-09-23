@@ -1,40 +1,15 @@
 <script lang="ts">
-	import * as Chart from "$lib/components/ui/chart/index.js";
-	import { PieChart } from "layerchart";
 	import { defineContent } from "$lib/i18n/locale.svelte";
-	import IconArrowUpRegular from "phosphor-icons-svelte/IconArrowUpRegular.svelte";
 	import IconChartLineRegular from "phosphor-icons-svelte/IconChartLineRegular.svelte";
 	import IconChartPieSliceRegular from "phosphor-icons-svelte/IconChartPieSliceRegular.svelte";
-	import { scaleUtc } from "d3-scale";
-	import { curveNatural } from "d3-shape";
-	import { Area, AreaChart, LinearGradient } from "layerchart";
 	import type {
 		AggregatedKeywordAnalysis,
 		AggregatedKeywordAnalysisData,
 	} from "$lib/server/clickhouse/services/keywords";
 	import type { SvelteSet } from "svelte/reactivity";
 	import { context } from "$lib/stores/context.svelte";
-	import { formatPercent } from "$lib/numbers/formatPercent";
-	import IconArrowDownRegular from "phosphor-icons-svelte/IconArrowDownRegular.svelte";
-	import Trend from "$lib/components/Trend.svelte";
-
-	type PieChartData = {
-		domain: string;
-		volume: number;
-		color: string;
-	};
-
-	type LineChartData = {
-		date: Date;
-		value: number;
-		color: string;
-	};
-
-	const chartColors: Array<string> = [
-		"var(--color-primary)",
-		"var(--color-info-magenta)",
-		"var(--color-error)",
-	];
+	import SectionShareOfVoicePieChart from "./SectionShareOfVoicePieChart.svelte";
+	import SectionShareOfVoiceLineChart from "./SectionShareOfVoiceLineChart.svelte";
 
 	const content = defineContent({
 		en: {
@@ -66,65 +41,6 @@
 	let chartType = $state<"line" | "pie">(
 		context.project!.type == "audit" ? "pie" : "line",
 	);
-
-	const chartData = [
-		{ date: new Date("2024-01-01"), desktop: 186 },
-		{ date: new Date("2024-02-01"), desktop: 305 },
-		{ date: new Date("2024-03-01"), desktop: 237 },
-		{ date: new Date("2024-04-01"), desktop: 73 },
-		{ date: new Date("2024-05-01"), desktop: 209 },
-		{ date: new Date("2024-06-01"), desktop: 214 },
-	];
-
-	const chartConfig = {
-		desktop: { label: "Desktop", color: "var(--chart-1)" },
-	} satisfies Chart.ChartConfig;
-
-	function getPieChartData({
-		data,
-		totalVolume,
-		visibleDomains,
-	}: Pick<AggregatedKeywordAnalysis, "data" | "totalVolume"> & {
-		visibleDomains: SvelteSet<string>;
-	}): { pieChartData: Array<PieChartData>; pieChartConfig: Chart.ChartConfig } {
-		let visibleDomainsVolume = 0;
-		let index = 0;
-
-		const pieChartData = Array<PieChartData>();
-		const pieChartConfig: Chart.ChartConfig = {};
-
-		for (const domain of visibleDomains) {
-			const domainData = data.find((item) => item.domain === domain);
-			const volume = domainData ? Math.round(domainData.volume) : 0;
-			visibleDomainsVolume += volume;
-
-			pieChartData.push({
-				domain,
-				volume,
-				color: chartColors[index % chartColors.length]!,
-			});
-			pieChartConfig[domain] = {
-				label: domain,
-				color: chartColors[index % chartColors.length]!,
-			};
-
-			index += 1;
-		}
-
-		pieChartData.push({
-			domain: "others",
-			volume: totalVolume - visibleDomainsVolume,
-			color: "var(--color-gray-2)",
-		});
-		pieChartConfig["others"] = {
-			label: $content.others,
-			color: "var(--color-gray-2)",
-		};
-
-		return { pieChartData, pieChartConfig };
-	}
-
-	function getChartLineData() {}
 </script>
 
 <div class="card col justify-stretch">
@@ -158,125 +74,14 @@
 
 	<main class="col justify-stretch w-full grow">
 		{#if chartType == "line"}
-			<div class="row justify-between items-center">
-				<div class="row items-center gap-2">
-					<div class="text-4xl font-bold">
-						{formatPercent(client.volume / totalVolume, {
-							maximumFractionDigits: 0,
-						})}
-					</div>
-					<Trend trend={client.trend} />
-				</div>
-			</div>
-
-			<div class="Graph w-full grow">
-				<Chart.Container config={chartConfig} class="h-full">
-					<AreaChart
-						data={chartData}
-						x="date"
-						xScale={scaleUtc()}
-						yPadding={[0, 25]}
-						series={[
-							{
-								key: "mobile",
-								label: "Mobile",
-								color: "var(--color-mobile)",
-							},
-							{
-								key: "desktop",
-								label: "Desktop",
-								color: "var(--color-desktop)",
-							},
-						]}
-						seriesLayout="stack"
-						props={{
-							area: {
-								curve: curveNatural,
-								"fill-opacity": 0.4,
-								line: { class: "stroke-1" },
-								motion: "tween",
-							},
-							xAxis: {
-								format: (v: Date) =>
-									v.toLocaleDateString("en-US", { month: "short" }),
-							},
-							yAxis: { format: () => "" },
-						}}
-					>
-						{#snippet tooltip()}
-							<Chart.Tooltip
-								indicator="dot"
-								labelFormatter={(v: Date) => {
-									return v.toLocaleDateString("en-US", {
-										month: "long",
-									});
-								}}
-							/>
-						{/snippet}
-						{#snippet marks({ series, getAreaProps })}
-							{#each series as s, i (s.key)}
-								<LinearGradient
-									stops={[
-										s.color ?? "",
-										"color-mix(in lch, " + s.color + " 10%, transparent)",
-									]}
-									vertical
-								>
-									{#snippet children({ gradient })}
-										<Area {...getAreaProps(s, i)} fill={gradient} />
-									{/snippet}
-								</LinearGradient>
-							{/each}
-						{/snippet}
-					</AreaChart>
-				</Chart.Container>
-			</div>
+			<SectionShareOfVoiceLineChart {totalVolume} {visibleDomains} {client} />
 		{:else if chartType == "pie"}
-			{@const { pieChartData, pieChartConfig } = getPieChartData({
-				data,
-				totalVolume,
-				visibleDomains,
-			})}
-
-			<div class="Graph w-full grow">
-				<Chart.Container
-					config={pieChartConfig}
-					class="mx-auto aspect-square h-full center"
-				>
-					<div class="absolute col center">
-						{#if client.trend && client.trend >= 0.1}
-							<div class="badge badge-success translate-y-[-0.5rem]">
-								<IconArrowUpRegular class="text-small" />
-								{formatPercent(client.trend)}
-							</div>
-						{:else if client.trend && client.trend <= -0.1}
-							<div class="badge badge-warning translate-y-[-0.5rem]">
-								<IconArrowDownRegular class="text-small" />
-								{formatPercent(Math.abs(client.trend))}
-							</div>
-						{/if}
-						<div class="text-5xl font-bold">
-							{formatPercent(client.volume / totalVolume, {
-								maximumFractionDigits: 0,
-							})}
-						</div>
-					</div>
-
-					<PieChart
-						data={pieChartData}
-						key="domain"
-						value="volume"
-						c="color"
-						innerRadius={0.75}
-						padding={28}
-						props={{ pie: { motion: "tween" } }}
-					>
-						{#snippet tooltip()}
-							<Chart.Tooltip hideLabel />
-						{/snippet}
-					</PieChart>
-				</Chart.Container>
-			</div>
+			<SectionShareOfVoicePieChart
+				{data}
+				{totalVolume}
+				{visibleDomains}
+				{client}
+			/>
 		{/if}
 	</main>
 </div>

@@ -158,10 +158,14 @@
 				</div>
 			</div>
 
-			<div class="grid grid-cols-2 gap-3">
+			<div
+				class="grid gap-3 {project.type == 'prospect'
+					? 'grid-cols-2'
+					: 'grid-cols-1'}"
+			>
 				<div class="field">
 					<div class="field-title">{$content.type}</div>
-					<label class="select">
+					<label class="select w-full">
 						<IconFolderRegular class="icon" />
 						<select class="select" bind:value={project.type}>
 							{#each Object.entries($projectTypes) as [value, label]}
@@ -171,20 +175,22 @@
 					</label>
 				</div>
 
-				<div class="field">
-					<div class="field-title">{$content.keywordAnalysisFrequency}</div>
-					<label class="select">
-						<IconRepeatRegular class="icon" />
-						<select
-							class="select"
-							bind:value={project.keywordAnalysisFrequency}
-						>
-							{#each Object.entries($keywordAnalysisFrequencies) as [value, label]}
-								<option {value}>{label}</option>
-							{/each}
-						</select>
-					</label>
-				</div>
+				{#if project.type == "prospect"}
+					<div class="field">
+						<div class="field-title">{$content.keywordAnalysisFrequency}</div>
+						<label class="select w-full">
+							<IconRepeatRegular class="icon" />
+							<select
+								class="select"
+								bind:value={project.keywordAnalysisFrequency}
+							>
+								{#each Object.entries($keywordAnalysisFrequencies) as [value, label]}
+									<option {value}>{label}</option>
+								{/each}
+							</select>
+						</label>
+					</div>
+				{/if}
 			</div>
 
 			<div class="grid grid-cols-1 gap-[0.375rem]">
@@ -194,7 +200,7 @@
 						{#each project.leaderIds as leaderId, index (leaderId)}
 							<div class="row items-center w-full gap-2">
 								<SelectUser
-									bind:userId={project.leaderIds[index]}
+									bind:userId={project.leaderIds[index]!}
 									class="grow"
 									exclude={project.leaderIds.filter((id) => id !== leaderId)}
 								/>

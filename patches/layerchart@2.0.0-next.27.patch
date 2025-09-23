@@ -1,0 +1,28 @@
+diff --git a/node_modules/layerchart/.bun-tag-3e58ea767accd509 b/.bun-tag-3e58ea767accd509
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/layerchart/.bun-tag-bb193fcb2c55fe98 b/.bun-tag-bb193fcb2c55fe98
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/layerchart/.bun-tag-db7e75b34260f795 b/.bun-tag-db7e75b34260f795
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/layerchart/.bun-tag-fdf3543dd43c4f8d b/.bun-tag-fdf3543dd43c4f8d
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/dist/components/charts/AreaChart.svelte b/dist/components/charts/AreaChart.svelte
+index fc14fe9dbcd87a71c3498b3512c55bb80d0e9f5f..c1157f5817d090db728a3689013536cb7040676b 100644
+--- a/dist/components/charts/AreaChart.svelte
++++ b/dist/components/charts/AreaChart.svelte
+@@ -154,8 +154,10 @@
+     let _chartData = (
+       seriesState.allSeriesData.length ? seriesState.allSeriesData : chartDataArray(data)
+     ) as Array<TData>;
++
++
+     if (stackSeries) {
+-      const seriesKeys = seriesState.visibleSeries.map((s) => s.key);
++      const seriesKeys = seriesState.visibleSeries.map((s) => s.key).filter(key => _chartData.some(data => key in data));
+       const offset =
+         seriesLayout === 'stackExpand'
+           ? stackOffsetExpand

@@ -1,6 +1,8 @@
 // import { env } from "$env/dynamic/private";
 import { env } from "$env/dynamic/private";
 import { getWeightedVolume } from "$lib/keywords/getWeightedVolume";
+import { getSimilarityJaccard } from "$lib/numbers/getSimilarityJaccard";
+import { groupBy } from "$lib/objects/groupBy";
 import { DAY } from "$lib/timeUnits";
 import { getClickhouseClient } from "../index";
 import type { DataForSeo } from "./DataForSeo";
@@ -50,6 +52,10 @@ export type KeywordAnalysisResponse = {
 	description: string;
 };
 export type KeywordAnalysisResponseInput = Omit<KeywordAnalysisResponse, "createdAt">;
+export type KeywordAnalysisMinimalResponse = Pick<
+	KeywordAnalysisResponse,
+	"keyword" | "domain" | "position"
+>;
 
 export type AggregatedKeywordAnalysis = {
 	analysisId: string;
@@ -59,12 +65,31 @@ export type AggregatedKeywordAnalysis = {
 	data: Array<AggregatedKeywordAnalysisData>;
 };
 
+export type DatedAggregatedKeywordAnalysis = AggregatedKeywordAnalysis & {
+	createdAt: string;
+};
+
 export type AggregatedKeywordAnalysisData = {
 	domain: string;
 	volume: number;
 	topThreeKeywordCount: number;
 	topTenKeywordCount: number;
+	positionnedKeywordCount: number;
 	trend?: number;
+};
+
+export type KeywordCluster = Array<KeywordClusterData>;
+
+export type KeywordClusterData = {
+	keyword: string;
+	volume: number;
+	items: Array<KeywordClusterItem>;
+};
+
+export type KeywordClusterItem = {
+	domain: string;
+	url: string;
+	position: number;
 };
 
 export namespace KeywordsService {
@@ -143,7 +168,7 @@ export namespace KeywordsService {
 	 */
 	export async function getKeywords(
 		input: { projectId: string } | { setId: string },
-	): Promise<Keyword[]> {
+	): Promise<Keyword[] | null> {
 		const clickhouse = getClickhouseClient();
 		let setId: string;
 
@@ -165,7 +190,7 @@ export namespace KeywordsService {
 			const result = await response.json<{ id: string }>();
 			const latestSetId = result.data[0]?.id;
 			if (!latestSetId) {
-				throw new Error(`No keyword set found for project ${projectId}`);
+				return null;
 			}
 			setId = latestSetId;
 		}
@@ -224,7 +249,7 @@ export namespace KeywordsService {
 		}
 
 		const keywords = await getKeywords({ setId });
-		if (!keywords.length) {
+		if (!keywords?.length) {
 			throw new Error(`No keywords found for set ${setId}`);
 		}
 
@@ -248,7 +273,7 @@ export namespace KeywordsService {
 					keyword: keyword.name,
 					location_code: 2250,
 					language_code: "fr",
-					depth: 22,
+					depth: 50,
 					priority: 2,
 					...callbackOptions,
 				})),
@@ -507,31 +532,49 @@ export namespace KeywordsService {
 	}
 
 	/**
-	 * Returns the aggregated results for a given analysis.
+	 * Return the keyword analysis responses for a given analysis.
 	 */
-	export async function aggregateAnalysisResults({
+	export async function getKeywordAnalysisResponses({
 		analysisId,
+		positionLimit,
 	}: {
 		analysisId: string;
-	}): Promise<AggregatedKeywordAnalysis | null> {
+		positionLimit?: number;
+	}): Promise<Array<KeywordAnalysisMinimalResponse>> {
 		const clickhouse = getClickhouseClient();
-
-		const setId = await getSetIdOfAnalysis({ analysisId });
-		if (!setId) return null;
-
-		const keywords = await getKeywords({ setId });
 
 		const response = await clickhouse.query({
 			query: `
 				SELECT keyword, position, domain
 				FROM keywordAnalysisResponses
 				WHERE analysisId = {analysisId: String}
+				${positionLimit ? `AND position <= ${positionLimit} ORDER BY position ASC` : ""}
 			`,
 			query_params: { analysisId },
 			format: "JSON",
 		});
 
-		const { data } = await response.json<{ keyword: string; position: number; domain: string }>();
+		const { data } = await response.json<KeywordAnalysisMinimalResponse>();
+		return data;
+	}
+
+	/**
+	 * Returns the aggregated results for a given analysis.
+	 */
+	export async function aggregateAnalysisResults({
+		analysisId,
+		positionLimit,
+	}: {
+		analysisId: string;
+		positionLimit?: number;
+	}): Promise<AggregatedKeywordAnalysis | null> {
+		const setId = await getSetIdOfAnalysis({ analysisId });
+		if (!setId) return null;
+
+		const keywords = await getKeywords({ setId });
+		if (!keywords?.length) return null;
+
+		const data = await getKeywordAnalysisResponses({ analysisId, positionLimit });
 
 		let totalVolume = 0;
 		const distinctKeywords = new Set<string>();
@@ -554,6 +597,7 @@ export namespace KeywordsService {
 				domain: item.domain,
 				topThreeKeywordCount: 0,
 				topTenKeywordCount: 0,
+				positionnedKeywordCount: 0,
 				volume: 0,
 			};
 			if (item.position <= 3) {
@@ -562,6 +606,7 @@ export namespace KeywordsService {
 			if (item.position <= 10) {
 				dataByDomain[item.domain]!.topTenKeywordCount += 1;
 			}
+			dataByDomain[item.domain]!.positionnedKeywordCount += 1;
 			dataByDomain[item.domain]!.volume += weightedVolume;
 		}
 
@@ -643,5 +688,127 @@ export namespace KeywordsService {
 				new Date(mostRecentAnalysisAt).getTime() - 28 * DAY,
 		);
 		return (analysisOnemonthAgo ?? allAnalysis.at(-1))?.id;
+	}
+
+	/**
+	 * Returns all previous analysy results.
+	 */
+	export async function getAllAggregatedAnalysisResults({
+		projectId,
+		positionLimit = undefined,
+	}: {
+		projectId: string;
+		positionLimit?: number;
+	}): Promise<Array<DatedAggregatedKeywordAnalysis>> {
+		const allAnalysisIds = await getAllProjectAnalysis(projectId);
+		const result: Array<DatedAggregatedKeywordAnalysis> = [];
+
+		for (const { id: analysisId, createdAt } of allAnalysisIds) {
+			const analysisResult = await aggregateAnalysisResults({
+				analysisId,
+				positionLimit,
+			});
+			if (analysisResult) {
+				result.push({ createdAt, ...analysisResult });
+			}
+		}
+
+		return result;
+	}
+
+	/**
+	 * Find similarities between keywords and group them by similar clusters.
+	 */
+	export async function getKeywordClusters({
+		projectId,
+	}: {
+		projectId: string;
+	}): Promise<null | Array<KeywordCluster>> {
+		const analysisId = await getProjectLastAnalysisId(projectId);
+		if (!analysisId) return null;
+
+		const setId = await getSetIdOfAnalysis({ analysisId });
+		if (!setId) return null;
+
+		const keywords = await getKeywords({ setId });
+		if (!keywords?.length) return null;
+
+		const clickhouse = getClickhouseClient();
+
+		const response = await clickhouse.query({
+			query: `
+				SELECT keyword, domain, url, position
+				FROM keywordAnalysisResponses
+				WHERE analysisId = {analysisId: String}
+				AND position <= 10 ORDER BY position ASC
+			`,
+			query_params: { analysisId },
+			format: "JSON",
+		});
+
+		const { data } = await response.json<{
+			keyword: string;
+			domain: string;
+			url: string;
+			position: number;
+		}>();
+
+		const dataByKeyword = groupBy(data, "keyword");
+		const clusters: Array<KeywordCluster> = [];
+
+		for (const keyword in dataByKeyword) {
+			if (isKeywordInClusters(clusters, keyword)) {
+				continue;
+			}
+			const items = dataByKeyword[keyword]!;
+			const cluster: KeywordCluster = [
+				{
+					keyword,
+					items,
+					volume: keywords.find(({ name }) => name === keyword)?.volume ?? 0,
+				},
+			];
+
+			for (const otherKeyword in dataByKeyword) {
+				if (keyword == otherKeyword || isKeywordInClusters(clusters, otherKeyword)) {
+					continue;
+				}
+				const otherItems = dataByKeyword[otherKeyword]!;
+
+				const similarity = getSimilarityJaccard(
+					items.map((item) => item.url),
+					otherItems.map((item) => item.url),
+				);
+
+				if (similarity >= 0.6) {
+					cluster.push({
+						keyword: otherKeyword,
+						items: otherItems,
+						volume: keywords.find(({ name }) => name === otherKeyword)?.volume ?? 0,
+					});
+				}
+			}
+
+			if (cluster.length > 1) {
+				cluster.sort((a, b) => b.volume - a.volume);
+				clusters.push(cluster);
+			}
+		}
+
+		return clusters;
+	}
+
+	/**
+	 * Checks if a keyword is in a cluster.
+	 */
+	export function isKeywordInCluster(cluster: KeywordCluster, keyword: string) {
+		return cluster.some((item) => item.keyword === keyword);
+	}
+
+	/**
+	 * Checks if a keyword is in any cluster.
+	 */
+	export function isKeywordInClusters(clusters: Array<KeywordCluster>, keyword: string) {
+		return clusters.some((cluster) => isKeywordInCluster(cluster, keyword));
 	}
 }

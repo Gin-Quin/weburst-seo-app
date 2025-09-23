@@ -26,6 +26,6 @@
 
 	.field-error {
 		font-weight: 600;
-		color: var(--color-error-content);
+		color: var(--color-error);
 	}
 }

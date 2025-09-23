@@ -1,13 +1,10 @@
 <script lang="ts">
 	import Trend from "$lib/components/Trend.svelte";
 	import { defineContent } from "$lib/i18n/locale.svelte";
-	import { formatPercent } from "$lib/numbers/formatPercent";
 	import type {
 		AggregatedKeywordAnalysis,
 		AggregatedKeywordAnalysisData,
 	} from "$lib/server/clickhouse/services/keywords";
-	import { context } from "$lib/stores/context.svelte";
-	import type { SvelteSet } from "svelte/reactivity";
 
 	const content = defineContent({
 		en: {
@@ -15,7 +12,7 @@
 			description: "Estimated traffic from positions not yet exploited.",
 			trafficPotential: "Traffic potential",
 			targetedKeywordsLabel: "Number of targeted keywords",
-			top10KeywordsTitle: "Top 10 keywords",
+			positionnedKeywordsTitle: "Positionned keywords",
 			top3KeywordsTitle: "Top 3 keywords",
 		},
 		fr: {
@@ -24,7 +21,7 @@
 				"Trafic SEO potentiel sur les positions pas encore exploitées.",
 			trafficPotential: "Potentiel de trafic",
 			targetedKeywordsLabel: "Nombre de mots clés ciblés",
-			top10KeywordsTitle: "Mots-clés positionnés en top 10",
+			positionnedKeywordsTitle: "Mots-clés positionnés",
 			top3KeywordsTitle: "Mots-clés positionnés en top 3",
 		},
 	});
@@ -85,9 +82,9 @@
 				</span>
 			</div>
 			<div class="center justify-between">
-				<span class="">{$content.top10KeywordsTitle}</span>
+				<span class="">{$content.positionnedKeywordsTitle}</span>
 				<span class="text-xl">
-					{client.topTenKeywordCount}
+					{client.positionnedKeywordCount}
 				</span>
 			</div>
 		</div>

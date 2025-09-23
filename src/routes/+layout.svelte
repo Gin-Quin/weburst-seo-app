@@ -35,6 +35,6 @@
 
 <Toaster />
 
-<div class="root min-h-[100dvh] bg-base-300">
+<div class="root min-h-[100dvh]! bg-base-300">
 	{@render children?.()}
 </div>

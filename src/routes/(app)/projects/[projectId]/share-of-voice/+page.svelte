@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Loader from "$lib/components/Loader.svelte";
 	import { defineContent } from "$lib/i18n/locale.svelte";
 	import type { KeywordAnalysisStatus } from "$lib/server/clickhouse/services/keywords";
 	import { context } from "$lib/stores/context.svelte";
@@ -8,6 +9,7 @@
 	import IconDownloadSimpleRegular from "phosphor-icons-svelte/IconDownloadSimpleRegular.svelte";
 	import { onMount } from "svelte";
 	import { toast } from "svelte-sonner";
+	import { SvelteSet } from "svelte/reactivity";
 	import {
 		getAnalysisResultsWithTrend,
 		getAnalysisStatus,
@@ -19,8 +21,6 @@
 	import SectionLeaders from "./SectionLeaders.svelte";
 	import SectionPotential from "./SectionPotential.svelte";
 	import SectionShareOfVoice from "./SectionShareOfVoice.svelte";
-	import Loader from "$lib/components/Loader.svelte";
-	import { SvelteSet } from "svelte/reactivity";
 
 	const content = defineContent({
 		en: {
@@ -151,11 +151,12 @@
 				domain: context.project!.domain,
 				topThreeKeywordCount: 0,
 				topTenKeywordCount: 0,
+				positionnedKeywordCount: 0,
 				volume: 0,
 				trend: 0,
 			}}
 
-			<div class="grid grid-cols-[1.6fr_1fr] gap-5">
+			<div class="grid grid-cols-[1.4fr_1fr] gap-5">
 				<SectionShareOfVoice
 					{analysisResultsWithTrend}
 					{visibleDomains}
@@ -166,7 +167,11 @@
 
 			<div class="grid grid-cols-[1fr_1.8fr] gap-5">
 				<SectionPotential {analysisResultsWithTrend} {client} />
-				<SectionCompetitiveMapping />
+				<SectionCompetitiveMapping
+					{analysisResultsWithTrend}
+					{visibleDomains}
+					{client}
+				/>
 			</div>
 		{/if}
 	{:catch error}

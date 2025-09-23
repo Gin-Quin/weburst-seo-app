@@ -82,7 +82,7 @@
 	}
 </script>
 
-<div class="col items-center w-full bg-base-200 min-h-[100dvh]">
+<div class="col items-center w-full bg-base-200 min-h-[100dvh]!">
 	<header class="w-full px-10 py-2">
 		<img src={WeBurstLogo} alt="WeBurst Logo" width="280" />
 	</header>
