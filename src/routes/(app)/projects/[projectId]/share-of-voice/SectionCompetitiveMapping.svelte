@@ -141,7 +141,6 @@
 						>
 							{#snippet children({ points })}
 								{#each points as point}
-									{console.log("POINT!!", { series, index, point })}
 									{@const radialPoint = pointRadial(point.x, point.y)}
 									<Circle
 										cx={ctx.radial ? radialPoint[0] : point.x}
@@ -173,7 +172,6 @@
 				{#snippet tooltip({ context: ctx })}
 					<Tooltip.Root context={ctx}>
 						{#snippet children({ data })}
-							{console.log("DATA", { data })}
 							<div
 								class="border-border/50 bg-background grid min-w-[9rem] items-start gap-1.5 rounded-[0.5rem] border px-2.5 py-1.5 text-xs shadow-xl"
 							>
