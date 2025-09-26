@@ -26,7 +26,7 @@ test("KeywordsService: list sets, add, then retrieve for same project", async ()
 	const deadline = Date.now() + 5000;
 	while (Date.now() < deadline) {
 		try {
-			const d = await KeywordsService.getKeywords(projectId);
+			const d = await KeywordsService.getKeywords({ projectId });
 			if (Array.isArray(d) && d.length >= expectedCount) {
 				data = d as any;
 				break;

@@ -17,7 +17,7 @@ export async function sendSignInEmail(
 
 			    <!-- Logo -->
 			    <div style="text-align:center; padding:25px 0 10px;">
-			      <img src="https://weburst.com/assets/logo.png" alt="Logo Weburst" width="120" style="display:block; margin:0 auto; max-width:120px; height:auto;">
+			      <img src="${PUBLIC.PUBLIC_BASE_URL}/weburst-logo.png" alt="Logo Weburst" width="120" style="display:block; margin:0 auto; max-width:120px; height:auto;">
 			    </div>
 
 			    <!-- Header -->

@@ -7,6 +7,7 @@
 	import IconUserRegular from "phosphor-icons-svelte/IconUserRegular.svelte";
 	import { createUserByAdmin, updateCurrentUser } from "../api/users.remote";
 	import { CreateUser, UpdateCurrentUser } from "../api/users.schema";
+	import { toast } from "svelte-sonner";
 
 	let {
 		ref = $bindable(),
@@ -27,6 +28,10 @@
 			save: "Save",
 			create: "Create user",
 			cancel: "Cancel",
+			userUpdated: "Your data has been updated",
+			userCreated: "User created successfully",
+			userCreationFailed: "User creation failed",
+			userUpdateFailed: "User update failed",
 		},
 		fr: {
 			title: "Paramètres du compte",
@@ -38,6 +43,10 @@
 			save: "Enregistrer",
 			create: "Créer l'utilisateur",
 			cancel: "Annuler",
+			userUpdated: "Vos données ont été mises à jour",
+			userCreated: "Utilisateur créé avec succès",
+			userCreationFailed: "Impossible de créer l'utilisateur",
+			userUpdateFailed: "Impossible de mettre à jour l'utilisateur",
 		},
 	});
 
@@ -82,11 +91,21 @@
 	async function save() {
 		updating = true;
 		if (createMode) {
-			await createUserByAdmin(newUser);
+			try {
+				await createUserByAdmin(newUser);
+				toast.success($content.userCreated, { richColors: true });
+			} catch (error) {
+				toast.error($content.userCreationFailed, { richColors: true });
+			}
 		} else {
-			const response = await updateCurrentUser(updates);
-			if (response) {
-				setContextUser(response);
+			try {
+				const response = await updateCurrentUser(updates);
+				if (response) {
+					setContextUser(response);
+				}
+				toast.success($content.userUpdated, { richColors: true });
+			} catch (error) {
+				toast.error($content.userUpdateFailed, { richColors: true });
 			}
 		}
 		updating = false;

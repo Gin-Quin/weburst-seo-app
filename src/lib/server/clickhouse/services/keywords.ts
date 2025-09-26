@@ -3,9 +3,16 @@ import { env } from "$env/dynamic/private";
 import { getWeightedVolume } from "$lib/keywords/getWeightedVolume";
 import { getSimilarityJaccard } from "$lib/numbers/getSimilarityJaccard";
 import { groupBy } from "$lib/objects/groupBy";
+import { db } from "$lib/server/db";
+import { projects } from "$lib/server/db/schema";
+import { removeUrlParam } from "$lib/strings/removeUrlParam";
 import { DAY } from "$lib/timeUnits";
+import { and, eq, inArray, isNull } from "drizzle-orm";
+import type { KeywordAnalysisFrequency } from "../../../../routes/api/projects.schema";
 import { getClickhouseClient } from "../index";
 import type { DataForSeo } from "./DataForSeo";
+
+const ANALYSIS_DEPTH = 50;
 
 export type KeywordTuple = [name: string, volume: number];
 export type Keyword = { name: string; volume: number };
@@ -242,7 +249,7 @@ export namespace KeywordsService {
 	 * Start keyword analysis for a project.
 	 * @param projectId - The ID of the project.
 	 */
-	export async function startKeywordAnalysis(projectId: string) {
+	export async function startKeywordAnalysis(projectId: string, { priority = 2 } = {}) {
 		const setId = await getCurrentKeywordSet(projectId);
 		if (!setId) {
 			throw new Error(`No keyword set found for project ${projectId}`);
@@ -262,78 +269,100 @@ export namespace KeywordsService {
 			: {};
 
 		const url = `https://api.dataforseo.com/v3/serp/google/organic/task_post`;
-		const response = await fetch(url, {
-			method: "POST",
-			headers: {
-				Authorization: `Basic ${btoa(`${env.DATA_FOR_SEO_LOGIN}:${env.DATA_FOR_SEO_PASSWORD}`)}`,
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify(
-				keywords.map((keyword) => ({
-					keyword: keyword.name,
-					location_code: 2250,
-					language_code: "fr",
-					depth: 50,
-					priority: 2,
-					...callbackOptions,
-				})),
-			),
-		});
 
-		if (!response.ok) {
-			console.error(`Error starting keyword analysis: ${response.statusText}`);
-			console.error(await response.json());
-			throw new Error(`Error starting keyword analysis: ${response.statusText}`);
+		const chunks: Array<Array<Keyword>> = [];
+		for (let offset = 0; offset < keywords.length; offset += 100) {
+			chunks.push(keywords.slice(offset, offset + 100));
 		}
 
-		const result = (await response.json()) as DataForSeo.Serp.Response;
-
-		console.dir(result, { depth: null });
-
-		if (result.status_code !== 20000) {
-			console.error(`Error starting keyword analysis: ${result.status_message}`);
-			return;
-		}
-
-		const clickhouse = getClickhouseClient();
-
-		await clickhouse.insert<KeywordAnalysisInput>({
-			table: "keywordAnalysis",
-			values: [
-				{
-					id: analysisId,
-					projectId,
-					setId,
-					status: "pending",
-				},
-			],
-			format: "JSON",
-		});
-
-		for (const task of result.tasks) {
-			await clickhouse.insert<KeywordAnalysisTaskInput>({
-				table: "keywordAnalysisTasks",
-				values: [
-					{
-						id: task.id,
-						analysisId: analysisId,
-						status: "pending",
-					},
-				],
-				format: "JSON",
-			});
-
-			if (task.status_code === 20100) {
-				console.log(`🏗️  Task ${task.id} started successfully.`);
-				if (!env.DATA_FOR_SEO_SERP_POSTBACK_URL) {
-					void pollKeywordAnalysisTask({ projectId, analysisId, taskId: task.id });
-				}
-			} else {
-				console.error(
-					`⚠️ Task ${task.id} failed with status code ${task.status_code}: ${task.status_message}`,
+		await Promise.all(
+			chunks.map(async (chunk) => {
+				console.log(
+					"Sending task:",
+					chunk.map((keyword) => ({
+						keyword: keyword.name,
+						location_code: 2250,
+						language_code: "fr",
+						depth: ANALYSIS_DEPTH,
+						priority,
+						...callbackOptions,
+					})),
 				);
-			}
-		}
+
+				const response = await fetch(url, {
+					method: "POST",
+					headers: {
+						Authorization: `Basic ${btoa(`${env.DATA_FOR_SEO_LOGIN}:${env.DATA_FOR_SEO_PASSWORD}`)}`,
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify(
+						chunk.map((keyword) => ({
+							keyword: keyword.name,
+							location_code: 2250,
+							language_code: "fr",
+							depth: ANALYSIS_DEPTH,
+							priority,
+							...callbackOptions,
+						})),
+					),
+				});
+
+				if (!response.ok) {
+					console.error(`Error starting keyword analysis: ${response.statusText}`);
+					console.error(await response.json());
+					throw new Error(`Error starting keyword analysis: ${response.statusText}`);
+				}
+
+				const result = (await response.json()) as DataForSeo.Serp.Response;
+
+				console.dir(result, { depth: null });
+
+				if (result.status_code !== 20000) {
+					console.error(`Error starting keyword analysis: ${result.status_message}`);
+					return;
+				}
+
+				const clickhouse = getClickhouseClient();
+
+				await clickhouse.insert<KeywordAnalysisInput>({
+					table: "keywordAnalysis",
+					values: [
+						{
+							id: analysisId,
+							projectId,
+							setId,
+							status: "pending",
+						},
+					],
+					format: "JSON",
+				});
+
+				for (const task of result.tasks) {
+					await clickhouse.insert<KeywordAnalysisTaskInput>({
+						table: "keywordAnalysisTasks",
+						values: [
+							{
+								id: task.id,
+								analysisId: analysisId,
+								status: "pending",
+							},
+						],
+						format: "JSON",
+					});
+
+					if (task.status_code === 20100) {
+						console.log(`🏗️  Task ${task.id} started successfully.`);
+						if (!env.DATA_FOR_SEO_SERP_POSTBACK_URL) {
+							void pollKeywordAnalysisTask({ projectId, analysisId, taskId: task.id });
+						}
+					} else {
+						console.error(
+							`⚠️ Task ${task.id} failed with status code ${task.status_code}: ${task.status_message}`,
+						);
+					}
+				}
+			}),
+		);
 	}
 
 	/**
@@ -416,7 +445,7 @@ export namespace KeywordsService {
 						keyword: result.keyword,
 						position: item.rank_group,
 						domain: item.domain,
-						url: item.url,
+						url: removeUrlParam(item.url, "srsltid"),
 						type: item.type,
 						title: item.title,
 						description: item.description,
@@ -760,7 +789,14 @@ export namespace KeywordsService {
 			if (isKeywordInClusters(clusters, keyword)) {
 				continue;
 			}
-			const items = dataByKeyword[keyword]!;
+			// const items = dataByKeyword[keyword]!;
+			const items = dataByKeyword[keyword]!.filter(
+				(item, index, array) => !array.slice(0, index).some(({ url }) => item.url === url),
+			);
+
+			if (dataByKeyword[keyword]!.length !== items.length) {
+				console.log("Items before:", dataByKeyword[keyword], "Items after:", items);
+			}
 			const cluster: KeywordCluster = [
 				{
 					keyword,
@@ -773,7 +809,9 @@ export namespace KeywordsService {
 				if (keyword == otherKeyword || isKeywordInClusters(clusters, otherKeyword)) {
 					continue;
 				}
-				const otherItems = dataByKeyword[otherKeyword]!;
+				const otherItems = dataByKeyword[otherKeyword]!.filter(
+					(item, index, array) => !array.slice(0, index).some(({ url }) => item.url === url),
+				);
 
 				const similarity = getSimilarityJaccard(
 					items.map((item) => item.url),
@@ -783,16 +821,16 @@ export namespace KeywordsService {
 				if (similarity >= 0.6) {
 					cluster.push({
 						keyword: otherKeyword,
-						items: otherItems,
+						items: otherItems.filter(
+							(item) => !cluster.some(({ items }) => items.some(({ url }) => url === item.url)),
+						),
 						volume: keywords.find(({ name }) => name === otherKeyword)?.volume ?? 0,
 					});
 				}
 			}
 
-			if (cluster.length > 1) {
-				cluster.sort((a, b) => b.volume - a.volume);
-				clusters.push(cluster);
-			}
+			cluster.sort((a, b) => b.volume - a.volume);
+			clusters.push(cluster);
 		}
 
 		return clusters;
@@ -810,5 +848,52 @@ export namespace KeywordsService {
 	 */
 	export function isKeywordInClusters(clusters: Array<KeywordCluster>, keyword: string) {
 		return clusters.some((cluster) => isKeywordInCluster(cluster, keyword));
+	}
+
+	/**
+	 * Checks if a keyword is in any cluster.
+	 */
+	export function isUrlInClusters(clusters: Array<KeywordCluster>, url: string) {
+		return clusters.some((cluster) =>
+			cluster.some(({ items }) => items.some((item) => item.url === url)),
+		);
+	}
+
+	/**
+	 * Check every project if it needs to be analyzed again.
+	 *
+	 */
+	export async function startAllKeywordAnalysis() {
+		console.log("⏰ Starting daily keyword analysis");
+
+		const frequencies: Array<KeywordAnalysisFrequency> = ["1/day"];
+		const date = new Date().getDate();
+
+		if (date == 1) frequencies.push("1/month", "1/week", "2/month");
+		if (date == 7) frequencies.push("1/week");
+		if (date == 15) frequencies.push("1/week", "2/month");
+		if (date == 22) frequencies.push("1/week");
+
+		console.log(`Checking projects with frequencies: ${frequencies.join(", ")}`);
+
+		const auditProjects = await db.query.projects.findMany({
+			where: and(
+				eq(projects.type, "audit"),
+				inArray(projects.keywordAnalysisFrequency, frequencies),
+				isNull(projects.deletedAt),
+			),
+		});
+
+		console.log(`Found ${auditProjects.length} projects to audit.`);
+
+		for (const project of auditProjects) {
+			await startKeywordAnalysis(project.id, { priority: 1 })
+				.then(() => {
+					console.log(`Started analysis for project ${project.id}`);
+				})
+				.catch((error) => {
+					console.error(`Error starting analysis for project ${project.id}: ${error}`);
+				});
+		}
 	}
 }

@@ -6,7 +6,7 @@
 	"scripts": {
 		"dev": "vite dev",
 		"dev:turso": "turso dev --db-file ./data/$(git branch --show-current).db",
-		"build": "vite build",
+		"build": "bun --bun vite build",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"postinstall": "bun scripts/postinstall.ts",
@@ -67,6 +67,7 @@
 		"lucia": "^3.2.2",
 		"nanoid": "^5.1.5",
 		"papaparse": "^5.5.3",
+		"svelte-adapter-bun": "^1.0.0",
 		"svelte-sonner": "^1.0.5",
 		"valibot": "^1.1.0",
 		"xlsx": "^0.18.5"

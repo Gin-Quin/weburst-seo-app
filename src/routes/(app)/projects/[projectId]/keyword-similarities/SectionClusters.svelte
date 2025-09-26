@@ -36,8 +36,8 @@
 	} = $props();
 </script>
 
-<div class="card">
-	<header>
+<div class="card w-full min-w-0">
+	<header class="shrink-0">
 		<div class="title">
 			{$content.title}
 		</div>
@@ -46,14 +46,14 @@
 		</div>
 	</header>
 
-	<main class="col justify-stretch w-full grow overflow-auto">
-		<Table.Root class="table-fixed">
+	<main class="col justify-stretch w-full grow">
+		<Table.Root class="w-full">
 			<Table.Header>
 				<Table.Row class="border-none h-9">
-					<Table.Head class="w-[12rem]">
+					<Table.Head class="">
 						{$content.mainKeyword}
 					</Table.Head>
-					<Table.Head>
+					<Table.Head class="">
 						{$content.associatedKeywords}
 					</Table.Head>
 					<Table.Head class="text-center w-[13rem]">
@@ -114,13 +114,20 @@
 							{@const items = cluster
 								.flatMap((cluster) => cluster.items)
 								.filter((item) => item.domain == context.project!.domain)}
-							<div class="col items-start gap-1">
+							<div class="col items-center gap-1">
 								{#if items.length == 0}
 									<div class="center text-[#777] w-full">-</div>
 								{:else}
 									{#each items as item}
-										<div class="center gap-1">
-											{item.url}
+										<div class="center text-center gap-1">
+											<a
+												class="link"
+												href={item.url}
+												target="_blank"
+												rel="noopener noreferrer"
+											>
+												{item.url}
+											</a>
 										</div>
 									{/each}
 								{/if}

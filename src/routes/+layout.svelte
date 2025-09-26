@@ -1,5 +1,5 @@
 <script lang="ts">
-	import favicon from "$lib/assets/favicon.svg";
+	import favicon from "$lib/assets/favicon.png";
 	import { onMount } from "svelte";
 	import { Toaster } from "svelte-sonner";
 	import "../app.css";

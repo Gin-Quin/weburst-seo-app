@@ -22,7 +22,7 @@
 			trafficPotential: "Potentiel de trafic",
 			targetedKeywordsLabel: "Nombre de mots clés ciblés",
 			positionnedKeywordsTitle: "Mots-clés positionnés",
-			top3KeywordsTitle: "Mots-clés positionnés en top 3",
+			top3KeywordsTitle: "Mots-clés en top 3",
 		},
 	});
 
@@ -76,15 +76,15 @@
 				<span class="text-xl">{keywordCount}</span>
 			</div>
 			<div class="center justify-between">
-				<span class="">{$content.top3KeywordsTitle}</span>
-				<span class="text-xl">
-					{client.topThreeKeywordCount}
-				</span>
-			</div>
-			<div class="center justify-between">
 				<span class="">{$content.positionnedKeywordsTitle}</span>
 				<span class="text-xl">
 					{client.positionnedKeywordCount}
+				</span>
+			</div>
+			<div class="center justify-between">
+				<span class="">{$content.top3KeywordsTitle}</span>
+				<span class="text-xl">
+					{client.topThreeKeywordCount}
 				</span>
 			</div>
 		</div>

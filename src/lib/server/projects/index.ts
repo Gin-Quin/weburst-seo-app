@@ -17,7 +17,7 @@ export async function createProject(input: ProjectInsert): Promise<Project> {
 		.values({ ...input, id })
 		.returning();
 
-	return created;
+	return created!;
 }
 
 /**

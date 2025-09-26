@@ -1,14 +1,10 @@
 import { env } from "$env/dynamic/private";
 import { type ClickHouseClient, createClient as createClickhouseClient } from "@clickhouse/client";
-import { execSync } from "node:child_process";
 
 const clickhouseClients: Record<string, ClickHouseClient> = {};
 
 export function getClickhouseDatabase(): string {
-	const database =
-		env.CLICKHOUSE_DATABASE || execSync("git branch --show-current").toString().trim();
-
-	return database == "main" ? "default" : database;
+	return "default";
 }
 
 export function getClickhouseClient({ database = getClickhouseDatabase() } = {}): ClickHouseClient {

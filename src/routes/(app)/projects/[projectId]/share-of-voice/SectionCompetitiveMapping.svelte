@@ -7,7 +7,7 @@
 		AggregatedKeywordAnalysisData,
 	} from "$lib/server/clickhouse/services/keywords";
 	import { pointRadial } from "d3-shape";
-	import { Circle, Points, ScatterChart, Tooltip } from "layerchart";
+	import { Axis, Circle, Points, ScatterChart, Svg, Tooltip } from "layerchart";
 	import type { SvelteSet } from "svelte/reactivity";
 
 	const content = defineContent({
@@ -88,7 +88,7 @@
 								domain: item.domain,
 								x: item.positionnedKeywordCount,
 								y: (item.volume / totalVolume) * 100,
-								r: 4 + 2 * item.topThreeKeywordCount,
+								r: 4 + Math.sqrt(5 * item.topThreeKeywordCount),
 								source: item,
 							},
 						]
@@ -114,48 +114,62 @@
 		</div>
 	</header>
 
-	<main class="col justify-stretch w-full grow">
-		<Chart.Container config={chartConfig} class="h-full">
-			<ScatterChart
-				x="x"
-				y="y"
-				r="r"
-				xPadding={[20, 20]}
-				yPadding={[20, 20]}
-				series={chartData}
-				renderContext="svg"
-				grid={{ x: false }}
-				props={{
-					yAxis: { format: (percent) => formatPercent(percent / 100) },
-				}}
-			>
-				{#snippet marks({ context: ctx })}
-					{#each chartData as series, index (series.key)}
-						<Points
-							data={series.data}
-							fill="red"
-							stroke="blue"
-							width={10}
-							height={10}
-							strokeWidth={2}
-						>
-							{#snippet children({ points })}
-								{#each points as point}
-									{@const radialPoint = pointRadial(point.x, point.y)}
-									<Circle
-										cx={ctx.radial ? radialPoint[0] : point.x}
-										cy={ctx.radial ? radialPoint[1] : point.y}
-										r={point.data.r}
-										fill={point.data.domain == client.domain
-											? "var(--color-primary)"
-											: chartColors[index % chartColors.length]}
-										fillOpacity={point.data.domain == client.domain ? 1 : 0.1}
-										strokeWidth={1}
-										stroke={point.data.domain == client.domain
-											? "var(--color-primary)"
-											: chartColors[index % chartColors.length]}
-									/>
-									<!-- <text
+	<main class="col justify-stretch w-full grow p-0! relative text-[0.6875rem]">
+		<div class="absolute bottom-1 w-full grow text-center font-bold">
+			{$content.positionnedKeywordCount}
+		</div>
+		<div class="absolute left-1 h-full center font-bold">
+			<div class="Label Y">
+				{$content.shareOfVoice}
+			</div>
+		</div>
+		<div class="col justify-stretch w-full grow overflow-hidden p-5">
+			<Chart.Container config={chartConfig} class="h-full pl-2">
+				<ScatterChart
+					x="x"
+					y="y"
+					r="r"
+					xPadding={[20, 20]}
+					yPadding={[20, 20]}
+					series={chartData}
+					renderContext="svg"
+					grid={{ x: false }}
+					props={{
+						xAxis: {
+							label: "HELLO",
+						},
+						yAxis: {
+							format: (percent) => formatPercent(percent / 100),
+						},
+					}}
+				>
+					{#snippet marks({ context: ctx })}
+						{#each chartData as series, index (series.key)}
+							<Points
+								data={series.data}
+								fill="red"
+								stroke="blue"
+								width={10}
+								height={10}
+								strokeWidth={2}
+							>
+								{#snippet children({ points })}
+									{#each points as point}
+										{@const radialPoint = pointRadial(point.x, point.y)}
+										<Circle
+											cx={ctx.radial ? radialPoint[0] : point.x}
+											cy={ctx.radial ? radialPoint[1] : point.y}
+											r={point.data.r}
+											fill={point.data.domain == client.domain
+												? "var(--color-primary)"
+												: chartColors[index % chartColors.length]}
+											fillOpacity={point.data.domain == client.domain ? 1 : 0.1}
+											strokeWidth={1}
+											stroke={point.data.domain == client.domain
+												? "var(--color-primary)"
+												: chartColors[index % chartColors.length]}
+										/>
+										<!-- <text
 										fill="black"
 										text-anchor="middle"
 										x={ctx.radial ? radialPoint[0] : point.x}
@@ -163,57 +177,70 @@
 									>
 										{series.key}
 									</text> -->
-								{/each}
-							{/snippet}
-						</Points>
-					{/each}
-				{/snippet}
+									{/each}
+								{/snippet}
+							</Points>
+						{/each}
+					{/snippet}
 
-				{#snippet tooltip({ context: ctx })}
-					<Tooltip.Root context={ctx}>
-						{#snippet children({ data })}
-							<div
-								class="border-border/50 bg-background grid min-w-[9rem] items-start gap-1.5 rounded-[0.5rem] border px-2.5 py-1.5 text-xs shadow-xl"
-							>
-								<div class="col items-stretch gap-1 font-bold">
-									<div
-										class={data.domain == client.domain
-											? "text-primary"
-											: "text-light"}
-									>
-										{data.domain}
-									</div>
-
-									<div class="col items-stretch gap-0">
-										<div class="row justify-between gap-4">
-											<span class="font-normal"> {$content.shareOfVoice} </span>
-											<span>
-												{formatPercent(data.y / 100)}
-											</span>
+					{#snippet tooltip({ context: ctx })}
+						<Tooltip.Root context={ctx}>
+							{#snippet children({ data })}
+								<div
+									class="border-border/50 bg-background grid min-w-[9rem] items-start gap-1.5 rounded-[0.5rem] border px-2.5 py-1.5 text-xs shadow-xl"
+								>
+									<div class="col items-stretch gap-1 font-bold">
+										<div
+											class={data.domain == client.domain
+												? "text-primary"
+												: "text-light"}
+										>
+											{data.domain}
 										</div>
 
-										<div class="row justify-between gap-4">
-											<span class="font-normal"> {$content.top3Keywords} </span>
-											<span>
-												{data.source.topThreeKeywordCount}
-											</span>
-										</div>
+										<div class="col items-stretch gap-0">
+											<div class="row justify-between gap-4">
+												<span class="font-normal">
+													{$content.shareOfVoice}
+												</span>
+												<span>
+													{formatPercent(data.y / 100)}
+												</span>
+											</div>
 
-										<div class="row justify-between gap-4">
-											<span class="font-normal">
-												{$content.positionnedKeywordCount}
-											</span>
-											<span>
-												{data.source.positionnedKeywordCount}
-											</span>
+											<div class="row justify-between gap-4">
+												<span class="font-normal">
+													{$content.positionnedKeywordCount}
+												</span>
+												<span>
+													{data.source.positionnedKeywordCount}
+												</span>
+											</div>
+
+											<div class="row justify-between gap-4">
+												<span class="font-normal">
+													{$content.top3Keywords}
+												</span>
+												<span>
+													{data.source.topThreeKeywordCount}
+												</span>
+											</div>
 										</div>
 									</div>
 								</div>
-							</div>
-						{/snippet}
-					</Tooltip.Root>
-				{/snippet}
-			</ScatterChart>
-		</Chart.Container>
+							{/snippet}
+						</Tooltip.Root>
+					{/snippet}
+				</ScatterChart>
+			</Chart.Container>
+		</div>
 	</main>
 </div>
+
+<style>
+	.Label {
+		&.Y {
+			writing-mode: sideways-lr;
+		}
+	}
+</style>

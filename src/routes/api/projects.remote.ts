@@ -4,13 +4,16 @@ import { projects, users, usersToProjects, type Project, type User } from "$lib/
 import {
 	createProject as createProjectService,
 	deleteProject as deleteProjectService,
-	getProjectById as getProjectByIdService,
 	updateProject as updateProjectService,
 } from "$lib/server/projects";
 
+import {
+	KeywordsService,
+	type AggregatedKeywordAnalysis,
+} from "$lib/server/clickhouse/services/keywords";
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import { CreateProject, DeleteProject, GetProjectById, UpdateProject } from "./projects.schema";
-import { getRequestUser, getRequestUserId } from "./utilities";
+import { CreateProject, DeleteProject, UpdateProject } from "./projects.schema";
+import { getRequestUser } from "./utilities";
 
 export const createProject = command(CreateProject, async (input): Promise<void> => {
 	const user = await getRequestUser();
@@ -29,45 +32,48 @@ export const createProject = command(CreateProject, async (input): Promise<void>
 	await listProjects().refresh();
 });
 
-export const getProjectById = query(GetProjectById, async (id): Promise<ProjectInfo | null> => {
-	const userId = await getRequestUserId();
-	if (!userId) return null;
-	const membership = await db.query.usersToProjects.findFirst({
-		where: and(eq(usersToProjects.userId, userId), eq(usersToProjects.projectId, id)),
-	});
-	if (!membership) return null;
-	const project = await getProjectByIdService(id);
-	if (!project) return null;
+// export const getProjectById = query(GetProjectById, async (id): Promise<ProjectInfo | null> => {
+// 	const userId = await getRequestUserId();
+// 	if (!userId) return null;
+// 	const membership = await db.query.usersToProjects.findFirst({
+// 		where: and(eq(usersToProjects.userId, userId), eq(usersToProjects.projectId, id)),
+// 	});
+// 	if (!membership) return null;
+// 	const project = await getProjectByIdService(id);
+// 	if (!project) return null;
 
-	const rows = await db
-		.select({ user: users })
-		.from(usersToProjects)
-		.innerJoin(users, eq(usersToProjects.userId, users.id))
-		.where(eq(usersToProjects.projectId, id));
+// 	const rows = await db
+// 		.select({ user: users })
+// 		.from(usersToProjects)
+// 		.innerJoin(users, eq(usersToProjects.userId, users.id))
+// 		.where(eq(usersToProjects.projectId, id));
 
-	const leaders = rows.map(({ user }) => ({
-		id: user.id,
-		firstName: user.firstName,
-		lastName: user.lastName,
-		email: user.email,
-		role: user.role,
-	}));
+// 	const leaders = rows.map(({ user }) => ({
+// 		id: user.id,
+// 		firstName: user.firstName,
+// 		lastName: user.lastName,
+// 		email: user.email,
+// 		role: user.role,
+// 	}));
 
-	return { ...project, leaders };
-});
+// 	const analysis =
+
+// 	return { ...project, leaders };
+// });
 
 export const listProjects = query(async (): Promise<ProjectInfo[]> => {
 	const user = await getRequestUser();
 	if (!user) return [];
 
 	// Determine owner filter: non-admins are restricted to themselves
-	const ownerIds = user.role === "admin" ? undefined : [user.id];
+	const ownerId = user.role === "admin" ? undefined : user.id;
 
 	// If we have an owner filter (non-admin or admin provided owners), join with memberships
-	if (ownerIds && ownerIds.length > 0) {
+	if (ownerId) {
 		const rows = await db
 			.select({ project: projects, userId: usersToProjects.userId })
 			.from(usersToProjects)
+			.where(eq(usersToProjects.userId, ownerId))
 			.innerJoin(
 				projects,
 				and(eq(usersToProjects.projectId, projects.id), isNull(projects.deletedAt)),
@@ -78,10 +84,12 @@ export const listProjects = query(async (): Promise<ProjectInfo[]> => {
 		for (const row of rows) {
 			byId.set(row.project.id, row.project);
 		}
-		return await attachLeaders(Array.from(byId.values()));
+		return await attachProjectInfo(Array.from(byId.values()));
 	}
 
-	return await attachLeaders(await db.select().from(projects).where(isNull(projects.deletedAt)));
+	return await attachProjectInfo(
+		await db.select().from(projects).where(isNull(projects.deletedAt)),
+	);
 });
 
 export const updateProject = command(UpdateProject, async ([id, updates]): Promise<void> => {
@@ -159,19 +167,21 @@ export const deleteProject = command(DeleteProject, async (id): Promise<void> =>
 
 export type ProjectInfo = Project & {
 	leaders: Pick<User, "id" | "firstName" | "lastName" | "email" | "role">[];
+	analysis: AggregatedKeywordAnalysis | null;
 };
 
-async function attachLeaders(projectsList: Project[]): Promise<ProjectInfo[]> {
-	if (projectsList.length === 0) return [];
-	const projectIds = projectsList.map((p) => p.id);
-	const rows = await db
+async function attachProjectInfo(projectList: Project[]): Promise<ProjectInfo[]> {
+	if (projectList.length === 0) return [];
+	const projectIds = projectList.map((project) => project.id);
+
+	const projectAndUsers = await db
 		.select({ user: users, projectId: usersToProjects.projectId })
 		.from(usersToProjects)
 		.innerJoin(users, eq(usersToProjects.userId, users.id))
 		.where(inArray(usersToProjects.projectId, projectIds));
 
 	const leadersByProject = new Map<string, ProjectInfo["leaders"]>();
-	for (const { user, projectId } of rows) {
+	for (const { user, projectId } of projectAndUsers) {
 		const list = leadersByProject.get(projectId) ?? [];
 		list.push({
 			id: user.id,
@@ -183,8 +193,15 @@ async function attachLeaders(projectsList: Project[]): Promise<ProjectInfo[]> {
 		leadersByProject.set(projectId, list);
 	}
 
-	return projectsList.map((p) => ({
-		...p,
-		leaders: leadersByProject.get(p.id) ?? [],
-	}));
+	return await Promise.all(
+		projectList.map(async (project) => {
+			const leaders = leadersByProject.get(project.id) ?? [];
+
+			const analysis = await KeywordsService.aggregateAnalysisResultsWithTrend({
+				projectId: project.id,
+			});
+
+			return { ...project, leaders, analysis };
+		}),
+	);
 }

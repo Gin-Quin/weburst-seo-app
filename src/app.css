@@ -3,6 +3,7 @@
 @import "./shadcn.css";
 
 @plugin "daisyui" {
+	themes: weburst --default;
 	theme: "weburst";
 }
 
@@ -174,4 +175,10 @@ html {
 
 .modal-box {
 	max-height: 90dvh;
+}
+
+.link {
+	&:hover {
+		color: var(--color-primary);
+	}
 }

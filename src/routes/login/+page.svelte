@@ -92,7 +92,9 @@
 			class="main card col px-6 py-10 items-center bg-base-100 grow border-0!"
 		>
 			<main class="col items-center gap-8">
-				<div class="center w-[4.5rem] h-[4.5rem] rounded-full bg-info-purple">
+				<div
+					class="center w-[4.5rem] h-[4.5rem] rounded-full bg-info-purple-content"
+				>
 					<IconSignInRegular class="text-4xl text-purple" />
 				</div>
 

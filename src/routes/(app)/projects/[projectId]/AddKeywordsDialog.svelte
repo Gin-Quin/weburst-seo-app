@@ -4,9 +4,11 @@
 	import { parseKeywordsCsv } from "$lib/keywords/parseKeywordsCsv";
 	import { parseKeywordsXlsx } from "$lib/keywords/parseKeywordsXlsx";
 	import type { KeywordTuple } from "$lib/server/clickhouse/services/keywords";
-	import { context } from "$lib/stores/context.svelte";
+	import { context, type Context } from "$lib/stores/context.svelte";
 	import { toast } from "svelte-sonner";
 	import { addKeywords } from "../../../api/keywords/index.remote";
+	import type { ProjectContext } from "$lib/stores/projectContext.svelte";
+	import { startNewAnalysis } from "./startNewAnalysis";
 
 	const content = defineContent({
 		en: {
@@ -19,6 +21,9 @@
 			],
 			keywordsAddedSuccessfully: "Keywords added successfully.",
 			errorAddingKeywords: "An error occurred while adding keywords.",
+			startAnalysis: "Start Analysis?",
+			startAnalysisDescription:
+				"Keywords added successfully. Do you want to start a analysis using the new keywords?",
 		},
 		fr: {
 			title: "Ajouter des mots-clés",
@@ -31,13 +36,16 @@
 			keywordsAddedSuccessfully: "Mots-clés ajoutés avec succès.",
 			errorAddingKeywords:
 				"Une erreur est survenue lors de l'ajout des mots-clés.",
+			startAnalysis: "Démarrer une analyse ?",
+			startAnalysisDescription:
+				"Les mots-clés ont été ajoutés avec succès. Voulez-vous démarrer une analyse en utilisant les nouveaux mots-clés ?",
 		},
 	});
 
 	let {
 		openAddKeywordsDialog = $bindable(),
 	}: {
-		openAddKeywordsDialog?: () => void;
+		openAddKeywordsDialog: ProjectContext["openAddKeywordsDialog"];
 	} = $props();
 
 	let ref: HTMLDialogElement;
@@ -45,6 +53,7 @@
 	let file = $state<File | undefined>();
 	let keywords = $state<Array<KeywordTuple> | undefined | Error>();
 	let loading = $state<boolean>(false);
+	let afterAnalysis = $state<() => void | undefined>();
 
 	$effect(() => {
 		if (file) {
@@ -54,8 +63,9 @@
 		}
 	});
 
-	openAddKeywordsDialog = () => {
+	openAddKeywordsDialog = (input = {}) => {
 		file = undefined;
+		afterAnalysis = input.afterAnalysis;
 		ref?.showModal();
 	};
 
@@ -80,6 +90,17 @@
 			});
 			toast.success($content.keywordsAddedSuccessfully, {
 				richColors: true,
+			});
+			context.openConfirmDialog?.({
+				title: $content.startAnalysis,
+				description: $content.startAnalysisDescription,
+				color: "primary",
+				then: () => {
+					startNewAnalysis({
+						projectId: context.project!.id,
+						then: afterAnalysis,
+					});
+				},
 			});
 		} catch (error) {
 			console.error(error);

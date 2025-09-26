@@ -37,6 +37,21 @@
 	} = $props();
 
 	const { data, totalVolume } = $derived(analysisResultsWithTrend);
+
+	function toggleTop10Domains() {
+		const allTop10DomainsSelected = data
+			.slice(0, 10)
+			.every(({ domain }) => visibleDomains.has(domain));
+
+		visibleDomains.clear();
+		if (allTop10DomainsSelected) {
+			visibleDomains.add(client.domain);
+		} else {
+			for (const { domain } of data.slice(0, 10)) {
+				visibleDomains.add(domain);
+			}
+		}
+	}
 </script>
 
 <div class="card col justify-stretch">
@@ -61,7 +76,9 @@
 						{$content.shareOfVoice}
 					</Table.Head>
 					<Table.Head class="text-center">
-						<IconEyeBold class="icon m-auto" />
+						<button class="cursor-pointer azeaz" onclick={toggleTop10Domains}>
+							<IconEyeBold class="icon m-auto" />
+						</button>
 					</Table.Head>
 				</Table.Row>
 			</Table.Header>

@@ -17,6 +17,7 @@
 	import type { ProjectInfo } from "../api/projects.remote";
 	import { createProject, updateProject } from "../api/projects.remote";
 	import type { CreateProject } from "../api/projects.schema";
+	import { toast } from "svelte-sonner";
 
 	const content = defineContent({
 		en: {
@@ -32,6 +33,9 @@
 			websiteUrl: "Website URL",
 			leaders: "Project leaders",
 			createNewUser: "+ New user",
+			projectUpdated: "Project updated",
+			projectCreationFailed: "Project creation failed",
+			projectUpdateFailed: "Project update failed",
 		},
 		fr: {
 			createProject: "Créer un nouveau projet",
@@ -46,6 +50,9 @@
 			websiteUrl: "URL du site web",
 			leaders: "Chefs de projet",
 			createNewUser: "+ Nouvel utilisateur",
+			projectUpdated: "Le projet a été mis à jour",
+			projectCreationFailed: "Échec de la création du projet",
+			projectUpdateFailed: "Échec de la mise à jour du projet",
 		},
 	});
 
@@ -81,12 +88,21 @@
 	async function save() {
 		updating = true;
 		if (edit) {
-			await updateProject([edit.id, project]);
+			try {
+				await updateProject([edit.id, project]);
+				toast.success($content.projectUpdated, { richColors: true });
+			} catch (error) {
+				toast.error($content.projectUpdateFailed, { richColors: true });
+			}
 		} else {
-			await createProject({
-				...project,
-				leaderIds: project.leaderIds,
-			});
+			try {
+				await createProject({
+					...project,
+					leaderIds: project.leaderIds,
+				});
+			} catch (error) {
+				toast.error($content.projectCreationFailed, { richColors: true });
+			}
 		}
 		updating = false;
 		ref?.close();
@@ -159,7 +175,7 @@
 			</div>
 
 			<div
-				class="grid gap-3 {project.type == 'prospect'
+				class="grid gap-3 {project.type == 'audit'
 					? 'grid-cols-2'
 					: 'grid-cols-1'}"
 			>
@@ -175,7 +191,7 @@
 					</label>
 				</div>
 
-				{#if project.type == "prospect"}
+				{#if project.type == "audit"}
 					<div class="field">
 						<div class="field-title">{$content.keywordAnalysisFrequency}</div>
 						<label class="select w-full">

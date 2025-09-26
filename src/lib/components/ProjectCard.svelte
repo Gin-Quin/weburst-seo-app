@@ -12,6 +12,8 @@
 		type ProjectInfo,
 	} from "../../routes/api/projects.remote";
 	import Avatar from "./Avatar.svelte";
+	import { formatPercent } from "$lib/numbers/formatPercent";
+	import Trend from "./Trend.svelte";
 
 	const content = defineContent({
 		en: {
@@ -19,12 +21,16 @@
 			deleteProject: "Delete project",
 			confirmDeleteProject: (name: string) =>
 				`Are you sure you want to delete the project "${name}"?`,
+			positionnedKeywords: "Positionned keywords",
+			shareOfVoice: "Share of voice",
 		},
 		fr: {
 			updateProject: "Modifier le projet",
 			deleteProject: "Supprimer le projet",
 			confirmDeleteProject: (name: string) =>
 				`Êtes-vous certain de vouloir supprimer le projet "${name}" ?`,
+			positionnedKeywords: "Mots-clés positionnés",
+			shareOfVoice: "Part de voix",
 		},
 	});
 
@@ -41,6 +47,10 @@
 		onEdit?: (project: ProjectInfo) => void;
 		onDelete?: (project: ProjectInfo) => void;
 	} = $props();
+
+	const analysisData = $derived(
+		project.analysis?.data.find((item) => item.domain === project.domain),
+	);
 </script>
 
 <button
@@ -48,7 +58,10 @@
 	onclick={() => goto(`/projects/${project.id}`)}
 >
 	<div class="row justify-between w-full">
-		<div class="badge badge-info">
+		<div
+			class="badge bg-base-300! px-2! py-1.5!"
+			style:border="1px solid var(--color-border)"
+		>
 			{$projectTypes[project.type]}
 		</div>
 
@@ -83,13 +96,8 @@
 		</div>
 	</div>
 
-	<footer class="mt-auto row justify-between items-end w-full">
-		<div class="col grow gap-1 text-start">
-			<div class="text-4xl font-bold">{project.clientName}</div>
-			<div class="text-lg text-base-content/70">{project.domain}</div>
-		</div>
-
-		<div class="col gap-2 text-end">
+	<footer class="mt-auto col gap-2 w-full">
+		<div class="row gap-x-3 gap-y-2 flex-wrap">
 			{#each project.leaders as leader, index (leader.email)}
 				<span class="row items-center gap-2 text-sm font-medium">
 					<Avatar user={leader as unknown as User} size="mini" />
@@ -97,6 +105,44 @@
 					{leader.lastName}
 				</span>
 			{/each}
+		</div>
+
+		<div class="col grow gap-1 text-start">
+			<div class="text-4xl font-bold">{project.clientName}</div>
+			<div class="text-md text-base-content/70">{project.domain}</div>
+		</div>
+
+		<div
+			class="col items-stretch gap-2 p-4 bg-base-300 rounded-[1.25rem] font-bold"
+		>
+			<div class="row justify-between">
+				<div class="text-sm">{$content.positionnedKeywords}</div>
+				<div class="badge badge-info--purple bg-base-100">
+					{#if project.analysis && analysisData}
+						{analysisData.positionnedKeywordCount}
+						/
+						{project.analysis.keywordCount}
+					{:else}
+						<span class="w-5"> - </span>
+					{/if}
+				</div>
+			</div>
+
+			<div class="row justify-between">
+				<div class="text-sm">{$content.shareOfVoice}</div>
+				<div class="center gap-2">
+					<div class="badge badge-info--purple bg-base-100">
+						{#if project.analysis && analysisData}
+							{formatPercent(
+								analysisData.volume / project.analysis.totalVolume,
+							)}
+						{:else}
+							<span class="w-5"> - </span>
+						{/if}
+					</div>
+					<Trend trend={analysisData?.trend} />
+				</div>
+			</div>
 		</div>
 	</footer>
 </button>
