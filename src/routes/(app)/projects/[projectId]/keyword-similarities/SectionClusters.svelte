@@ -15,6 +15,7 @@
 			totalVolume: "Total Volume",
 			positionnedPages: "Positionned Pages",
 			noPosition: "No page positionned",
+			otherPages: "Other pages",
 		},
 		fr: {
 			title: "Groupes similaires",
@@ -26,6 +27,7 @@
 			totalVolume: "Volume total",
 			positionnedPages: "Pages positionnées",
 			noPosition: "Aucune page positionnée",
+			otherPages: "Autres pages",
 		},
 	});
 
@@ -65,6 +67,11 @@
 					<Table.Head class="text-center">
 						{$content.positionnedPages}
 					</Table.Head>
+					{#if context.user?.role == "admin"}
+						<Table.Head class="text-center">
+							{$content.otherPages}
+						</Table.Head>
+					{/if}
 				</Table.Row>
 			</Table.Header>
 
@@ -133,6 +140,34 @@
 								{/if}
 							</div>
 						</Table.Cell>
+
+						{#if context.user?.role == "admin"}
+							<Table.Cell class="text-xs">
+								{@const items = cluster
+									.flatMap((cluster) => cluster.items)
+									.filter((item) => item.domain != context.project!.domain)}
+								<div class="col items-start gap-1">
+									{#if items.length == 0}
+										<div class="center text-[#777] w-full">-</div>
+									{:else}
+										{#each items as item}
+											<div class="row items-center gap-1">
+												<a
+													class="link"
+													href={item.url}
+													target="_blank"
+													rel="noopener noreferrer"
+												>
+													{item.url.length > 90
+														? item.url.slice(0, 87) + "..."
+														: item.url}
+												</a>
+											</div>
+										{/each}
+									{/if}
+								</div>
+							</Table.Cell>
+						{/if}
 					</Table.Row>
 				{/each}
 			</Table.Body>

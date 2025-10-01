@@ -1,33 +1,27 @@
 // import { env } from "$env/dynamic/private";
 import { env } from "$env/dynamic/private";
 import { getWeightedVolume } from "$lib/keywords/getWeightedVolume";
-import { getSimilarityJaccard } from "$lib/numbers/getSimilarityJaccard";
+import { getSimilarity } from "$lib/numbers/getSimilarity";
 import { groupBy } from "$lib/objects/groupBy";
 import { db } from "$lib/server/db";
 import { projects } from "$lib/server/db/schema";
-import { removeUrlParam } from "$lib/strings/removeUrlParam";
-import { DAY } from "$lib/timeUnits";
+import { normalizeUrlForSimilarity } from "$lib/strings/normalizeUrlForSimilarity";
+import { DAY, MINUTE } from "$lib/timeUnits";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { KeywordAnalysisFrequency } from "../../../../routes/api/projects.schema";
 import { getClickhouseClient } from "../index";
+import type { ClickhouseTable } from "../migrations";
 import type { DataForSeo } from "./DataForSeo";
 
-const ANALYSIS_DEPTH = 50;
+const ANALYSIS_DEPTH = env.SEARCH_DEPTH;
+const SIMILARITY_THRESHOLD = 0.6;
 
 export type KeywordTuple = [name: string, volume: number];
 export type Keyword = { name: string; volume: number };
 export type KeywordSet = { setId: string; createdAt: string };
 
-export type KeywordAnalysis = {
-	id: string;
-	createdAt: string;
-	status: "pending" | "completed" | "failed";
-	projectId: string;
-	setId: string;
-	error?: string;
-};
-export type KeywordAnalysisInput = Omit<KeywordAnalysis, "createdAt">;
-export type KeywordAnalysisIdAndDate = Pick<KeywordAnalysis, "id" | "createdAt">;
+export type KeywordAnalysisInput = Omit<ClickhouseTable.KeywordAnalysis, "createdAt">;
+export type KeywordAnalysisIdAndDate = Pick<ClickhouseTable.KeywordAnalysis, "id" | "createdAt">;
 
 export type KeywordAnalysisStatus = {
 	analysisId: string;
@@ -36,31 +30,14 @@ export type KeywordAnalysisStatus = {
 	failedTasks: number;
 };
 
-export type KeywordAnalysisTask = {
-	id: string;
-	createdAt: string;
-	analysisId: string;
-	status: "pending" | "completed" | "failed";
-	error?: string;
-};
-export type KeywordAnalysisTaskInput = Omit<KeywordAnalysisTask, "createdAt">;
+export type KeywordAnalysisTaskInput = Omit<ClickhouseTable.KeywordAnalysisTask, "createdAt">;
 
-export type KeywordAnalysisResponse = {
-	projectId: string;
-	analysisId: string;
-	taskId: string;
-	createdAt: string;
-	keyword: string;
-	position: number;
-	domain: string;
-	url: string;
-	type: string;
-	title: string;
-	description: string;
-};
-export type KeywordAnalysisResponseInput = Omit<KeywordAnalysisResponse, "createdAt">;
+export type KeywordAnalysisResponseInput = Omit<
+	ClickhouseTable.KeywordAnalysisResponse,
+	"createdAt"
+>;
 export type KeywordAnalysisMinimalResponse = Pick<
-	KeywordAnalysisResponse,
+	ClickhouseTable.KeywordAnalysisResponse,
 	"keyword" | "domain" | "position"
 >;
 
@@ -82,6 +59,7 @@ export type AggregatedKeywordAnalysisData = {
 	topThreeKeywordCount: number;
 	topTenKeywordCount: number;
 	positionnedKeywordCount: number;
+	keywords: Array<string>;
 	trend?: number;
 };
 
@@ -120,7 +98,11 @@ export namespace KeywordsService {
 
 		await clickhouse.insert({
 			table: "keywords",
-			values: keywords.map(([name, volume]) => ({ setId, name, volume })),
+			values: keywords
+				.map(([name, volume]) => ({ setId, name, volume }))
+				.filter(
+					({ name }, index, self) => !self.slice(0, index).some((other) => other.name === name),
+				),
 			format: "JSON",
 		});
 	}
@@ -163,9 +145,7 @@ export namespace KeywordsService {
 			format: "JSON",
 		});
 		const result = await response.json<KeywordAnalysisIdAndDate>();
-
 		const currentSet = result.data[0];
-
 		return currentSet?.id;
 	}
 
@@ -218,7 +198,10 @@ export namespace KeywordsService {
 
 		console.log(`Fetched ${result.data.length} keywords`);
 
-		return result.data;
+		return result.data.filter(
+			(keyword, index, self) =>
+				!self.slice(0, index).some((previousKeyword) => keyword.name === previousKeyword.name),
+		);
 	}
 
 	/**
@@ -275,19 +258,31 @@ export namespace KeywordsService {
 			chunks.push(keywords.slice(offset, offset + 100));
 		}
 
+		const clickhouse = getClickhouseClient();
+
+		await clickhouse.insert<KeywordAnalysisInput>({
+			table: "keywordAnalysis",
+			values: [
+				{
+					id: analysisId,
+					projectId,
+					setId,
+					status: "pending",
+				},
+			],
+			format: "JSON",
+		});
+
 		await Promise.all(
 			chunks.map(async (chunk) => {
-				console.log(
-					"Sending task:",
-					chunk.map((keyword) => ({
-						keyword: keyword.name,
-						location_code: 2250,
-						language_code: "fr",
-						depth: ANALYSIS_DEPTH,
-						priority,
-						...callbackOptions,
-					})),
-				);
+				const body = chunk.map((keyword) => ({
+					keyword: keyword.name,
+					location_code: 2250,
+					language_code: "fr",
+					depth: ANALYSIS_DEPTH,
+					priority,
+					...callbackOptions,
+				}));
 
 				const response = await fetch(url, {
 					method: "POST",
@@ -295,16 +290,7 @@ export namespace KeywordsService {
 						Authorization: `Basic ${btoa(`${env.DATA_FOR_SEO_LOGIN}:${env.DATA_FOR_SEO_PASSWORD}`)}`,
 						"Content-Type": "application/json",
 					},
-					body: JSON.stringify(
-						chunk.map((keyword) => ({
-							keyword: keyword.name,
-							location_code: 2250,
-							language_code: "fr",
-							depth: ANALYSIS_DEPTH,
-							priority,
-							...callbackOptions,
-						})),
-					),
+					body: JSON.stringify(body),
 				});
 
 				if (!response.ok) {
@@ -315,27 +301,10 @@ export namespace KeywordsService {
 
 				const result = (await response.json()) as DataForSeo.Serp.Response;
 
-				console.dir(result, { depth: null });
-
 				if (result.status_code !== 20000) {
 					console.error(`Error starting keyword analysis: ${result.status_message}`);
 					return;
 				}
-
-				const clickhouse = getClickhouseClient();
-
-				await clickhouse.insert<KeywordAnalysisInput>({
-					table: "keywordAnalysis",
-					values: [
-						{
-							id: analysisId,
-							projectId,
-							setId,
-							status: "pending",
-						},
-					],
-					format: "JSON",
-				});
 
 				for (const task of result.tasks) {
 					await clickhouse.insert<KeywordAnalysisTaskInput>({
@@ -353,7 +322,7 @@ export namespace KeywordsService {
 					if (task.status_code === 20100) {
 						console.log(`🏗️  Task ${task.id} started successfully.`);
 						if (!env.DATA_FOR_SEO_SERP_POSTBACK_URL) {
-							void pollKeywordAnalysisTask({ projectId, analysisId, taskId: task.id });
+							setTimeout(() => pollKeywordAnalysisTask({ analysisId, taskId: task.id }), 1000);
 						}
 					} else {
 						console.error(
@@ -370,18 +339,26 @@ export namespace KeywordsService {
 	 * @param taskId - The ID of the task.
 	 */
 	export async function pollKeywordAnalysisTask({
-		projectId,
 		analysisId,
 		taskId,
+		retries = Infinity,
 	}: {
-		projectId: string;
 		analysisId: string;
 		taskId: string;
+		retries?: number;
 	}) {
 		const url = `https://api.dataforseo.com/v3/serp/google/organic/task_get/regular/${taskId}`;
 		let result: DataForSeo.Serp.Response;
 
+		let tries = 0;
+
 		do {
+			if (tries >= retries) {
+				console.error(`Max retries reached for task ${taskId}`);
+				return;
+			}
+			tries++;
+
 			await new Promise((resolve) => setTimeout(resolve, 1_000));
 			const response = await fetch(url, {
 				method: "GET",
@@ -401,7 +378,7 @@ export namespace KeywordsService {
 		} while (result.tasks[0]?.status_code == 40601 || result.tasks[0]?.status_code == 40602);
 
 		// Got the result, save it in database
-		await saveKeywordAnalysisResult({ projectId, analysisId, taskId, result });
+		await saveKeywordAnalysisResult({ analysisId, result });
 	}
 
 	/**
@@ -410,14 +387,10 @@ export namespace KeywordsService {
 	 * @param result - The result of the task.
 	 */
 	export async function saveKeywordAnalysisResult({
-		projectId,
 		analysisId,
-		taskId,
 		result,
 	}: {
-		projectId: string;
 		analysisId: string;
-		taskId: string;
 		result: DataForSeo.Serp.Response;
 	}) {
 		const clickhouse = getClickhouseClient();
@@ -435,17 +408,16 @@ export namespace KeywordsService {
 				continue;
 			}
 
-			for (const result of task.result) {
+			for (const { keyword, items } of task.result) {
 				await clickhouse.insert<KeywordAnalysisResponseInput>({
 					table: "keywordAnalysisResponses",
-					values: result.items.map((item) => ({
-						projectId,
+					values: items.map((item) => ({
 						analysisId,
-						taskId,
-						keyword: result.keyword,
+						taskId: task.id,
+						keyword: keyword,
 						position: item.rank_group,
 						domain: item.domain,
-						url: removeUrlParam(item.url, "srsltid"),
+						url: item.url,
 						type: item.type,
 						title: item.title,
 						description: item.description,
@@ -453,7 +425,7 @@ export namespace KeywordsService {
 					format: "JSON",
 				});
 
-				console.log(`✨  Saved ${result.items.length} items for keyword '${result.keyword}'.`);
+				console.log(`✨  Saved ${items.length} items for keyword '${keyword}'.`);
 			}
 		}
 	}
@@ -576,7 +548,7 @@ export namespace KeywordsService {
 			query: `
 				SELECT keyword, position, domain
 				FROM keywordAnalysisResponses
-				WHERE analysisId = {analysisId: String}
+				WHERE analysisId = {analysisId:String}
 				${positionLimit ? `AND position <= ${positionLimit} ORDER BY position ASC` : ""}
 			`,
 			query_params: { analysisId },
@@ -617,26 +589,32 @@ export namespace KeywordsService {
 			}
 
 			const weightedVolume = getWeightedVolume(volume, item.position);
+
 			if (!distinctKeywords.has(item.keyword)) {
 				distinctKeywords.add(item.keyword);
 				totalVolume += volume;
 			}
 
-			dataByDomain[item.domain] ??= {
+			const domainData = (dataByDomain[item.domain] ??= {
 				domain: item.domain,
 				topThreeKeywordCount: 0,
 				topTenKeywordCount: 0,
 				positionnedKeywordCount: 0,
 				volume: 0,
-			};
-			if (item.position <= 3) {
-				dataByDomain[item.domain]!.topThreeKeywordCount += 1;
+				keywords: [],
+			});
+
+			if (!domainData.keywords.includes(item.keyword)) {
+				if (item.position <= 3) {
+					domainData.topThreeKeywordCount += 1;
+				}
+				if (item.position <= 10) {
+					domainData.topTenKeywordCount += 1;
+				}
+				domainData.positionnedKeywordCount += 1;
+				domainData.volume += weightedVolume;
+				domainData.keywords.push(item.keyword);
 			}
-			if (item.position <= 10) {
-				dataByDomain[item.domain]!.topTenKeywordCount += 1;
-			}
-			dataByDomain[item.domain]!.positionnedKeywordCount += 1;
-			dataByDomain[item.domain]!.volume += weightedVolume;
 		}
 
 		return {
@@ -775,12 +753,10 @@ export namespace KeywordsService {
 			format: "JSON",
 		});
 
-		const { data } = await response.json<{
-			keyword: string;
-			domain: string;
-			url: string;
-			position: number;
-		}>();
+		const { data } =
+			await response.json<
+				Pick<ClickhouseTable.KeywordAnalysisResponse, "keyword" | "domain" | "url" | "position">
+			>();
 
 		const dataByKeyword = groupBy(data, "keyword");
 		const clusters: Array<KeywordCluster> = [];
@@ -794,9 +770,6 @@ export namespace KeywordsService {
 				(item, index, array) => !array.slice(0, index).some(({ url }) => item.url === url),
 			);
 
-			if (dataByKeyword[keyword]!.length !== items.length) {
-				console.log("Items before:", dataByKeyword[keyword], "Items after:", items);
-			}
 			const cluster: KeywordCluster = [
 				{
 					keyword,
@@ -813,12 +786,12 @@ export namespace KeywordsService {
 					(item, index, array) => !array.slice(0, index).some(({ url }) => item.url === url),
 				);
 
-				const similarity = getSimilarityJaccard(
-					items.map((item) => item.url),
-					otherItems.map((item) => item.url),
+				const similarity = getSimilarity(
+					new Set(items.map((item) => normalizeUrlForSimilarity(item.url))),
+					new Set(otherItems.map((item) => normalizeUrlForSimilarity(item.url))),
 				);
 
-				if (similarity >= 0.6) {
+				if (similarity >= SIMILARITY_THRESHOLD) {
 					cluster.push({
 						keyword: otherKeyword,
 						items: otherItems.filter(
@@ -894,6 +867,67 @@ export namespace KeywordsService {
 				.catch((error) => {
 					console.error(`Error starting analysis for project ${project.id}: ${error}`);
 				});
+
+			await new Promise((resolve) => setTimeout(resolve, 2 * MINUTE));
 		}
+	}
+
+	/**
+	 * Fetch the ready tasks.
+	 */
+	export async function fetchTasksReady() {
+		console.log("⏰ Fetching tasks ready");
+
+		const url = `https://api.dataforseo.com/v3/serp/google/organic/tasks_ready`;
+
+		try {
+			const response = await fetch(url, {
+				method: "GET",
+				headers: {
+					Authorization: `Basic ${btoa(`${env.DATA_FOR_SEO_LOGIN}:${env.DATA_FOR_SEO_PASSWORD}`)}`,
+					"Content-Type": "application/json",
+				},
+			});
+
+			if (!response.ok) {
+				console.error(`Error starting keyword analysis: ${response.statusText}`);
+				console.error(await response.json());
+				throw new Error(`Error starting keyword analysis: ${response.statusText}`);
+			}
+
+			const result = (await response.json()) as DataForSeo.Serp.TaskReadyResponse;
+
+			for (const task of result.tasks) {
+				const analysisId = await getAnalysisIdFromTaskId({ taskId: task.id });
+				if (!analysisId) {
+					console.warn(`No analysis ID found for task ${task.id}`);
+					continue;
+				}
+				await pollKeywordAnalysisTask({
+					analysisId,
+					taskId: task.id,
+					retries: 1,
+				});
+			}
+		} catch (error) {
+			console.error(`Error fetching tasks ready: ${error}`);
+		}
+	}
+
+	/**
+	 * Get analysis if from a task id.
+	 */
+	export async function getAnalysisIdFromTaskId({
+		taskId,
+	}: {
+		taskId: string;
+	}): Promise<string | null> {
+		const clickhouse = getClickhouseClient();
+		const response = await clickhouse.query({
+			query: `SELECT analysisId FROM keywordAnalysisTasks WHERE id = {taskId:String}`,
+			query_params: { taskId },
+		});
+		const result = await response.json<Pick<ClickhouseTable.KeywordAnalysisTask, "analysisId">>();
+		return result.data[0]?.analysisId ?? null;
 	}
 }

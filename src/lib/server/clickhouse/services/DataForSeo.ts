@@ -1,6 +1,6 @@
 export namespace DataForSeo {
 	export namespace Serp {
-		export interface Response {
+		export interface Response<T = Task> {
 			version: string;
 			status_code: number;
 			status_message: string;
@@ -8,7 +8,7 @@ export namespace DataForSeo {
 			cost: number;
 			tasks_count: number;
 			tasks_error: number;
-			tasks: Task[];
+			tasks: T[];
 		}
 
 		export interface Task {
@@ -63,6 +63,19 @@ export namespace DataForSeo {
 			description: string;
 			url: string;
 			breadcrumb: string;
+		}
+
+		export type TaskReadyResponse = Response<TaskReady>;
+
+		export interface TaskReady {
+			id: string;
+			se: string; // 'google' | 'bing' | ...
+			se_type: string; // 'organic' | ...
+			date_posted: string;
+			tag: string;
+			endpoint_regular: string; // ex: '/v3/serp/google/organic/task_get/regular/09291301-1103-0066-0000-263212284b04'
+			endpoint_advanced: string; // ex: '/v3/serp/google/organic/task_get/advanced/09291301-1103-0066-0000-263212284b04',
+			endpoint_html: string; // ex: '/v3/serp/google/organic/task_get/html/09291301-1103-0066-0000-263212284b04'
 		}
 	}
 }

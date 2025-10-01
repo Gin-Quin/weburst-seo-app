@@ -1,15 +1,14 @@
 <script lang="ts">
 	import { defineContent } from "$lib/i18n/locale.svelte";
-	import IconChartLineRegular from "phosphor-icons-svelte/IconChartLineRegular.svelte";
-	import IconChartPieSliceRegular from "phosphor-icons-svelte/IconChartPieSliceRegular.svelte";
 	import type {
 		AggregatedKeywordAnalysis,
 		AggregatedKeywordAnalysisData,
 	} from "$lib/server/clickhouse/services/keywords";
+	import IconChartLineRegular from "phosphor-icons-svelte/IconChartLineRegular.svelte";
+	import IconChartPieSliceRegular from "phosphor-icons-svelte/IconChartPieSliceRegular.svelte";
 	import type { SvelteSet } from "svelte/reactivity";
-	import { context } from "$lib/stores/context.svelte";
-	import SectionShareOfVoicePieChart from "./SectionShareOfVoicePieChart.svelte";
 	import SectionShareOfVoiceLineChart from "./SectionShareOfVoiceLineChart.svelte";
+	import SectionShareOfVoicePieChart from "./SectionShareOfVoicePieChart.svelte";
 
 	const content = defineContent({
 		en: {
@@ -38,9 +37,7 @@
 
 	const { data, totalVolume } = $derived(analysisResultsWithTrend);
 
-	let chartType = $state<"line" | "pie">(
-		context.project!.type == "audit" ? "pie" : "line",
-	);
+	let chartType = $state<"line" | "pie">("pie");
 </script>
 
 <div class="card col justify-stretch">
@@ -72,7 +69,7 @@
 		</div>
 	</header>
 
-	<main class="col justify-stretch w-full grow">
+	<main class="col justify-stretch w-full grow gap-1">
 		{#if chartType == "line"}
 			<SectionShareOfVoiceLineChart {totalVolume} {visibleDomains} {client} />
 		{:else if chartType == "pie"}

@@ -7,7 +7,7 @@
 		AggregatedKeywordAnalysisData,
 	} from "$lib/server/clickhouse/services/keywords";
 	import { pointRadial } from "d3-shape";
-	import { Axis, Circle, Points, ScatterChart, Svg, Tooltip } from "layerchart";
+	import { Circle, Points, ScatterChart, Tooltip } from "layerchart";
 	import type { SvelteSet } from "svelte/reactivity";
 
 	const content = defineContent({
@@ -118,7 +118,7 @@
 		<div class="absolute bottom-1 w-full grow text-center font-bold">
 			{$content.positionnedKeywordCount}
 		</div>
-		<div class="absolute left-1 h-full center font-bold">
+		<div class="absolute left-[-3px] h-full center font-bold">
 			<div class="Label Y">
 				{$content.shareOfVoice}
 			</div>

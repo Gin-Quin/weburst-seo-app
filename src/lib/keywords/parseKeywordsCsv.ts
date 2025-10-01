@@ -7,6 +7,7 @@ export async function parseKeywordsCsv(file: File | string): Promise<Array<Keywo
 		const { data, errors } = Papa.parse<[string, string]>(raw, {
 			header: false,
 			dynamicTyping: false,
+			delimitersToGuess: [",", ";", "\t"],
 		});
 		if (errors.length) {
 			errors.map((error) => console.error(error));
@@ -16,7 +17,11 @@ export async function parseKeywordsCsv(file: File | string): Promise<Array<Keywo
 			return [];
 		}
 		const hasHeader = Number.isNaN(parseInt(data[0]![1], 10));
-		return data.slice(hasHeader ? 1 : 0).map((row) => [row[0], parseInt(row[1], 10)]);
+		const parsed = data
+			.slice(hasHeader ? 1 : 0)
+			.filter((row) => row.length === 2 && row[0])
+			.map((row) => [row[0], parseInt(row[1], 10)]) as Array<KeywordTuple>;
+		return parsed;
 	} catch (error) {
 		console.error(error);
 		return new Error(`Failed to parse CSV file: ${error}`);

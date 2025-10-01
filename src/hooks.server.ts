@@ -1,4 +1,5 @@
-import type { HandleFetch } from "@sveltejs/kit";
+import { KeywordsService } from "$lib/server/clickhouse/services/keywords";
+import { DAY, MINUTE } from "$lib/timeUnits";
 
 const timeUntil23PM = () => {
 	const now = new Date();
@@ -7,20 +8,8 @@ const timeUntil23PM = () => {
 };
 
 setTimeout(() => {
-	console.log("Hello, world!");
+	KeywordsService.startAllKeywordAnalysis();
+	setInterval(KeywordsService.startAllKeywordAnalysis, 1 * DAY);
 }, timeUntil23PM());
 
-export const handleFetch: HandleFetch = async ({ request, fetch }) => {
-	const token = localStorage.getItem("bearer");
-
-	if (token) {
-		request = new Request(request, {
-			headers: {
-				...Object.fromEntries(request.headers),
-				Authorization: `Bearer ${token}`,
-			},
-		});
-	}
-
-	return fetch(request);
-};
+setInterval(KeywordsService.fetchTasksReady, 2 * MINUTE);

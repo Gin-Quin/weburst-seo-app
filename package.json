@@ -4,9 +4,10 @@
 	"version": "0.0.1",
 	"type": "module",
 	"scripts": {
-		"dev": "vite dev",
+		"dev": "bun --bun vite dev",
 		"dev:turso": "turso dev --db-file ./data/$(git branch --show-current).db",
 		"build": "bun --bun vite build",
+		"deploy": "bun run build && bun scripts/deploy.ts",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"postinstall": "bun scripts/postinstall.ts",
