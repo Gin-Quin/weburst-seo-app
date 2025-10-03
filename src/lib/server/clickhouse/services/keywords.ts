@@ -569,14 +569,32 @@ export namespace KeywordsService {
 		analysisId: string;
 		positionLimit?: number;
 	}): Promise<AggregatedKeywordAnalysis | null> {
+		console.time(`[aggregateAnalysisResults] Total (${analysisId})`);
+
+		console.time(`[aggregateAnalysisResults] getSetIdOfAnalysis (${analysisId})`);
 		const setId = await getSetIdOfAnalysis({ analysisId });
-		if (!setId) return null;
+		console.timeEnd(`[aggregateAnalysisResults] getSetIdOfAnalysis (${analysisId})`);
 
+		if (!setId) {
+			console.timeEnd(`[aggregateAnalysisResults] Total (${analysisId})`);
+			return null;
+		}
+
+		console.time(`[aggregateAnalysisResults] getKeywords (${analysisId})`);
 		const keywords = await getKeywords({ setId });
-		if (!keywords?.length) return null;
+		console.timeEnd(`[aggregateAnalysisResults] getKeywords (${analysisId})`);
 
+		if (!keywords?.length) {
+			console.timeEnd(`[aggregateAnalysisResults] Total (${analysisId})`);
+			return null;
+		}
+
+		console.time(`[aggregateAnalysisResults] getKeywordAnalysisResponses (${analysisId})`);
 		const data = await getKeywordAnalysisResponses({ analysisId, positionLimit });
+		console.timeEnd(`[aggregateAnalysisResults] getKeywordAnalysisResponses (${analysisId})`);
+		console.log(`[aggregateAnalysisResults] Processing ${data.length} responses (${analysisId})`);
 
+		console.time(`[aggregateAnalysisResults] Processing loop (${analysisId})`);
 		let totalVolume = 0;
 		const distinctKeywords = new Set<string>();
 		const dataByDomain: Record<string, AggregatedKeywordAnalysisData> = {};
@@ -616,14 +634,20 @@ export namespace KeywordsService {
 				domainData.keywords.push(item.keyword);
 			}
 		}
+		console.timeEnd(`[aggregateAnalysisResults] Processing loop (${analysisId})`);
 
-		return {
+		console.time(`[aggregateAnalysisResults] Sorting results (${analysisId})`);
+		const result = {
 			analysisId,
 			setId,
 			totalVolume,
 			keywordCount: distinctKeywords.size,
 			data: Object.values(dataByDomain).sort((a, b) => b.volume - a.volume),
 		};
+		console.timeEnd(`[aggregateAnalysisResults] Sorting results (${analysisId})`);
+
+		console.timeEnd(`[aggregateAnalysisResults] Total (${analysisId})`);
+		return result;
 	}
 
 	/**
@@ -634,27 +658,52 @@ export namespace KeywordsService {
 	}: {
 		projectId: string;
 	}): Promise<AggregatedKeywordAnalysis | null> {
+		console.time(`[aggregateAnalysisResultsWithTrend] Total (${projectId})`);
+
+		console.time(`[aggregateAnalysisResultsWithTrend] getAllProjectAnalysis (${projectId})`);
 		const allAnalysis = await getAllProjectAnalysis(projectId);
+		console.timeEnd(`[aggregateAnalysisResultsWithTrend] getAllProjectAnalysis (${projectId})`);
+
 		const currentAnalysisId = allAnalysis[0]?.id;
 		if (!currentAnalysisId) {
+			console.log(`[aggregateAnalysisResultsWithTrend] No analysis found for project ${projectId}`);
+			console.timeEnd(`[aggregateAnalysisResultsWithTrend] Total (${projectId})`);
 			return null;
 		}
 
+		console.time(`[aggregateAnalysisResultsWithTrend] getLastMonthAnalysisId (${projectId})`);
 		const lastMonthAnalysisId = getLastMonthAnalysisId({ allAnalysis });
+		console.timeEnd(`[aggregateAnalysisResultsWithTrend] getLastMonthAnalysisId (${projectId})`);
+		console.log(
+			`[aggregateAnalysisResultsWithTrend] Current: ${currentAnalysisId}, Last month: ${lastMonthAnalysisId || "none"}`,
+		);
 
+		console.time(`[aggregateAnalysisResultsWithTrend] Current analysis aggregation (${projectId})`);
 		const currentAnalysis = await aggregateAnalysisResults({ analysisId: currentAnalysisId });
+		console.timeEnd(
+			`[aggregateAnalysisResultsWithTrend] Current analysis aggregation (${projectId})`,
+		);
 
 		if (!lastMonthAnalysisId || !currentAnalysis) {
+			console.timeEnd(`[aggregateAnalysisResultsWithTrend] Total (${projectId})`);
 			return currentAnalysis;
 		}
 
+		console.time(
+			`[aggregateAnalysisResultsWithTrend] Last month analysis aggregation (${projectId})`,
+		);
 		const lastMonthAnalysis = await aggregateAnalysisResults({ analysisId: lastMonthAnalysisId });
+		console.timeEnd(
+			`[aggregateAnalysisResultsWithTrend] Last month analysis aggregation (${projectId})`,
+		);
 
 		if (!lastMonthAnalysis) {
+			console.timeEnd(`[aggregateAnalysisResultsWithTrend] Total (${projectId})`);
 			return currentAnalysis;
 		}
 
-		return {
+		console.time(`[aggregateAnalysisResultsWithTrend] Trend calculation (${projectId})`);
+		const result = {
 			...currentAnalysis,
 			data: currentAnalysis.data.map((item) => {
 				const lastMonthItem = lastMonthAnalysis.data.find(({ domain }) => domain === item.domain);
@@ -674,6 +723,10 @@ export namespace KeywordsService {
 				};
 			}),
 		};
+		console.timeEnd(`[aggregateAnalysisResultsWithTrend] Trend calculation (${projectId})`);
+
+		console.timeEnd(`[aggregateAnalysisResultsWithTrend] Total (${projectId})`);
+		return result;
 	}
 
 	/**
