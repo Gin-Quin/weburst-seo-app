@@ -35,7 +35,18 @@ async function migrateClickhouse() {
 		}
 
 		try {
-			await clickhouse.command({ query: migration.query(database) });
+			// Call the migration function to get queries
+			const result = migration.query(database);
+			const queries = Array.isArray(result) ? result : [result];
+
+			// Execute each query in the migration
+			for (const query of queries) {
+				// Skip comments and empty lines
+				if (query.trim() && !query.trim().startsWith("--")) {
+					await clickhouse.command({ query });
+				}
+			}
+
 			await clickhouse.insert({
 				table: `${database}.migrations`,
 				values: [{ name: migration.name, appliedAt: Date.now() }],

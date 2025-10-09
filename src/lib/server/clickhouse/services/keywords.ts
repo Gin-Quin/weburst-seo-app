@@ -1,8 +1,6 @@
-// import { env } from "$env/dynamic/private";
 import { env } from "$env/dynamic/private";
 import { getWeightedVolume } from "$lib/keywords/getWeightedVolume";
 import { getSimilarity } from "$lib/numbers/getSimilarity";
-import { groupBy } from "$lib/objects/groupBy";
 import { db } from "$lib/server/db";
 import { projects } from "$lib/server/db/schema";
 import { normalizeUrlForSimilarity } from "$lib/strings/normalizeUrlForSimilarity";
@@ -11,6 +9,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { KeywordAnalysisFrequency } from "../../../../routes/api/projects.schema";
 import { getClickhouseClient } from "../index";
 import type { ClickhouseTable } from "../migrations";
+import { parseClickhouseCsvRows } from "../parseClickhouseCsvRow";
 import type { DataForSeo } from "./DataForSeo";
 
 const ANALYSIS_DEPTH = env.SEARCH_DEPTH;
@@ -59,7 +58,6 @@ export type AggregatedKeywordAnalysisData = {
 	topThreeKeywordCount: number;
 	topTenKeywordCount: number;
 	positionnedKeywordCount: number;
-	keywords: Array<string>;
 	trend?: number;
 };
 
@@ -78,6 +76,9 @@ export type KeywordClusterItem = {
 };
 
 export namespace KeywordsService {
+	export const setIdByAnalysisId = new Map<string, string>();
+	export const keywordsBySetId = new Map<string, Map<string, number>>();
+
 	/**
 	 * Add keywords to a project.
 	 * @param projectId - The ID of the project.
@@ -155,7 +156,7 @@ export namespace KeywordsService {
 	 */
 	export async function getKeywords(
 		input: { projectId: string } | { setId: string },
-	): Promise<Keyword[] | null> {
+	): Promise<Map<string, number> | null> {
 		const clickhouse = getClickhouseClient();
 		let setId: string;
 
@@ -184,24 +185,42 @@ export namespace KeywordsService {
 
 		console.log(`👀 Fetching keywords for set '${setId}'`);
 
+		const cached = keywordsBySetId.get(setId);
+		if (cached) {
+			console.log(`✅ Cached keywords for set '${setId}'`);
+			return cached;
+		}
+
 		const response = await clickhouse.query({
 			query: `
 				SELECT name, volume
         FROM keywords
-        WHERE setId = {setId:String}
+        WHERE setId = {setId:UUID}
         ORDER BY volume DESC
 			`,
-			format: "JSON",
+			format: "CSV",
 			query_params: { setId },
 		});
-		const result = await response.json<Keyword>();
 
-		console.log(`Fetched ${result.data.length} keywords`);
+		// Use ClickHouse client's built-in streaming for CSV
+		const data = new Map<string, number>();
+		const stream = response.stream();
 
-		return result.data.filter(
-			(keyword, index, self) =>
-				!self.slice(0, index).some((previousKeyword) => keyword.name === previousKeyword.name),
-		);
+		for await (const rows of stream) {
+			const parsedRows = parseClickhouseCsvRows(rows, {
+				name: "string",
+				volume: "number",
+			});
+			for (const { name, volume } of parsedRows) {
+				if (!data.has(name)) {
+					data.set(name, volume);
+				}
+			}
+		}
+
+		console.log(`Fetched ${data.size} keywords`);
+		keywordsBySetId.set(setId, data);
+		return data;
 	}
 
 	/**
@@ -212,20 +231,32 @@ export namespace KeywordsService {
 	}: {
 		analysisId: string;
 	}): Promise<string | null> {
+		const cached = setIdByAnalysisId.get(analysisId);
+		if (cached) {
+			return cached;
+		}
+
 		const clickhouse = getClickhouseClient();
 
 		const response = await clickhouse.query({
 			query: `
 				SELECT setId
 				FROM keywordAnalysis
-				WHERE id = {analysisId: String}
+				WHERE id = {analysisId: UUID}
+				LIMIT 1
 			`,
 			query_params: { analysisId },
 			format: "JSON",
 		});
 
 		const result = await response.json<{ setId: string }>();
-		return result.data[0]?.setId ?? null;
+		const setId = result.data[0]?.setId ?? null;
+
+		if (setId) {
+			setIdByAnalysisId.set(analysisId, setId);
+		}
+
+		return setId;
 	}
 
 	/**
@@ -239,7 +270,7 @@ export namespace KeywordsService {
 		}
 
 		const keywords = await getKeywords({ setId });
-		if (!keywords?.length) {
+		if (!keywords?.size) {
 			throw new Error(`No keywords found for set ${setId}`);
 		}
 
@@ -253,9 +284,10 @@ export namespace KeywordsService {
 
 		const url = `https://api.dataforseo.com/v3/serp/google/organic/task_post`;
 
-		const chunks: Array<Array<Keyword>> = [];
-		for (let offset = 0; offset < keywords.length; offset += 100) {
-			chunks.push(keywords.slice(offset, offset + 100));
+		const chunks: Array<Array<[string, number]>> = [];
+		const keywordEntries = Array.from(keywords.entries());
+		for (let offset = 0; offset < keywords.size; offset += 100) {
+			chunks.push(keywordEntries.slice(offset, offset + 100));
 		}
 
 		const clickhouse = getClickhouseClient();
@@ -275,8 +307,8 @@ export namespace KeywordsService {
 
 		await Promise.all(
 			chunks.map(async (chunk) => {
-				const body = chunk.map((keyword) => ({
-					keyword: keyword.name,
+				const body = chunk.map(([keyword]) => ({
+					keyword,
 					location_code: 2250,
 					language_code: "fr",
 					depth: ANALYSIS_DEPTH,
@@ -461,6 +493,9 @@ export namespace KeywordsService {
 	export async function getAllProjectAnalysis(
 		projectId: string,
 	): Promise<Array<KeywordAnalysisIdAndDate>> {
+		console.log(`[getAllProjectAnalysis] 🚵‍♀️ Starting for project ${projectId}`);
+		console.time(`[getAllProjectAnalysis] 🚵‍♂️ Total (${projectId})`);
+
 		const clickhouse = getClickhouseClient();
 
 		const response = await clickhouse.query({
@@ -471,11 +506,23 @@ export namespace KeywordsService {
 				ORDER BY createdAt DESC
 			`,
 			query_params: { projectId },
-			format: "JSON",
+			format: "CSV",
 		});
 
-		const result = await response.json<KeywordAnalysisIdAndDate>();
-		return result.data;
+		let data: KeywordAnalysisIdAndDate[] = [];
+		const stream = response.stream();
+
+		for await (const rows of stream) {
+			data = data.concat(
+				parseClickhouseCsvRows(rows, {
+					id: "string",
+					createdAt: "string",
+				}),
+			);
+		}
+
+		console.timeEnd(`[getAllProjectAnalysis] 🚵‍♂️ Total (${projectId})`);
+		return data;
 	}
 
 	/**
@@ -538,10 +585,15 @@ export namespace KeywordsService {
 	export async function getKeywordAnalysisResponses({
 		analysisId,
 		positionLimit,
+		limit = 10000,
+		offset = 0,
 	}: {
 		analysisId: string;
 		positionLimit?: number;
+		limit?: number;
+		offset?: number;
 	}): Promise<Array<KeywordAnalysisMinimalResponse>> {
+		console.time(`[getKeywordAnalysisResponses] (${analysisId})`);
 		const clickhouse = getClickhouseClient();
 
 		const response = await clickhouse.query({
@@ -550,12 +602,28 @@ export namespace KeywordsService {
 				FROM keywordAnalysisResponses
 				WHERE analysisId = {analysisId:String}
 				${positionLimit ? `AND position <= ${positionLimit} ORDER BY position ASC` : ""}
+				LIMIT {limit:UInt64} OFFSET {offset:UInt64}
 			`,
-			query_params: { analysisId },
-			format: "JSON",
+			query_params: { analysisId, limit, offset },
+			format: "CSV",
 		});
 
-		const { data } = await response.json<KeywordAnalysisMinimalResponse>();
+		// Use ClickHouse client's built-in streaming for CSV
+		let data: Array<KeywordAnalysisMinimalResponse> = [];
+		const stream = response.stream();
+
+		for await (const rows of stream) {
+			data = data.concat(
+				parseClickhouseCsvRows(rows, {
+					keyword: "string",
+					position: "number",
+					domain: "string",
+				}),
+			);
+		}
+
+		console.timeEnd(`[getKeywordAnalysisResponses] (${analysisId})`);
+
 		return data;
 	}
 
@@ -569,38 +637,40 @@ export namespace KeywordsService {
 		analysisId: string;
 		positionLimit?: number;
 	}): Promise<AggregatedKeywordAnalysis | null> {
-		console.time(`[aggregateAnalysisResults] Total (${analysisId})`);
-
-		console.time(`[aggregateAnalysisResults] getSetIdOfAnalysis (${analysisId})`);
+		console.time(`🤓🤓 aggregateAnalysisResults:getSetIdOfAnalysis (${analysisId})`);
 		const setId = await getSetIdOfAnalysis({ analysisId });
-		console.timeEnd(`[aggregateAnalysisResults] getSetIdOfAnalysis (${analysisId})`);
+		console.timeEnd(`🤓🤓 aggregateAnalysisResults:getSetIdOfAnalysis (${analysisId})`);
 
 		if (!setId) {
-			console.timeEnd(`[aggregateAnalysisResults] Total (${analysisId})`);
 			return null;
 		}
 
-		console.time(`[aggregateAnalysisResults] getKeywords (${analysisId})`);
+		console.time(`🤓🤓 aggregateAnalysisResults getKeywords (${analysisId})`);
 		const keywords = await getKeywords({ setId });
-		console.timeEnd(`[aggregateAnalysisResults] getKeywords (${analysisId})`);
+		console.timeEnd(`🤓🤓 aggregateAnalysisResults getKeywords (${analysisId})`);
 
-		if (!keywords?.length) {
-			console.timeEnd(`[aggregateAnalysisResults] Total (${analysisId})`);
+		if (!keywords?.size) {
 			return null;
 		}
 
-		console.time(`[aggregateAnalysisResults] getKeywordAnalysisResponses (${analysisId})`);
+		console.time(`🤓🤓 aggregateAnalysisResults getKeywordAnalysisResponses (${analysisId})`);
 		const data = await getKeywordAnalysisResponses({ analysisId, positionLimit });
-		console.timeEnd(`[aggregateAnalysisResults] getKeywordAnalysisResponses (${analysisId})`);
-		console.log(`[aggregateAnalysisResults] Processing ${data.length} responses (${analysisId})`);
+		console.timeEnd(`🤓🤓 aggregateAnalysisResults getKeywordAnalysisResponses (${analysisId})`);
 
-		console.time(`[aggregateAnalysisResults] Processing loop (${analysisId})`);
+		console.time(`🤓🤓 aggregateAnalysisResults Processing loop (${analysisId})`);
 		let totalVolume = 0;
 		const distinctKeywords = new Set<string>();
+		const distinctKeywordsByDomain = new Map<string, Map<string, number>>();
 		const dataByDomain: Record<string, AggregatedKeywordAnalysisData> = {};
 
 		for (const item of data) {
-			const volume = keywords.find(({ name }) => name == item.keyword)?.volume;
+			let domainDistinctKeywords = distinctKeywordsByDomain.get(item.domain);
+			if (!domainDistinctKeywords) {
+				domainDistinctKeywords = new Map();
+				distinctKeywordsByDomain.set(item.domain, domainDistinctKeywords);
+			}
+
+			const volume = keywords.get(item.keyword);
 			if (!volume) {
 				console.error(`Keyword ${item.keyword} not found in keywords`);
 				continue;
@@ -608,9 +678,10 @@ export namespace KeywordsService {
 
 			const weightedVolume = getWeightedVolume(volume, item.position);
 
+			totalVolume += weightedVolume;
+
 			if (!distinctKeywords.has(item.keyword)) {
 				distinctKeywords.add(item.keyword);
-				totalVolume += volume;
 			}
 
 			const domainData = (dataByDomain[item.domain] ??= {
@@ -619,34 +690,41 @@ export namespace KeywordsService {
 				topTenKeywordCount: 0,
 				positionnedKeywordCount: 0,
 				volume: 0,
-				keywords: [],
 			});
 
-			if (!domainData.keywords.includes(item.keyword)) {
+			domainData.volume += weightedVolume;
+
+			const previousPosition = domainDistinctKeywords.get(item.keyword);
+
+			if (!previousPosition) {
+				domainDistinctKeywords.set(item.keyword, item.position);
+				domainData.positionnedKeywordCount += 1;
 				if (item.position <= 3) {
 					domainData.topThreeKeywordCount += 1;
 				}
 				if (item.position <= 10) {
 					domainData.topTenKeywordCount += 1;
 				}
-				domainData.positionnedKeywordCount += 1;
-				domainData.volume += weightedVolume;
-				domainData.keywords.push(item.keyword);
+			} else if (item.position < previousPosition) {
+				domainDistinctKeywords.set(item.keyword, item.position);
+				if (item.position <= 3 && previousPosition > 3) {
+					domainData.topThreeKeywordCount += 1;
+				}
+				if (item.position <= 10 && previousPosition > 10) {
+					domainData.topTenKeywordCount += 1;
+				}
 			}
 		}
-		console.timeEnd(`[aggregateAnalysisResults] Processing loop (${analysisId})`);
+		console.timeEnd(`🤓🤓 aggregateAnalysisResults Processing loop (${analysisId})`);
 
-		console.time(`[aggregateAnalysisResults] Sorting results (${analysisId})`);
 		const result = {
 			analysisId,
 			setId,
-			totalVolume,
+			totalVolume: Math.round(totalVolume),
 			keywordCount: distinctKeywords.size,
 			data: Object.values(dataByDomain).sort((a, b) => b.volume - a.volume),
 		};
-		console.timeEnd(`[aggregateAnalysisResults] Sorting results (${analysisId})`);
 
-		console.timeEnd(`[aggregateAnalysisResults] Total (${analysisId})`);
 		return result;
 	}
 
@@ -658,51 +736,41 @@ export namespace KeywordsService {
 	}: {
 		projectId: string;
 	}): Promise<AggregatedKeywordAnalysis | null> {
-		console.time(`[aggregateAnalysisResultsWithTrend] Total (${projectId})`);
+		console.log(`🏎️ aggregateAnalysisResultsWithTrend ${projectId}`);
+		console.time(`🏁 aggregateAnalysisResultsWithTrend ${projectId}`);
 
-		console.time(`[aggregateAnalysisResultsWithTrend] getAllProjectAnalysis (${projectId})`);
+		console.time(`🤓 getAllProjectAnalysis ${projectId}`);
 		const allAnalysis = await getAllProjectAnalysis(projectId);
-		console.timeEnd(`[aggregateAnalysisResultsWithTrend] getAllProjectAnalysis (${projectId})`);
+		console.timeEnd(`🤓 getAllProjectAnalysis ${projectId}`);
 
 		const currentAnalysisId = allAnalysis[0]?.id;
 		if (!currentAnalysisId) {
-			console.log(`[aggregateAnalysisResultsWithTrend] No analysis found for project ${projectId}`);
-			console.timeEnd(`[aggregateAnalysisResultsWithTrend] Total (${projectId})`);
+			console.log(`No analysis found for project ${projectId}`);
+			console.timeEnd(`🏁 aggregateAnalysisResultsWithTrend ${projectId}`);
 			return null;
 		}
 
-		console.time(`[aggregateAnalysisResultsWithTrend] getLastMonthAnalysisId (${projectId})`);
+		console.time(`🤓 getLastMonthAnalysisId (${projectId})`);
 		const lastMonthAnalysisId = getLastMonthAnalysisId({ allAnalysis });
-		console.timeEnd(`[aggregateAnalysisResultsWithTrend] getLastMonthAnalysisId (${projectId})`);
-		console.log(
-			`[aggregateAnalysisResultsWithTrend] Current: ${currentAnalysisId}, Last month: ${lastMonthAnalysisId || "none"}`,
-		);
+		console.timeEnd(`🤓 getLastMonthAnalysisId (${projectId})`);
 
-		console.time(`[aggregateAnalysisResultsWithTrend] Current analysis aggregation (${projectId})`);
+		console.time(`🤓 Current analysis aggregation (${projectId})`);
 		const currentAnalysis = await aggregateAnalysisResults({ analysisId: currentAnalysisId });
-		console.timeEnd(
-			`[aggregateAnalysisResultsWithTrend] Current analysis aggregation (${projectId})`,
-		);
+		console.timeEnd(`🤓 Current analysis aggregation (${projectId})`);
 
 		if (!lastMonthAnalysisId || !currentAnalysis) {
-			console.timeEnd(`[aggregateAnalysisResultsWithTrend] Total (${projectId})`);
+			console.timeEnd(`Total (${projectId})`);
 			return currentAnalysis;
 		}
 
-		console.time(
-			`[aggregateAnalysisResultsWithTrend] Last month analysis aggregation (${projectId})`,
-		);
 		const lastMonthAnalysis = await aggregateAnalysisResults({ analysisId: lastMonthAnalysisId });
-		console.timeEnd(
-			`[aggregateAnalysisResultsWithTrend] Last month analysis aggregation (${projectId})`,
-		);
 
 		if (!lastMonthAnalysis) {
-			console.timeEnd(`[aggregateAnalysisResultsWithTrend] Total (${projectId})`);
+			console.timeEnd(`🏁 aggregateAnalysisResultsWithTrend ${projectId}`);
 			return currentAnalysis;
 		}
 
-		console.time(`[aggregateAnalysisResultsWithTrend] Trend calculation (${projectId})`);
+		console.time(`🤓 Trend calculation (${projectId})`);
 		const result = {
 			...currentAnalysis,
 			data: currentAnalysis.data.map((item) => {
@@ -723,9 +791,9 @@ export namespace KeywordsService {
 				};
 			}),
 		};
-		console.timeEnd(`[aggregateAnalysisResultsWithTrend] Trend calculation (${projectId})`);
+		console.timeEnd(`🤓 Trend calculation (${projectId})`);
 
-		console.timeEnd(`[aggregateAnalysisResultsWithTrend] Total (${projectId})`);
+		console.timeEnd(`🏁 aggregateAnalysisResultsWithTrend ${projectId}`);
 		return result;
 	}
 
@@ -791,10 +859,13 @@ export namespace KeywordsService {
 		if (!setId) return null;
 
 		const keywords = await getKeywords({ setId });
-		if (!keywords?.length) return null;
+		if (!keywords?.size) return null;
 
+		console.log(`🏃‍♀️ getKeywordClusters ${projectId}`);
+		console.time(`🏘️ getKeywordClusters ${projectId}`);
 		const clickhouse = getClickhouseClient();
 
+		console.time(`🏘️ getKeywordClusters ${projectId}: fetching CSV`);
 		const response = await clickhouse.query({
 			query: `
 				SELECT keyword, domain, url, position
@@ -803,61 +874,116 @@ export namespace KeywordsService {
 				AND position <= 10 ORDER BY position ASC
 			`,
 			query_params: { analysisId },
-			format: "JSON",
+			format: "CSV",
 		});
+		console.timeEnd(`🏘️ getKeywordClusters ${projectId}: fetching CSV`);
 
-		const { data } =
-			await response.json<
-				Pick<ClickhouseTable.KeywordAnalysisResponse, "keyword" | "domain" | "url" | "position">
-			>();
+		const stream = response.stream();
+		const dataByKeyword: Record<
+			string,
+			Array<Pick<ClickhouseTable.KeywordAnalysisResponse, "domain" | "url" | "position">>
+		> = {};
 
-		const dataByKeyword = groupBy(data, "keyword");
+		console.time(`🏘️ getKeywordClusters ${projectId}: parsing CSV`);
+		for await (const rows of stream) {
+			const parsedRows = parseClickhouseCsvRows(rows, {
+				keyword: "string",
+				domain: "string",
+				url: "string",
+				position: "number",
+			});
+			for (const { keyword, domain, url, position } of parsedRows) {
+				const dataForKeyword = (dataByKeyword[keyword] ??= []);
+				dataForKeyword.push({ domain, url, position });
+			}
+		}
+		console.timeEnd(`🏘️ getKeywordClusters ${projectId}: parsing CSV`);
+
 		const clusters: Array<KeywordCluster> = [];
 
+		console.time(`🏘️ getKeywordClusters ${projectId}: aggregating results`);
+
+		// Strategy 1: Pre-compute deduplicated items with normalized URLs
+		type ItemWithNormalizedUrl = KeywordClusterItem & { normalizedUrl: string };
+		const deduplicatedDataByKeyword = new Map<string, Array<ItemWithNormalizedUrl>>();
+		const normalizedUrlSetsByKeyword = new Map<string, Set<string>>();
+
 		for (const keyword in dataByKeyword) {
-			if (isKeywordInClusters(clusters, keyword)) {
+			const items = dataByKeyword[keyword]!;
+			const seenUrls = new Set<string>();
+			const deduplicatedItems: Array<ItemWithNormalizedUrl> = [];
+			const normalizedUrls = new Set<string>();
+
+			for (const item of items) {
+				if (!seenUrls.has(item.url)) {
+					seenUrls.add(item.url);
+					const normalizedUrl = normalizeUrlForSimilarity(item.url);
+					deduplicatedItems.push({ ...item, normalizedUrl });
+					normalizedUrls.add(normalizedUrl);
+				}
+			}
+
+			deduplicatedDataByKeyword.set(keyword, deduplicatedItems);
+			normalizedUrlSetsByKeyword.set(keyword, normalizedUrls);
+		}
+
+		// Strategy 2: Use Set to track clustered keywords for O(1) lookup
+		const clusteredKeywords = new Set<string>();
+
+		for (const keyword in dataByKeyword) {
+			if (clusteredKeywords.has(keyword)) {
 				continue;
 			}
-			// const items = dataByKeyword[keyword]!;
-			const items = dataByKeyword[keyword]!.filter(
-				(item, index, array) => !array.slice(0, index).some(({ url }) => item.url === url),
-			);
+
+			const items = deduplicatedDataByKeyword.get(keyword)!;
+			const normalizedUrlSet = normalizedUrlSetsByKeyword.get(keyword)!;
 
 			const cluster: KeywordCluster = [
 				{
 					keyword,
 					items,
-					volume: keywords.find(({ name }) => name === keyword)?.volume ?? 0,
+					volume: keywords.get(keyword) ?? 0,
 				},
 			];
 
+			clusteredKeywords.add(keyword);
+
 			for (const otherKeyword in dataByKeyword) {
-				if (keyword == otherKeyword || isKeywordInClusters(clusters, otherKeyword)) {
+				if (keyword === otherKeyword || clusteredKeywords.has(otherKeyword)) {
 					continue;
 				}
-				const otherItems = dataByKeyword[otherKeyword]!.filter(
-					(item, index, array) => !array.slice(0, index).some(({ url }) => item.url === url),
-				);
 
-				const similarity = getSimilarity(
-					new Set(items.map((item) => normalizeUrlForSimilarity(item.url))),
-					new Set(otherItems.map((item) => normalizeUrlForSimilarity(item.url))),
-				);
+				const otherItems = deduplicatedDataByKeyword.get(otherKeyword)!;
+				const otherNormalizedUrlSet = normalizedUrlSetsByKeyword.get(otherKeyword)!;
+
+				// Strategy 3: Use pre-computed normalized URL sets for similarity
+				const similarity = getSimilarity(normalizedUrlSet, otherNormalizedUrlSet);
 
 				if (similarity >= SIMILARITY_THRESHOLD) {
+					// Build set of URLs already in cluster for efficient filtering
+					const urlsInCluster = new Set<string>();
+					for (const clusterItem of cluster) {
+						for (const item of clusterItem.items) {
+							urlsInCluster.add(item.url);
+						}
+					}
+
 					cluster.push({
 						keyword: otherKeyword,
-						items: otherItems.filter(
-							(item) => !cluster.some(({ items }) => items.some(({ url }) => url === item.url)),
-						),
-						volume: keywords.find(({ name }) => name === otherKeyword)?.volume ?? 0,
+						items: otherItems.filter((item) => !urlsInCluster.has(item.url)),
+						volume: keywords.get(otherKeyword) ?? 0,
 					});
+
+					clusteredKeywords.add(otherKeyword);
 				}
 			}
 
 			cluster.sort((a, b) => b.volume - a.volume);
 			clusters.push(cluster);
 		}
+		console.timeEnd(`🏘️ getKeywordClusters ${projectId}: aggregating results`);
+
+		console.timeEnd(`🏘️ getKeywordClusters ${projectId}`);
 
 		return clusters;
 	}
@@ -977,7 +1103,7 @@ export namespace KeywordsService {
 	}): Promise<string | null> {
 		const clickhouse = getClickhouseClient();
 		const response = await clickhouse.query({
-			query: `SELECT analysisId FROM keywordAnalysisTasks WHERE id = {taskId:String}`,
+			query: `SELECT analysisId FROM keywordAnalysisTasks WHERE id = {taskId:UUID}`,
 			query_params: { taskId },
 		});
 		const result = await response.json<Pick<ClickhouseTable.KeywordAnalysisTask, "analysisId">>();

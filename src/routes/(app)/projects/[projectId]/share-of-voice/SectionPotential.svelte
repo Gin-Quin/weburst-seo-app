@@ -55,7 +55,7 @@
 					{$content.trafficPotential}
 				</h2>
 				<div class="center gap-2">
-					<span class="text-xl font-bold">{Math.round(client.volume)}</span>
+					<span class="text-xl font-bold">{totalVolume}</span>
 					<Trend trend={client.trend} />
 				</div>
 			</div>

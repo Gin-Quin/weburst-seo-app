@@ -48,7 +48,7 @@ export namespace ClickhouseTable {
 
 export type ClickhouseMigration = {
 	name: string;
-	query: (database: string) => string;
+	query: (database: string) => string | Array<string>;
 };
 
 export const clickhouseMigrations: Array<ClickhouseMigration> = [
@@ -315,5 +315,44 @@ export const clickhouseMigrations: Array<ClickhouseMigration> = [
 		name: "Remove batchIndex column for keywordAnalysisTasks",
 		query: (database: string) =>
 			`ALTER TABLE ${database}.keywordAnalysisTasks DROP COLUMN batchIndex`,
+	},
+	{
+		name: "Remove duplicate IDs from keywordAnalysis table",
+		query: (database: string) => [
+			`-- For each duplicate ID, keep the earliest record and delete the rest`,
+			`ALTER TABLE ${database}.keywordAnalysis DELETE WHERE (id, createdAt) NOT IN (SELECT id, min(createdAt) FROM ${database}.keywordAnalysis GROUP BY id)`,
+		],
+	},
+	{
+		name: "Fix keywordAnalysis table schema to use id as primary key",
+		query: (database: string) => [
+			`-- Create new table with correct schema (id as primary key)`,
+			`CREATE TABLE ${database}.keywordAnalysis_new (id UUID, createdAt DateTime DEFAULT now(), projectId String, setId UUID, status String, error String DEFAULT '') ENGINE = MergeTree ORDER BY id`,
+
+			`-- Copy data from old table to new table`,
+			`INSERT INTO ${database}.keywordAnalysis_new SELECT id, createdAt, projectId, setId, status, error FROM ${database}.keywordAnalysis`,
+
+			`-- Drop old table`,
+			`DROP TABLE ${database}.keywordAnalysis`,
+
+			`-- Rename new table to original name`,
+			`RENAME TABLE ${database}.keywordAnalysis_new TO ${database}.keywordAnalysis`,
+		],
+	},
+	{
+		name: "Properly deduplicate keywordAnalysis table keeping earliest records",
+		query: (database: string) => [
+			`-- Create temp table with deduplicated data`,
+			`CREATE TABLE ${database}.keywordAnalysis_dedup (id UUID, createdAt DateTime DEFAULT now(), projectId String, setId UUID, status String, error String DEFAULT '') ENGINE = ReplacingMergeTree(createdAt) ORDER BY id`,
+
+			`-- Insert only the earliest record for each id`,
+			`INSERT INTO ${database}.keywordAnalysis_dedup SELECT id, createdAt, projectId, setId, status, error FROM ${database}.keywordAnalysis WHERE (id, createdAt) IN (SELECT id, min(createdAt) as createdAt FROM ${database}.keywordAnalysis GROUP BY id)`,
+
+			`-- Drop table with duplicates`,
+			`DROP TABLE ${database}.keywordAnalysis`,
+
+			`-- Rename deduplicated table`,
+			`RENAME TABLE ${database}.keywordAnalysis_dedup TO ${database}.keywordAnalysis`,
+		],
 	},
 ];
