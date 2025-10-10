@@ -1,13 +1,22 @@
 import type { Row } from "@clickhouse/client";
 
-export type ClickHouseColumn = "string" | "number" | "boolean";
+export type ClickHouseColumnRaw = "string" | "number" | "boolean";
+export type ClickHouseColumn = `${ClickHouseColumnRaw}${"" | "?"}`;
 
 export type ClickhouseRow<Columns extends Record<string, ClickHouseColumn>> = {
 	[Key in keyof Columns]: Columns[Key] extends "string"
 		? string
-		: Columns[Key] extends "number"
-			? number
-			: boolean;
+		: Columns[Key] extends "string?"
+			? string | undefined
+			: Columns[Key] extends "number"
+				? number
+				: Columns[Key] extends "number?"
+					? number | undefined
+					: Columns[Key] extends "boolean"
+						? boolean
+						: Columns[Key] extends "boolean?"
+							? boolean | undefined
+							: never;
 };
 
 export function parseClickhouseCsvRows<Columns extends Record<string, ClickHouseColumn>>(
@@ -38,8 +47,20 @@ export function parseClickhouseCsvRow<Columns extends Record<string, ClickHouseC
 
 	const data: any = {};
 
-	for (const [name, type] of entries) {
+	for (const [name, rawType] of entries) {
 		skipSpaces();
+
+		const isNullable = rawType.endsWith("?");
+		const type = isNullable ? rawType.slice(0, -1) : rawType;
+
+		if ((isNullable && text[offset] === "n") || text[offset] === "N") {
+			const content = untilCommaOrEnd().toLowerCase();
+			if (content.trim() == "null") {
+				data[name] = undefined;
+			}
+			offset += 1;
+			continue;
+		}
 
 		switch (type) {
 			case "string": {

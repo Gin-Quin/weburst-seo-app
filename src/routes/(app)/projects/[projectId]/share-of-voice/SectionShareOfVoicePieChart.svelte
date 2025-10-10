@@ -1,13 +1,9 @@
 <script lang="ts">
 	import Trend from "$lib/components/Trend.svelte";
 	import * as Chart from "$lib/components/ui/chart/index.js";
-	import Table from "$lib/components/ui/table/table.svelte";
-	import { defineContent, locale } from "$lib/i18n/locale.svelte";
+	import { defineContent } from "$lib/i18n/locale.svelte";
 	import { formatPercent } from "$lib/numbers/formatPercent";
-	import type {
-		AggregatedKeywordAnalysis,
-		AggregatedKeywordAnalysisData,
-	} from "$lib/server/clickhouse/services/keywords";
+	import type { ClickhouseTable } from "$lib/server/clickhouse/migrations";
 	import { PieChart } from "layerchart";
 	import type { SvelteSet } from "svelte/reactivity";
 
@@ -39,10 +35,10 @@
 		totalVolume,
 		client,
 	}: {
-		data: Array<AggregatedKeywordAnalysisData>;
+		data: Array<ClickhouseTable.AggregatedKeywordAnalysisData>;
 		visibleDomains: SvelteSet<string>;
 		totalVolume: number;
-		client: AggregatedKeywordAnalysisData;
+		client: ClickhouseTable.AggregatedKeywordAnalysisData;
 	} = $props();
 
 	const { pieChartData, pieChartConfig } = $derived(
@@ -57,7 +53,9 @@
 		data,
 		totalVolume,
 		visibleDomains,
-	}: Pick<AggregatedKeywordAnalysis, "data" | "totalVolume"> & {
+	}: {
+		data: Array<ClickhouseTable.AggregatedKeywordAnalysisData>;
+		totalVolume: number;
 		visibleDomains: SvelteSet<string>;
 	}): { pieChartData: Array<PieChartData>; pieChartConfig: Chart.ChartConfig } {
 		let visibleDomainsVolumePercent = 0;

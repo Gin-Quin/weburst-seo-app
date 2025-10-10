@@ -197,7 +197,7 @@ async function attachProjectInfo(projectList: Project[]): Promise<ProjectInfo[]>
 		projectList.map(async (project) => {
 			const leaders = leadersByProject.get(project.id) ?? [];
 
-			const analysis = await KeywordsService.aggregateAnalysisResultsWithTrend({
+			const analysis = await KeywordsService.getProjectLatestAggregatedAnalysisResults({
 				projectId: project.id,
 			});
 

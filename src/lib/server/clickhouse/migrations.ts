@@ -44,6 +44,17 @@ export namespace ClickhouseTable {
 		title: string;
 		description: string;
 	};
+
+	export type AggregatedKeywordAnalysisData = {
+		analysisId: string; // UUID
+		createdAt: string;
+		domain: string;
+		volume: number;
+		topThreeKeywordCount: number;
+		topTenKeywordCount: number;
+		positionnedKeywordCount: number;
+		trend?: number;
+	};
 }
 
 export type ClickhouseMigration = {
@@ -354,5 +365,22 @@ export const clickhouseMigrations: Array<ClickhouseMigration> = [
 			`-- Rename deduplicated table`,
 			`RENAME TABLE ${database}.keywordAnalysis_dedup TO ${database}.keywordAnalysis`,
 		],
+	},
+	{
+		name: "Create aggregatedKeywordAnalysisData table",
+		query: (database: string) =>
+			`CREATE TABLE IF NOT EXISTS ${database}.aggregatedKeywordAnalysisData
+			(
+				analysisId UUID,
+				createdAt DateTime DEFAULT now(),
+				domain String,
+				volume UInt32,
+				topThreeKeywordCount UInt32,
+				topTenKeywordCount UInt32,
+				positionnedKeywordCount UInt32,
+				trend Nullable(Float64)
+			)
+			ENGINE = MergeTree
+			ORDER BY (analysisId, createdAt)`,
 	},
 ];

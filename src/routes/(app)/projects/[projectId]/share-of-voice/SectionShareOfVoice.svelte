@@ -1,9 +1,7 @@
 <script lang="ts">
 	import { defineContent } from "$lib/i18n/locale.svelte";
-	import type {
-		AggregatedKeywordAnalysis,
-		AggregatedKeywordAnalysisData,
-	} from "$lib/server/clickhouse/services/keywords";
+	import type { ClickhouseTable } from "$lib/server/clickhouse/migrations";
+	import type { AggregatedKeywordAnalysis } from "$lib/server/clickhouse/services/keywords";
 	import IconChartLineRegular from "phosphor-icons-svelte/IconChartLineRegular.svelte";
 	import IconChartPieSliceRegular from "phosphor-icons-svelte/IconChartPieSliceRegular.svelte";
 	import type { SvelteSet } from "svelte/reactivity";
@@ -32,7 +30,7 @@
 	}: {
 		analysisResultsWithTrend: AggregatedKeywordAnalysis;
 		visibleDomains: SvelteSet<string>;
-		client: AggregatedKeywordAnalysisData;
+		client: ClickhouseTable.AggregatedKeywordAnalysisData;
 	} = $props();
 
 	const { data, totalVolume } = $derived(analysisResultsWithTrend);

@@ -7,6 +7,25 @@ describe("parseClickhouseCsvRow", () => {
 		expect(result).toEqual({ name: "hello" });
 	});
 
+	test("parses nullable values", () => {
+		const result = parseClickhouseCsvRow('"hello", null, 12, null, true, null', {
+			name: "string?",
+			nameNull: "string?",
+			number: "number?",
+			numberNull: "number?",
+			boolean: "boolean?",
+			booleanNull: "boolean?",
+		});
+		expect(result).toEqual({
+			name: "hello",
+			nameNull: undefined,
+			number: 12,
+			numberNull: undefined,
+			boolean: true,
+			booleanNull: undefined,
+		});
+	});
+
 	test("parses single number column", () => {
 		const result = parseClickhouseCsvRow("42", { count: "number" });
 		expect(result).toEqual({ count: 42 });

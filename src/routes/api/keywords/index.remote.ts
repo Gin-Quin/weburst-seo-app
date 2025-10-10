@@ -40,7 +40,7 @@ export const getAnalysisStatus = command(
 export const getAnalysisResultsWithTrend = query(
 	v.object({ projectId: v.string() }),
 	async ({ projectId }) => {
-		return await KeywordsService.aggregateAnalysisResultsWithTrend({ projectId });
+		return await KeywordsService.getProjectLatestAggregatedAnalysisResults({ projectId });
 	},
 );
 
@@ -49,7 +49,7 @@ export const getAllAggregatedAnalysisResults = query(
 		projectId: v.string(),
 	}),
 	async ({ projectId }) => {
-		return await KeywordsService.getAllAggregatedAnalysisResults({ projectId });
+		return await KeywordsService.getAllAggregatedAnalysisResults({ projectId, limit: 100 });
 	},
 );
 

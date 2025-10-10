@@ -2,26 +2,22 @@
 	import Loader from "$lib/components/Loader.svelte";
 	import Trend from "$lib/components/Trend.svelte";
 	import * as Chart from "$lib/components/ui/chart/index.js";
+	import { locale } from "$lib/i18n/locale.svelte";
 	import { formatPercent } from "$lib/numbers/formatPercent";
-	import type {
-		AggregatedKeywordAnalysisData,
-		DatedAggregatedKeywordAnalysis,
-	} from "$lib/server/clickhouse/services/keywords";
+	import type { ClickhouseTable } from "$lib/server/clickhouse/migrations";
 	import { context } from "$lib/stores/context.svelte";
+	import { scaleUtc } from "d3-scale";
+	import { curveNatural } from "d3-shape";
 	import {
 		Area,
 		AreaChart,
-		Axis,
 		ChartClipPath,
 		LinearGradient,
 		type SeriesData,
 	} from "layerchart";
+	import { cubicInOut } from "svelte/easing";
 	import type { SvelteSet } from "svelte/reactivity";
 	import { getAllAggregatedAnalysisResults } from "../../../../api/keywords/index.remote";
-	import { locale } from "$lib/i18n/locale.svelte";
-	import { scaleUtc } from "d3-scale";
-	import { curveNatural } from "d3-shape";
-	import { cubicInOut } from "svelte/easing";
 
 	type ChartData = Record<string, Date | number>;
 
@@ -38,7 +34,7 @@
 	}: {
 		visibleDomains: SvelteSet<string>;
 		totalVolume: number;
-		client: AggregatedKeywordAnalysisData;
+		client: ClickhouseTable.AggregatedKeywordAnalysisData;
 	} = $props();
 
 	const query = getAllAggregatedAnalysisResults({
@@ -49,7 +45,7 @@
 		data,
 		visibleDomains,
 	}: {
-		data: Array<DatedAggregatedKeywordAnalysis>;
+		data: Awaited<ReturnType<typeof getAllAggregatedAnalysisResults>>;
 		visibleDomains: SvelteSet<string>;
 	}): {
 		chartData: Array<ChartData>;
@@ -80,10 +76,8 @@
 				date: new Date(analysis.createdAt),
 			};
 
-			for (const domain of visibleDomains) {
-				const domainData = analysis.data.find((item) => item.domain === domain);
-				const volume = domainData ? Math.round(domainData.volume) : 0;
-				item[domain] = (volume / totalVolume) * 100;
+			if (visibleDomains.has(analysis.domain)) {
+				item[analysis.domain] = (analysis.volume / totalVolume) * 100;
 			}
 			chartData.push(item);
 		}
