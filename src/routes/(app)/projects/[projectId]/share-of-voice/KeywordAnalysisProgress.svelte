@@ -13,8 +13,16 @@
 
 	let { analysis }: { analysis: KeywordAnalysisStatus } = $props();
 
-	let { completedTasks, failedTasks, totalTasks } = $derived(analysis);
-	let done = $derived(completedTasks + failedTasks === totalTasks);
+	let { completedTasks, failedTasks, keywordsCount, totalTasks } =
+		$derived(analysis);
+	let done = $derived(completedTasks + failedTasks === keywordsCount);
+
+	$inspect({
+		completedTasks,
+		failedTasks,
+		keywordsCount,
+		totalTasks,
+	});
 </script>
 
 <div
@@ -31,19 +39,15 @@
 		style:background-color="var(--color-border)"
 	>
 		<div
-			class="done left-0 top-0 h-full bg-primary"
-			style:width="{(100 * completedTasks) / totalTasks}%"
-		></div>
-		<div
-			class="failed left-0 top-0 h-full bg-error"
-			style:width="{(100 * failedTasks) / totalTasks}%"
+			class="progress left-0 top-0 h-full bg-primary"
+			style:width="{(100 * completedTasks) / keywordsCount}%"
 		></div>
 	</div>
 </div>
 
 <style>
 	.done,
-	.failed {
+	.progress {
 		transition: width 100ms ease-in-out;
 	}
 

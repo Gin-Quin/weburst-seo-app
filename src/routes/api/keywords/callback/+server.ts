@@ -17,21 +17,25 @@ export const POST: RequestHandler = async ({ request }) => {
 		return text("OK — But no tasks found");
 	}
 
-	const analysisId = await KeywordsService.getAnalysisIdFromTaskId({
-		taskId: firstTask.id,
-	});
+	for (let retries = 0; retries < 5; retries++) {
+		const analysisId = await KeywordsService.getAnalysisIdFromTaskId({
+			taskId: firstTask.id,
+		});
 
-	if (!analysisId) {
-		console.warn(`No analysis ID found for task ID ${firstTask.id}`);
-		return text("OK — But no analysis found related to the task");
+		if (!analysisId) {
+			await new Promise((resolve) => setTimeout(resolve, 500));
+		} else {
+			KeywordsService.saveKeywordAnalysisResult({
+				analysisId,
+				result: data,
+			});
+
+			return text("OK");
+		}
 	}
 
-	KeywordsService.saveKeywordAnalysisResult({
-		analysisId,
-		result: data,
-	});
-
-	return text("OK");
+	console.warn(`No analysis ID found for task ID ${firstTask.id}`);
+	return text("OK — But no analysis found related to the task");
 };
 
 export const GET: RequestHandler = async ({ request }) => {

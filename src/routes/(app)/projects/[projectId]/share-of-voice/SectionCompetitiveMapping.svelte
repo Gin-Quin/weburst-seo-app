@@ -79,7 +79,12 @@
 		const chartData: Array<ChartData> = [];
 		const chartConfig: Chart.ChartConfig = {};
 
-		for (const item of data.slice(0, 10)) {
+		const topTen = data.slice(0, 10);
+		if (!topTen.some((item) => item.domain === client.domain)) {
+			topTen.push(client);
+		}
+
+		for (const item of topTen) {
 			chartData.push({
 				key: item.domain,
 				data: item

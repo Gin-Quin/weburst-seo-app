@@ -19,7 +19,7 @@
 			title: "Potentiel SEO",
 			description:
 				"Trafic SEO potentiel sur les positions pas encore exploitées.",
-			trafficPotential: "Potentiel de trafic",
+			trafficPotential: "Volume total de recherche",
 			targetedKeywordsLabel: "Nombre de mots clés ciblés",
 			positionnedKeywordsTitle: "Mots-clés positionnés",
 			top3KeywordsTitle: "Mots-clés en top 3",

@@ -31,6 +31,7 @@
 {#await projectContext.analysisResultsWithTrendQuery}
 	<Loader />
 {:then analysisResultsWithTrend}
+	{console.log({ analysisResultsWithTrend })}
 	{#if analysisResultsWithTrend == null}
 		<div class="center text-xl text-light bold">
 			{$content.noAnalysisResults}
@@ -45,7 +46,8 @@
 			positionnedKeywordCount: 0,
 			volume: 0,
 			trend: 0,
-			keywords: []
+			analysisId: "",
+			createdAt: new Date().toISOString()
 		}}
 
 		<div class="grid grid-cols-[1.4fr_1fr] gap-5">

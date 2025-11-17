@@ -1,25 +1,25 @@
 <script lang="ts">
+	import { page } from "$app/state";
+	import { defineContent } from "$lib/i18n/locale.svelte";
+	import type { KeywordAnalysisStatus } from "$lib/server/clickhouse/services/keywords";
 	import { context } from "$lib/stores/context.svelte";
 	import { projectContext } from "$lib/stores/projectContext.svelte";
-	import { fade } from "svelte/transition";
-	import AddKeywordsDialog from "./AddKeywordsDialog.svelte";
 	import { SECOND } from "$lib/timeUnits";
 	import IconArrowsClockwiseRegular from "phosphor-icons-svelte/IconArrowsClockwiseRegular.svelte";
 	import IconDownloadSimpleRegular from "phosphor-icons-svelte/IconDownloadSimpleRegular.svelte";
+	import IconExportRegular from "phosphor-icons-svelte/IconExportRegular.svelte";
 	import { onMount } from "svelte";
+	import { fade } from "svelte/transition";
 	import {
 		getAnalysisResultsWithTrend,
 		getAnalysisStatus,
 		getKeywordClusters,
 	} from "../../../api/keywords/index.remote";
+	import AddKeywordsDialog from "./AddKeywordsDialog.svelte";
+	import { exportDataToCsv } from "./exportDataToCsv";
 	import ProjectSettingsDropdown from "./ProjectSettingsDropdown.svelte";
 	import KeywordAnalysisProgress from "./share-of-voice/KeywordAnalysisProgress.svelte";
 	import { startNewAnalysis } from "./startNewAnalysis";
-	import type { KeywordAnalysisStatus } from "$lib/server/clickhouse/services/keywords";
-	import { defineContent } from "$lib/i18n/locale.svelte";
-	import { page } from "$app/state";
-	import { exportDataToCsv } from "./exportDataToCsv";
-	import IconExportRegular from "phosphor-icons-svelte/IconExportRegular.svelte";
 
 	const content = defineContent({
 		en: {
@@ -45,6 +45,8 @@
 	let analysisRunning = $state(false);
 	let lastAnalysisStatus = $state<KeywordAnalysisStatus | undefined>();
 	let fetchLastAnalysisStatusTimeout: ReturnType<typeof setTimeout>;
+
+	$inspect({ lastAnalysisStatus });
 
 	$effect(() => {
 		if (context.project) {
@@ -79,9 +81,11 @@
 			lastAnalysisStatus = response;
 		}
 		const wasRunning = analysisRunning;
+
 		analysisRunning =
 			!!response &&
-			response.completedTasks + response.failedTasks < response.totalTasks;
+			response.completedTasks + response.failedTasks < response.keywordsCount;
+
 		const intervalDuration = (analysisRunning ? 1 : 10) * SECOND;
 		fetchLastAnalysisStatusTimeout = setTimeout(
 			fetchLastAnalysisStatus,
@@ -89,7 +93,10 @@
 		);
 
 		if (wasRunning && !analysisRunning) {
-			projectContext.analysisResultsWithTrendQuery?.refresh();
+			setTimeout(() => {
+				projectContext.analysisResultsWithTrendQuery?.refresh();
+				projectContext.keywordClustersQuery?.refresh();
+			}, 1000);
 		}
 	}
 

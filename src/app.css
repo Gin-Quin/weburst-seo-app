@@ -60,6 +60,17 @@
 	--color-gray-1: #f8f8f8;
 	--color-gray-2: #f5f5f5;
 
+	--color-chart-red: #f4536e; /* 350° - Red/Pink */
+	--color-chart-orange: #f47853; /* 20° - Orange */
+	--color-chart-amber: #f4a953; /* 40° - Amber */
+	--color-chart-yellow: #f4d953; /* 55° - Yellow */
+	--color-chart-lime: #b8f453; /* 85° - Lime */
+	--color-chart-green: #53f47d; /* 135° - Green */
+	--color-chart-cyan: #53f4d4; /* 170° - Cyan */
+	--color-chart-blue: #5394f4; /* 210° - Blue */
+	--color-chart-indigo: #6e53f4; /* 245° - Indigo */
+	--color-chart-magenta: #f453d9; /* 310° - Magenta */
+
 	/* border radius */
 	--radius-selector: 1rem;
 	--radius-field: 0.25rem;

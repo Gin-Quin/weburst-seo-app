@@ -29,11 +29,14 @@ export const getAnalysisStatus = command(
 		projectId: v.string(),
 	}),
 	async ({ projectId }): Promise<KeywordAnalysisStatus | null> => {
-		const analysisId = await KeywordsService.getProjectLastAnalysisId(projectId);
+		const analysisId = await KeywordsService.getProjectLastAnalysisId({
+			projectId,
+			status: null,
+		});
 		if (analysisId === null) {
 			return null;
 		}
-		return await KeywordsService.getAnalysisStatus(analysisId);
+		return await KeywordsService.getAnalysisStatus({ analysisId });
 	},
 );
 
