@@ -25,6 +25,7 @@
 			role: "Rôle",
 		},
 	});
+	const creatableRoles = ["admin", "project_manager"] as const;
 
 	let { user }: { user: User } = $props();
 
@@ -34,7 +35,7 @@
 		email: "",
 		firstName: "",
 		lastName: "",
-		role: "user",
+		role: "project_manager",
 	});
 
 	onMount(() => {
@@ -73,8 +74,8 @@
 		<label class="select">
 			<IconUserCheckRegular class="icon" />
 			<select class="select" bind:value={newUser.role}>
-				{#each Object.entries($userRoles) as [key, value]}
-					<option value={key}>{value}</option>
+				{#each creatableRoles as role}
+					<option value={role}>{$userRoles[role]}</option>
 				{/each}
 			</select>
 		</label>

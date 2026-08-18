@@ -15,12 +15,14 @@ export type KeywordAnalysisFrequency = v.InferOutput<typeof KeywordAnalysisFrequ
 // createProject(input: ProjectInsert)
 export const CreateProject = v.object({
 	id: v.string(),
-	clientName: v.string(),
+	clientName: v.optional(v.string(), ""),
+	clientId: v.optional(v.string()),
 	domain: v.string(),
 	websiteUrl: v.string(),
 	type: ProjectType,
 	keywordAnalysisFrequency: KeywordAnalysisFrequency,
-	leaderIds: v.array(v.string()),
+	leaderIds: v.optional(v.array(v.string()), []),
+	projectManagerIds: v.optional(v.array(v.string())),
 });
 export type CreateProject = v.InferOutput<typeof CreateProject>;
 
@@ -32,11 +34,13 @@ export type GetProjectById = v.InferOutput<typeof GetProjectById>;
 export const ProjectUpdate = v.partial(
 	v.object({
 		clientName: v.string(),
+		clientId: v.string(),
 		domain: v.string(),
 		websiteUrl: v.string(),
 		type: ProjectType,
 		keywordAnalysisFrequency: KeywordAnalysisFrequency,
 		leaderIds: v.array(v.string()),
+		projectManagerIds: v.array(v.string()),
 	}),
 );
 export type ProjectUpdate = v.InferOutput<typeof ProjectUpdate>;

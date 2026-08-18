@@ -17,6 +17,7 @@ export async function createUser(input: UserInsert): Promise<User> {
 		.values({ ...input, id })
 		.returning();
 
+	if (!created) throw new Error("User creation failed");
 	return created;
 }
 

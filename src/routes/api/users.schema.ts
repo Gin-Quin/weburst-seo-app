@@ -10,6 +10,18 @@ export const CreateUser = v.object({
 	firstName: v.string(),
 	lastName: v.string(),
 	email: v.pipe(v.string(), v.email()),
-	role: v.picklist(["admin", "user"]),
+	role: v.picklist(["admin", "project_manager", "client"]),
+	clientIds: v.optional(v.array(v.string())),
 });
 export type CreateUser = v.InferOutput<typeof CreateUser>;
+
+export const UpdateUserByAdmin = v.tuple([
+	v.string(),
+	v.object({
+		firstName: v.string(),
+		lastName: v.string(),
+		email: v.pipe(v.string(), v.email()),
+		role: v.picklist(["admin", "project_manager", "client"]),
+		clientIds: v.array(v.string()),
+	}),
+]);

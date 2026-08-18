@@ -107,3 +107,7 @@ test("hello world", () => {
   expect(1).toBe(1);
 });
 ```
+
+### Deploying
+
+Read ./DEPLOYMENT.md to get instructions to deploy to production.

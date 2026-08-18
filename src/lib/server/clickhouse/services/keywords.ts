@@ -13,6 +13,7 @@ import { parseClickhouseCsvRows } from "../parseClickhouseCsvRow";
 import type { DataForSeo } from "./DataForSeo";
 import { hasEveryTaskFinished } from "./analysisCompletion";
 import { getReadySerpTasks } from "./getReadySerpTasks";
+import { selectLatestAnalysisPerDay } from "./selectLatestAnalysisPerDay";
 
 const ANALYSIS_DEPTH = env.SEARCH_DEPTH;
 const SIMILARITY_THRESHOLD = 0.6;
@@ -1178,7 +1179,7 @@ export namespace KeywordsService {
 		>
 	> {
 		const clickhouse = getClickhouseClient();
-		const allAnalysis = await getAllProjectAnalysis(projectId);
+		const allAnalysis = selectLatestAnalysisPerDay(await getAllProjectAnalysis(projectId));
 		if (allAnalysis.length === 0) return [];
 
 		const analysisIds = allAnalysis.map((analysis) => analysis.id);

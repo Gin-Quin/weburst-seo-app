@@ -49,6 +49,7 @@
 			userUpdateFailed: "Impossible de mettre à jour l'utilisateur",
 		},
 	});
+	const creatableRoles = ["admin", "project_manager"] as const;
 
 	let createMode = $state(false);
 	let updating = $state(false);
@@ -60,7 +61,7 @@
 		firstName: "",
 		lastName: "",
 		email: "",
-		role: "user",
+		role: "project_manager",
 	});
 
 	const hasValidChanges = $derived(
@@ -79,7 +80,7 @@
 				firstName: "",
 				lastName: "",
 				email: "",
-				role: "user",
+				role: "project_manager",
 			};
 		} else {
 			updates.firstName = context.user!.firstName;
@@ -229,8 +230,8 @@
 						<label class="select">
 							<IconUserCheckRegular class="icon" />
 							<select class="select" bind:value={newUser.role}>
-								{#each Object.entries($userRoles) as [key, value]}
-									<option value={key}>{value}</option>
+								{#each creatableRoles as role}
+									<option value={role}>{$userRoles[role]}</option>
 								{/each}
 							</select>
 						</label>

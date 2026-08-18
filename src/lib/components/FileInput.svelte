@@ -43,6 +43,7 @@
 		dragOver = false;
 		if (event.dataTransfer?.files?.length) {
 			const droppedFile = event.dataTransfer.files[0];
+			if (!droppedFile) return;
 
 			// Check if file type is accepted
 			if (accept && accept.length > 0) {

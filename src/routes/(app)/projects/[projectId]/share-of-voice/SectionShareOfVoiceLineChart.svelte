@@ -7,7 +7,7 @@
 	import type { ClickhouseTable } from "$lib/server/clickhouse/migrations";
 	import { context } from "$lib/stores/context.svelte";
 	import { scaleUtc } from "d3-scale";
-	import { curveNatural } from "d3-shape";
+	import { curveLinear } from "d3-shape";
 	import {
 		Area,
 		AreaChart,
@@ -138,9 +138,10 @@
 				yPadding={[0, 0]}
 				seriesLayout="stack"
 				series={chartSeries}
+				points={{ r: 3 }}
 				props={{
 					area: {
-						curve: curveNatural,
+						curve: curveLinear,
 						"fill-opacity": 0.4,
 						line: { class: "stroke-1" },
 						motion: "tween",
