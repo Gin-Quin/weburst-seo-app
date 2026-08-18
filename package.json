@@ -18,6 +18,7 @@
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
 		"db:studio": "drizzle-kit studio",
+		"sqlite": "bun scripts/sqlite.ts",
 		"db:reset": "rm -rf ./drizzle/* && bun migrate && bun run scripts/createLocalAdmin.ts",
 		"clickhouse:migrate": "bun scripts/clickhouse:migrate.ts",
 		"typesafe-i18n": "typesafe-i18n",

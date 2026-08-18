@@ -25,7 +25,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		if (!analysisId) {
 			await new Promise((resolve) => setTimeout(resolve, 500));
 		} else {
-			KeywordsService.saveKeywordAnalysisResult({
+			await KeywordsService.saveKeywordAnalysisResult({
 				analysisId,
 				result: data,
 			});

@@ -65,7 +65,11 @@ export namespace DataForSeo {
 			breadcrumb: string;
 		}
 
-		export type TaskReadyResponse = Response<TaskReady>;
+		export type TaskReadyResponse = Response<TaskReadyResponseTask>;
+
+		export interface TaskReadyResponseTask extends Omit<Task, "result"> {
+			result: TaskReady[] | null;
+		}
 
 		export interface TaskReady {
 			id: string;
@@ -73,9 +77,9 @@ export namespace DataForSeo {
 			se_type: string; // 'organic' | ...
 			date_posted: string;
 			tag: string;
-			endpoint_regular: string; // ex: '/v3/serp/google/organic/task_get/regular/09291301-1103-0066-0000-263212284b04'
-			endpoint_advanced: string; // ex: '/v3/serp/google/organic/task_get/advanced/09291301-1103-0066-0000-263212284b04',
-			endpoint_html: string; // ex: '/v3/serp/google/organic/task_get/html/09291301-1103-0066-0000-263212284b04'
+			endpoint_regular: string | null; // ex: '/v3/serp/google/organic/task_get/regular/09291301-1103-0066-0000-263212284b04'
+			endpoint_advanced: string | null; // ex: '/v3/serp/google/organic/task_get/advanced/09291301-1103-0066-0000-263212284b04',
+			endpoint_html: string | null; // ex: '/v3/serp/google/organic/task_get/html/09291301-1103-0066-0000-263212284b04'
 		}
 	}
 }

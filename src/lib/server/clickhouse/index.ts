@@ -18,6 +18,10 @@ export function getClickhouseClient({ database = getClickhouseDatabase() } = {})
 		clickhouse_settings: {
 			async_insert: 1,
 			async_insert_busy_timeout_ms: 1000,
+			// Do not acknowledge an insert until ClickHouse has flushed it. Without this,
+			// callbacks can return successfully while their rows are still only queued in
+			// memory, and a server restart can silently lose them.
+			wait_for_async_insert: 1,
 		},
 	}));
 }

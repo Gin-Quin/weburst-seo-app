@@ -34,6 +34,7 @@ bun run db:studio    # Open Drizzle Studio UI
 ## Architecture
 
 ### Tech Stack
+
 - **Runtime**: Bun (not Node.js)
 - **Framework**: SvelteKit with Svelte 5 (uses runes like `$props()`)
 - **Database**: Turso (LibSQL) with Drizzle ORM
@@ -41,6 +42,7 @@ bun run db:studio    # Open Drizzle Studio UI
 - **Language**: TypeScript
 
 ### Project Structure
+
 - `/src/routes/` - SvelteKit routes and pages
 - `/src/lib/` - Shared components and utilities
   - `/server/db/` - Database configuration and schema
@@ -51,23 +53,27 @@ bun run db:studio    # Open Drizzle Studio UI
 - `/data/` - Local data directory (created by postinstall)
 
 ### Database Setup
+
 - Uses environment variables: `DATABASE_URL` and `DATABASE_AUTH_TOKEN`
 - Schema defined in `src/lib/server/db/schema.ts`
 - Database client initialized in `src/lib/server/db/index.ts`
 - In development, can use local SQLite file or Turso cloud database
 
 ### Key Configuration Files
+
 - `drizzle.config.ts` - Drizzle ORM configuration for Turso
 - `svelte.config.js` - SvelteKit configuration
 - `vite.config.ts` - Vite bundler with Tailwind CSS plugin
 - `tsconfig.json` - TypeScript configuration
 
 ### Development Notes
+
 - Svelte 5 syntax: Uses runes (`$props()`, `$state()`) instead of older syntax
 - Tailwind CSS v4 is configured via Vite plugin (not PostCSS)
 - DaisyUI provides pre-built components (e.g., `class="btn"`)
 - Windows users must use WSL for development
 - Post-install script ensures `/data` directory exists
+- Test everything you can test with `*.test.ts` files, using Bun's tests
 
 ## Bun
 

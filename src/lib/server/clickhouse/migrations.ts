@@ -32,6 +32,16 @@ export namespace ClickhouseTable {
 		error?: string;
 	};
 
+	export type KeywordAnalysisTaskResult = {
+		analysisId: string; // UUID
+		taskId: string; // UUID
+		status: "completed" | "failed";
+		itemCount: number; // UInt32
+		error: string;
+		createdAt: string;
+		version: number; // UInt64
+	};
+
 	export type KeywordAnalysisResponse = {
 		analysisId: string; // UUID
 		taskId: string; // UUID
@@ -382,5 +392,40 @@ export const clickhouseMigrations: Array<ClickhouseMigration> = [
 			)
 			ENGINE = MergeTree
 			ORDER BY (analysisId, createdAt)`,
+	},
+	{
+		name: "Create keyword analysis task results table",
+		query: (database: string) =>
+			`CREATE TABLE IF NOT EXISTS ${database}.keywordAnalysisTaskResults
+			(
+				analysisId UUID,
+				taskId UUID,
+				status LowCardinality(String),
+				itemCount UInt32 DEFAULT 0,
+				error String DEFAULT '',
+				createdAt DateTime64(3) DEFAULT now64(3),
+				version UInt64 DEFAULT toUInt64(toUnixTimestamp64Milli(createdAt))
+			)
+			ENGINE = ReplacingMergeTree(version)
+			ORDER BY (analysisId, taskId)`,
+	},
+	{
+		name: "Add keyword analysis task lookup indexes",
+		query: (database: string) => [
+			`ALTER TABLE ${database}.keywordAnalysisResponses
+			ADD INDEX taskId_bloom_filter taskId TYPE bloom_filter(0.01) GRANULARITY 1`,
+			`ALTER TABLE ${database}.keywordAnalysisTasks
+			ADD INDEX analysisId_bloom_filter analysisId TYPE bloom_filter(0.01) GRANULARITY 1`,
+			`ALTER TABLE ${database}.keywordAnalysisTasks
+			ADD INDEX taskId_bloom_filter id TYPE bloom_filter(0.01) GRANULARITY 1`,
+		],
+	},
+	{
+		name: "Materialize keyword analysis task lookup indexes",
+		query: (database: string) => [
+			`ALTER TABLE ${database}.keywordAnalysisResponses MATERIALIZE INDEX taskId_bloom_filter`,
+			`ALTER TABLE ${database}.keywordAnalysisTasks MATERIALIZE INDEX analysisId_bloom_filter`,
+			`ALTER TABLE ${database}.keywordAnalysisTasks MATERIALIZE INDEX taskId_bloom_filter`,
+		],
 	},
 ];

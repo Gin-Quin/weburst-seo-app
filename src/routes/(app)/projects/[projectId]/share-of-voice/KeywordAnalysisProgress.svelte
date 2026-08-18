@@ -13,15 +13,16 @@
 
 	let { analysis }: { analysis: KeywordAnalysisStatus } = $props();
 
-	let { completedTasks, failedTasks, keywordsCount, totalTasks } =
+	let { completedTasks, failedTasks, keywordsCount, totalTasks, status } =
 		$derived(analysis);
-	let done = $derived(completedTasks + failedTasks === keywordsCount);
+	let done = $derived(status !== "pending" || completedTasks + failedTasks === keywordsCount);
 
 	$inspect({
 		completedTasks,
 		failedTasks,
 		keywordsCount,
 		totalTasks,
+		status,
 	});
 </script>
 

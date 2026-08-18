@@ -84,6 +84,7 @@
 
 		analysisRunning =
 			!!response &&
+			response.status === "pending" &&
 			response.completedTasks + response.failedTasks < response.keywordsCount;
 
 		const intervalDuration = (analysisRunning ? 1 : 10) * SECOND;

@@ -78,16 +78,34 @@
 			index++;
 		}
 
+		const rowsByDate = new Map<string, ChartData>();
 		for (const analysis of data) {
-			const item: ChartData = {
-				date: new Date(analysis.createdAt),
-			};
+			if (!visibleDomains.has(analysis.domain)) {
+				continue;
+			}
+			const key = analysis.createdAt;
+			let item = rowsByDate.get(key);
+			if (!item) {
+				item = { date: new Date(analysis.createdAt) };
+				rowsByDate.set(key, item);
+			}
+			item[analysis.domain] = (analysis.volume / analysis.totalVolume) * 100;
+		}
 
-			if (visibleDomains.has(analysis.domain)) {
-				item[analysis.domain] = (analysis.volume / totalVolume) * 100;
+		for (const item of rowsByDate.values()) {
+			for (const domain of visibleDomains) {
+				if (item[domain] === undefined) {
+					item[domain] = 0;
+				}
 			}
 			chartData.push(item);
 		}
+
+		chartData.sort((a, b) => {
+			const aDate = a.date instanceof Date ? a.date.getTime() : 0;
+			const bDate = b.date instanceof Date ? b.date.getTime() : 0;
+			return aDate - bDate;
+		});
 
 		return { chartData, chartConfig, chartSeries };
 	}

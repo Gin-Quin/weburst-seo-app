@@ -52,7 +52,10 @@ export const getAllAggregatedAnalysisResults = query(
 		projectId: v.string(),
 	}),
 	async ({ projectId }) => {
-		return await KeywordsService.getAllAggregatedAnalysisResults({ projectId, limit: 100 });
+		return await KeywordsService.getAllAggregatedAnalysisResults({
+			projectId,
+			domainLimit: 100,
+		});
 	},
 );
 
