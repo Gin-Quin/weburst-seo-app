@@ -1,15 +1,35 @@
+import { building } from "$app/environment";
+import { startRecurringTask } from "$lib/server/backgroundJobs";
 import { KeywordsService } from "$lib/server/clickhouse/services/keywords";
-import { DAY, MINUTE } from "$lib/timeUnits";
+import { HOUR, MINUTE } from "$lib/timeUnits";
 
-const timeUntil23PM = () => {
-	const now = new Date();
-	const target = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23);
-	return target.getTime() - now.getTime();
+type BackgroundJobs = {
+	stop: () => void;
 };
 
-setTimeout(() => {
-	KeywordsService.startAllKeywordAnalysis();
-	setInterval(KeywordsService.startAllKeywordAnalysis, 1 * DAY);
-}, timeUntil23PM());
+const runtime = globalThis as typeof globalThis & {
+	__weburstBackgroundJobs?: BackgroundJobs;
+};
 
-setInterval(KeywordsService.fetchTasksReady, 2 * MINUTE);
+if (!building) {
+	// Re-evaluating this module in development must replace, not duplicate, jobs.
+	runtime.__weburstBackgroundJobs?.stop();
+
+	const stopAnalysisScheduler = startRecurringTask({
+		name: "keyword analysis scheduler",
+		intervalMs: HOUR,
+		task: KeywordsService.startAllKeywordAnalysis,
+	});
+	const stopReadyTaskPoller = startRecurringTask({
+		name: "DataForSEO ready task poller",
+		intervalMs: 2 * MINUTE,
+		task: KeywordsService.fetchTasksReady,
+	});
+
+	runtime.__weburstBackgroundJobs = {
+		stop: () => {
+			stopAnalysisScheduler();
+			stopReadyTaskPoller();
+		},
+	};
+}

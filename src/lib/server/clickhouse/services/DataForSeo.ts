@@ -26,6 +26,7 @@ export namespace DataForSeo {
 		export interface Data {
 			api: string;
 			function: string;
+			tag?: string;
 			se: string;
 			se_type: string;
 			keyword: string;

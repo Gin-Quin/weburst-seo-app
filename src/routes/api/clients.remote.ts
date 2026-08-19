@@ -1,10 +1,14 @@
 import { command, query } from "$app/server";
-import { requireAdmin } from "$lib/server/auth/authorization";
+import {
+	requireAdmin,
+	requireClientAccess,
+} from "$lib/server/auth/authorization";
 import {
 	createClient as createClientService,
 	deleteClient as deleteClientService,
 	listClients as listAllClients,
 	setClientProjectManagers,
+	setClientUsers,
 	updateClient as updateClientService,
 	validateProjectManagerIds,
 } from "$lib/server/clients";
@@ -23,6 +27,7 @@ import { getRequestUser } from "./utilities";
 
 export type ClientInfo = Client & {
 	projectManagers: Pick<User, "id" | "firstName" | "lastName" | "email" | "role">[];
+	clientUsers: Pick<User, "id" | "firstName" | "lastName" | "email" | "role">[];
 };
 
 export const listClients = query(async (): Promise<ClientInfo[]> => {
@@ -43,7 +48,7 @@ export const listClients = query(async (): Promise<ClientInfo[]> => {
 						.where(eq(usersToClients.userId, currentUser.id))
 				).map(({ client }) => client);
 
-	return attachProjectManagers(clientList, currentUser.role !== "client");
+	return attachClientMembers(clientList, currentUser.role !== "client");
 });
 
 export const createClient = command(CreateClient, async (input): Promise<void> => {
@@ -58,15 +63,19 @@ export const createClient = command(CreateClient, async (input): Promise<void> =
 
 export const updateClient = command(UpdateClient, async ([id, input]): Promise<void> => {
 	const currentUser = await getRequestUser();
-	requireAdmin(currentUser);
+	await requireClientAccess(currentUser, id, "manage");
 
-	const { projectManagerIds, ...clientUpdates } = input;
+	const { projectManagerIds, clientUserIds, ...clientUpdates } = input;
+	if ((projectManagerIds || clientUserIds) && currentUser?.role !== "admin") {
+		throw new Error("Only admins can assign client memberships");
+	}
 	if (projectManagerIds) await validateProjectManagerIds(projectManagerIds);
 	if (Object.keys(clientUpdates).length > 0) {
 		const updated = await updateClientService(id, clientUpdates);
 		if (!updated) throw new Error("Client not found");
 	}
 	if (projectManagerIds) await setClientProjectManagers(id, projectManagerIds);
+	if (clientUserIds) await setClientUsers(id, clientUserIds);
 	await listClients().refresh();
 });
 
@@ -88,13 +97,13 @@ export const deleteClient = command(DeleteClient, async (id): Promise<void> => {
 	await listClients().refresh();
 });
 
-async function attachProjectManagers(
+async function attachClientMembers(
 	clientList: Client[],
-	includeManagers: boolean,
+	includeMembers: boolean,
 ): Promise<ClientInfo[]> {
 	if (clientList.length === 0) return [];
-	if (!includeManagers) {
-		return clientList.map((client) => ({ ...client, projectManagers: [] }));
+	if (!includeMembers) {
+		return clientList.map((client) => ({ ...client, projectManagers: [], clientUsers: [] }));
 	}
 	const clientIds = clientList.map(({ id }) => id);
 	const rows = await db
@@ -104,24 +113,33 @@ async function attachProjectManagers(
 		.where(
 			and(
 				inArray(usersToClients.clientId, clientIds),
-				inArray(users.role, ["user", "project_manager"]),
+				inArray(users.role, ["user", "project_manager", "client"]),
 			),
 		);
 	const managersByClient = new Map<string, ClientInfo["projectManagers"]>();
+	const clientUsersByClient = new Map<string, ClientInfo["clientUsers"]>();
 	for (const { clientId, user } of rows) {
-		const managers = managersByClient.get(clientId) ?? [];
-		managers.push({
+		const member = {
 			id: user.id,
 			firstName: user.firstName,
 			lastName: user.lastName,
 			email: user.email,
 			role: user.role,
-		});
-		managersByClient.set(clientId, managers);
+		};
+		if (user.role === "client") {
+			const clientUsers = clientUsersByClient.get(clientId) ?? [];
+			clientUsers.push(member);
+			clientUsersByClient.set(clientId, clientUsers);
+		} else {
+			const managers = managersByClient.get(clientId) ?? [];
+			managers.push(member);
+			managersByClient.set(clientId, managers);
+		}
 	}
 
 	return clientList.map((client) => ({
 		...client,
 		projectManagers: managersByClient.get(client.id) ?? [],
+		clientUsers: clientUsersByClient.get(client.id) ?? [],
 	}));
 }

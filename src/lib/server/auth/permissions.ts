@@ -9,6 +9,6 @@ export function roleCanAccessClient(
 ): boolean {
 	if (role === "admin") return true;
 	if (!hasMembership) return false;
-	if (role === "client") return action === "view";
-	return role === "project_manager" || role === "user";
+	if (action === "view") return true;
+	return role === "project_manager";
 }

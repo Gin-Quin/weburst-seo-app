@@ -22,3 +22,10 @@ export function hasEveryTaskFinished({
 		completedTasks + failedTasks === keywordsCount
 	);
 }
+
+export function getAnalysisCompletionOutcome(
+	counts: AnalysisTaskCounts,
+): "pending" | "completed" | "failed" {
+	if (!hasEveryTaskFinished(counts)) return "pending";
+	return counts.failedTasks > 0 ? "failed" : "completed";
+}

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { hasEveryTaskFinished } from "./analysisCompletion";
+import { getAnalysisCompletionOutcome, hasEveryTaskFinished } from "./analysisCompletion";
 
 describe("hasEveryTaskFinished", () => {
 	test("finishes when every expected task has a terminal status", () => {
@@ -44,5 +44,40 @@ describe("hasEveryTaskFinished", () => {
 				failedTasks: 0,
 			}),
 		).toBe(false);
+	});
+});
+
+describe("getAnalysisCompletionOutcome", () => {
+	test("completes only when every expected task completed successfully", () => {
+		expect(
+			getAnalysisCompletionOutcome({
+				keywordsCount: 2,
+				startedTasks: 2,
+				completedTasks: 2,
+				failedTasks: 0,
+			}),
+		).toBe("completed");
+	});
+
+	test("fails instead of publishing partial results", () => {
+		expect(
+			getAnalysisCompletionOutcome({
+				keywordsCount: 2,
+				startedTasks: 2,
+				completedTasks: 1,
+				failedTasks: 1,
+			}),
+		).toBe("failed");
+	});
+
+	test("remains pending until all expected tasks are terminal", () => {
+		expect(
+			getAnalysisCompletionOutcome({
+				keywordsCount: 2,
+				startedTasks: 2,
+				completedTasks: 1,
+				failedTasks: 0,
+			}),
+		).toBe("pending");
 	});
 });

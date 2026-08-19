@@ -1,6 +1,13 @@
 @layer utilities {
 	.btn {
-		@apply row gap-2.5 px-3 py-1.75 rounded-small;
+		--control-height: var(--control-size-2-height);
+		--control-radius: var(--control-size-2-radius);
+		--control-padding-inline: var(--control-size-2-padding-inline);
+		@apply row center gap-2.5 py-0;
+		height: var(--control-height);
+		min-height: var(--control-height);
+		border-radius: var(--control-radius);
+		padding-inline: var(--control-padding-inline);
 
 		&:not(
 			.btn-primary,
@@ -15,14 +22,11 @@
 		}
 	}
 
-	.btn-large,
-	.btn-primary,
-	.btn-secondary,
-	.btn-info,
-	.btn-error,
-	.btn-warning,
-	.btn-success {
-		@apply rounded px-8 center gap-2.5 h-14;
+	.btn-large {
+		--control-height: var(--control-size-3-height);
+		--control-radius: var(--control-size-3-radius);
+		--control-padding-inline: var(--control-size-3-padding-inline);
+		@apply center gap-2.5;
 	}
 
 	.btn-info,
@@ -53,6 +57,9 @@
 	}
 
 	.btn-medium {
-		@apply rounded px-5 center gap-2.5 h-7;
+		--control-height: var(--control-size-1-height);
+		--control-radius: var(--control-size-1-radius);
+		--control-padding-inline: var(--control-size-1-padding-inline);
+		@apply center gap-2.5;
 	}
 }

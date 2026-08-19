@@ -5,10 +5,12 @@ export const projectTypes = defineContent<Record<ProjectType, string>>({
 	en: {
 		audit: "Audit",
 		prospect: "Prospect",
+		monthly_subscription: "Monthly subscription",
 	},
 	fr: {
 		audit: "Audit",
 		prospect: "Prospect",
+		monthly_subscription: "Abonnement mensuel",
 	},
 });
 

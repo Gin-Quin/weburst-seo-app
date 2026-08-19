@@ -6,6 +6,20 @@
 		background-color: var(--color-base-100);
 	}
 
+	.card-hover {
+		transition:
+			transform 160ms ease,
+			box-shadow 160ms ease,
+			border-color 160ms ease;
+	}
+
+	.card-hover:is(:hover, :focus-visible),
+	.card-hover-group:focus-within > .card-hover {
+		transform: translateY(-2px);
+		border-color: #c9d8ff !important;
+		box-shadow: 0 0.75rem 2rem rgb(27 40 73 / 0.08);
+	}
+
 	.card > header {
 		@apply col;
 		gap: 0.25rem;

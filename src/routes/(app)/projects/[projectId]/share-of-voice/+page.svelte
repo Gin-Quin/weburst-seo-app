@@ -31,7 +31,6 @@
 {#await projectContext.analysisResultsWithTrendQuery}
 	<Loader />
 {:then analysisResultsWithTrend}
-	{console.log({ analysisResultsWithTrend })}
 	{#if analysisResultsWithTrend == null}
 		<div class="center text-xl text-light bold">
 			{$content.noAnalysisResults}
@@ -50,7 +49,7 @@
 			createdAt: new Date().toISOString()
 		}}
 
-		<div class="grid grid-cols-[1.4fr_1fr] gap-5">
+		<div class="DashboardGrid DashboardGridPrimary">
 			<SectionShareOfVoice
 				{analysisResultsWithTrend}
 				{visibleDomains}
@@ -59,7 +58,7 @@
 			<SectionLeaders {analysisResultsWithTrend} {visibleDomains} {client} />
 		</div>
 
-		<div class="grid grid-cols-[1fr_1.8fr] gap-5">
+		<div class="DashboardGrid DashboardGridSecondary">
 			<SectionPotential {analysisResultsWithTrend} {client} />
 			<SectionCompetitiveMapping
 				{analysisResultsWithTrend}
@@ -73,3 +72,38 @@
 		{String(error)}
 	</div>
 {/await}
+
+<style>
+	.DashboardGrid {
+		display: grid;
+		gap: 1.25rem;
+		min-width: 0;
+	}
+
+	.DashboardGridPrimary {
+		grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+	}
+
+	.DashboardGridSecondary {
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1.8fr);
+	}
+
+	.DashboardGrid > :global(*) {
+		min-width: 0;
+	}
+
+	@media (max-width: 900px) {
+		.DashboardGridPrimary,
+		.DashboardGridSecondary {
+			grid-template-columns: minmax(0, 1fr);
+		}
+
+		.DashboardGridPrimary > :global(.card) {
+			height: 32rem;
+		}
+
+		.DashboardGridSecondary > :global(.card:last-child) {
+			height: 32rem;
+		}
+	}
+</style>

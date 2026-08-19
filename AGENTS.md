@@ -75,6 +75,32 @@ bun run db:studio    # Open Drizzle Studio UI
 - Post-install script ensures `/data` directory exists
 - Test everything you can test with `*.test.ts` files, using Bun's tests
 
+### Select Components
+
+- Always use the project's DaisyUI select component (`class="select"`) instead of an unstyled native `<select>` or custom select styling. See `/src/routes/uikit/+page.svelte` for the canonical UI examples.
+- When selecting a user, prefer the existing specialized components such as `$lib/components/SelectUser.svelte` and `$lib/components/PickUser.svelte`.
+
+```svelte
+<select class="select w-full" bind:value={selectedClientId}>
+	<option value="">Tous les clients</option>
+	{#each clients as client (client.id)}
+		<option value={client.id}>{client.name}</option>
+	{/each}
+</select>
+```
+
+### Control Size Variants
+
+- Use `control-size-1`, `control-size-2`, or `control-size-3` to override the size of a `.btn`, `.input`, or `.select`.
+- Buttons default to variant 2. Inputs and selects default to variant 3.
+- Configure the shared heights, radii, and inline padding through the `--control-size-*-height`, `--control-size-*-radius`, and `--control-size-*-padding-inline` variables in `/src/styles/control.css`.
+
+```svelte
+<button class="btn control-size-1">Compact</button>
+<input class="input control-size-2" placeholder="Regular" />
+<select class="select control-size-3">...</select>
+```
+
 ## Bun
 
 Default to using Bun instead of Node.js.

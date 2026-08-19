@@ -19,7 +19,8 @@ describe("roleCanAccessClient", () => {
 		{ role: "client", member: true, action: "manage", allowed: false },
 		{ role: "client", member: false, action: "view", allowed: false },
 		{ role: "client", member: false, action: "manage", allowed: false },
-		{ role: "user", member: true, action: "manage", allowed: true },
+		{ role: "user", member: true, action: "view", allowed: true },
+		{ role: "user", member: true, action: "manage", allowed: false },
 	];
 
 	for (const { role, member, action, allowed } of cases) {

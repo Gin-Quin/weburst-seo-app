@@ -78,10 +78,11 @@ export const projects = sqliteTable(
 		clientId: text("client_id").references(() => clients.id),
 		domain: text("domain").notNull(),
 		websiteUrl: text("website_url").notNull(),
-		type: text("type").$type<"audit" | "prospect">().notNull(),
+		type: text("type").$type<"audit" | "prospect" | "monthly_subscription">().notNull(),
 		keywordAnalysisFrequency: text("keyword_analysis_frequency")
 			.$type<KeywordAnalysisFrequency>()
 			.notNull(),
+		articleLimit: integer("article_limit").notNull().default(10),
 		deletedAt: integer("deleted_at"),
 	},
 	(table) => [index("projects_client_id_idx").on(table.clientId)],

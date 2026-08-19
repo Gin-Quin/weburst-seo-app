@@ -1,0 +1,31 @@
+:root {
+	--control-size-1-height: 40px;
+	--control-size-1-radius: 8px;
+	--control-size-1-padding-inline: 12px;
+	--control-size-2-height: 48px;
+	--control-size-2-radius: 8px;
+	--control-size-2-padding-inline: 16px;
+	--control-size-3-height: 60px;
+	--control-size-3-radius: 9999px;
+	--control-size-3-padding-inline: 20px;
+}
+
+@layer utilities {
+	.control-size-1 {
+		--control-height: var(--control-size-1-height);
+		--control-radius: var(--control-size-1-radius);
+		--control-padding-inline: var(--control-size-1-padding-inline);
+	}
+
+	.control-size-2 {
+		--control-height: var(--control-size-2-height);
+		--control-radius: var(--control-size-2-radius);
+		--control-padding-inline: var(--control-size-2-padding-inline);
+	}
+
+	.control-size-3 {
+		--control-height: var(--control-size-3-height);
+		--control-radius: var(--control-size-3-radius);
+		--control-padding-inline: var(--control-size-3-padding-inline);
+	}
+}

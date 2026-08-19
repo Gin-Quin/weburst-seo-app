@@ -2,6 +2,7 @@
 	import { goto } from "$app/navigation";
 	import { projectTypes } from "$lib/i18n/contents/projects";
 	import { defineContent } from "$lib/i18n/locale.svelte";
+	import { formatPercent } from "$lib/numbers/formatPercent";
 	import type { User } from "$lib/server/db/schema";
 	import { context } from "$lib/stores/context.svelte";
 	import IconDotsThreeVerticalBold from "phosphor-icons-svelte/IconDotsThreeVerticalBold.svelte";
@@ -12,7 +13,6 @@
 		type ProjectInfo,
 	} from "../../routes/api/projects.remote";
 	import Avatar from "./Avatar.svelte";
-	import { formatPercent } from "$lib/numbers/formatPercent";
 	import Trend from "./Trend.svelte";
 
 	const content = defineContent({
@@ -54,8 +54,8 @@
 </script>
 
 <button
-	class="ProjectCard cursor-pointer card px-6! py-5! col! justify-stretch items-start bg-gray-1"
-	onclick={() => goto(`/projects/${project.id}`)}
+	class="ProjectCard card card-hover cursor-pointer px-6! py-5! col! justify-stretch items-start bg-gray-1"
+	onclick={() => goto(`/projects/${project.id}/share-of-voice`)}
 >
 	<div class="row justify-between w-full">
 		<div
@@ -65,35 +65,37 @@
 			{$projectTypes[project.type]}
 		</div>
 
-		<div
-			class="dropdown dropdown-bottom dropdown-end z-10 absolute right-5"
-			onclick={(event) => {
-				event.stopPropagation();
-				event.preventDefault();
-				event.stopImmediatePropagation();
-			}}
-		>
-			<div tabindex="0" role="button" class="cursor-pointer z-10">
-				<IconDotsThreeVerticalBold class="text-4xl text-accent" />
-			</div>
-			<ul
-				tabindex="0"
-				class="dropdown-content menu bg-base-100 rounded-box z-1 w-52 p-2 shadow-sm"
+		{#if context.user?.role === "admin" || context.user?.role === "project_manager"}
+			<div
+				class="dropdown dropdown-bottom dropdown-end z-10 absolute right-5"
+				onclick={(event) => {
+					event.stopPropagation();
+					event.preventDefault();
+					event.stopImmediatePropagation();
+				}}
 			>
-				<li>
-					<a onclick={() => onEdit(project)}>
-						<IconPencilSimpleRegular class="text-lg" />
-						{$content.updateProject}
-					</a>
-				</li>
-				<li>
-					<a onclick={() => onDelete(project)}>
-						<IconTrashRegular class="text-lg" />
-						{$content.deleteProject}
-					</a>
-				</li>
-			</ul>
-		</div>
+				<div tabindex="0" role="button" class="cursor-pointer z-10">
+					<IconDotsThreeVerticalBold class="text-4xl text-accent" />
+				</div>
+				<ul
+					tabindex="0"
+					class="dropdown-content menu bg-base-100 rounded-box z-1 w-52 p-2 shadow-sm"
+				>
+					<li>
+						<a onclick={() => onEdit(project)}>
+							<IconPencilSimpleRegular class="text-lg" />
+							{$content.updateProject}
+						</a>
+					</li>
+					<li>
+						<a onclick={() => onDelete(project)}>
+							<IconTrashRegular class="text-lg" />
+							{$content.deleteProject}
+						</a>
+					</li>
+				</ul>
+			</div>
+		{/if}
 	</div>
 
 	<footer class="mt-auto col gap-2 w-full">
@@ -112,12 +114,12 @@
 			<div class="text-md text-base-content/70">{project.domain}</div>
 		</div>
 
-		<div
-			class="col items-stretch gap-2 p-4 bg-base-300 rounded-[1.25rem] font-bold"
-		>
+		<hr class="w-full" style:margin-block="4px" />
+
+		<div class="col items-stretch gap-1 rounded-[1.25rem] font-bold">
 			<div class="row justify-between">
 				<div class="text-sm">{$content.positionnedKeywords}</div>
-				<div class="badge badge-info--purple bg-base-100">
+				<div class="text-sm">
 					{#if project.analysis && analysisData}
 						{analysisData.positionnedKeywordCount}
 						/
@@ -131,7 +133,7 @@
 			<div class="row justify-between">
 				<div class="text-sm">{$content.shareOfVoice}</div>
 				<div class="center gap-2">
-					<div class="badge badge-info--purple bg-base-100">
+					<div class="text-sm">
 						{#if project.analysis && analysisData}
 							{formatPercent(
 								analysisData.volume / project.analysis.totalVolume,
@@ -150,6 +152,11 @@
 <style>
 	.ProjectCard {
 		height: 20rem;
+		border-color: var(--input);
 		background: var(--color-base-200);
+	}
+
+	.ProjectCard hr {
+		border-color: var(--input);
 	}
 </style>

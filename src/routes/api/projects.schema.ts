@@ -1,8 +1,14 @@
 import * as v from "valibot";
 
 // Shared enums/schemas
-export const ProjectType = v.union([v.literal("audit"), v.literal("prospect")]);
+export const ProjectType = v.union([
+	v.literal("audit"),
+	v.literal("prospect"),
+	v.literal("monthly_subscription"),
+]);
 export type ProjectType = v.InferOutput<typeof ProjectType>;
+
+export const ArticleLimit = v.pipe(v.number(), v.integer(), v.minValue(0));
 
 export const KeywordAnalysisFrequency = v.union([
 	v.literal("1/day"),
@@ -21,6 +27,7 @@ export const CreateProject = v.object({
 	websiteUrl: v.string(),
 	type: ProjectType,
 	keywordAnalysisFrequency: KeywordAnalysisFrequency,
+	articleLimit: ArticleLimit,
 	leaderIds: v.optional(v.array(v.string()), []),
 	projectManagerIds: v.optional(v.array(v.string())),
 });
@@ -39,6 +46,7 @@ export const ProjectUpdate = v.partial(
 		websiteUrl: v.string(),
 		type: ProjectType,
 		keywordAnalysisFrequency: KeywordAnalysisFrequency,
+		articleLimit: ArticleLimit,
 		leaderIds: v.array(v.string()),
 		projectManagerIds: v.array(v.string()),
 	}),

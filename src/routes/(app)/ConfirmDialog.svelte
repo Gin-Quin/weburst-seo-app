@@ -23,6 +23,7 @@
 	let loading = $state(false);
 	let title = $state("");
 	let then = $state<() => unknown>(() => {});
+	let confirmLabel = $state<string | undefined>();
 	let color = $state<
 		| "info"
 		| "success"
@@ -38,6 +39,7 @@
 		title = input.title;
 		description = input.description;
 		then = input.then;
+		confirmLabel = input.confirmLabel;
 		color = input.color ?? "error";
 		ref?.showModal();
 	};
@@ -69,9 +71,9 @@
 				{/if}
 			</div>
 
-			<div class="row gap-3 pt-2">
+			<div class="grid grid-cols-2 gap-3 pt-2">
 				<button
-					class="btn btn-large grow"
+					class="btn control-size-2"
 					disabled={loading}
 					type="button"
 					onclick={() => ref?.close()}
@@ -80,14 +82,14 @@
 				</button>
 				<button
 					type="submit"
-					class="btn btn-large grow"
+					class="btn control-size-2"
 					disabled={loading}
 					onclick={submit}
 					style:background-color="var(--color-{color})"
 					style:color="var(--color-{color}-content)"
 					style:border-color="currentColor"
 				>
-					{$content.confirm}
+					{confirmLabel ?? $content.confirm}
 				</button>
 			</div>
 		</form>

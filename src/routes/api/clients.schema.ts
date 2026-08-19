@@ -10,6 +10,7 @@ export const ClientUpdate = v.partial(
 	v.object({
 		name: v.pipe(v.string(), v.trim(), v.minLength(1)),
 		projectManagerIds: v.array(v.string()),
+		clientUserIds: v.array(v.string()),
 	}),
 );
 export type ClientUpdate = v.InferOutput<typeof ClientUpdate>;

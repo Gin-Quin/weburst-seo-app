@@ -47,13 +47,25 @@
 </div>
 
 <style>
-	.done,
 	.progress {
 		transition: width 100ms ease-in-out;
 	}
 
 	.KeywordAnalysisProgress {
+		width: clamp(7rem, 12vw, 10rem);
+		min-width: 7rem;
+		flex: 0 1 10rem;
 		transition: opacity 300ms ease-in-out;
 		transition-delay: 700ms;
+	}
+
+	.KeywordAnalysisProgress.done {
+		width: 0;
+		height: 0;
+		min-width: 0;
+		flex-basis: 0;
+		overflow: hidden;
+		padding: 0;
+		pointer-events: none;
 	}
 </style>

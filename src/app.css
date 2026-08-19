@@ -11,6 +11,7 @@
 @import "./styles/button.css";
 @import "./styles/icon.css";
 @import "./styles/input.css";
+@import "./styles/control.css";
 @import "./styles/text.css";
 @import "./styles/card.css";
 @import "./styles/badge.css";
@@ -31,6 +32,7 @@
 	--color-base-content: #111111;
 	--color-primary: #9453f4;
 	--color-primary-content: #fff;
+	--color-primary-light: #f2e9ff;
 	--color-secondary: #faf8ff;
 	--color-secondary-content: #000;
 	--color-accent: #00ff19;

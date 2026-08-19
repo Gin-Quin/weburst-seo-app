@@ -2,167 +2,337 @@
 	import { goto } from "$app/navigation";
 	import { page } from "$app/state";
 	import WeBurstLogo from "$lib/assets/images/WeBurst.png";
-	import Avatar from "$lib/components/Avatar.svelte";
-	import { userRoles } from "$lib/i18n/contents/users";
-	import { defineContent } from "$lib/i18n/locale.svelte";
+	import WeBurstMark from "$lib/assets/images/WeBurstMark.png";
 	import { context } from "$lib/stores/context.svelte";
+	import { getProjectPath } from "$lib/projects/getProjectPath";
 	import IconCaretDownRegular from "phosphor-icons-svelte/IconCaretDownRegular.svelte";
-	import IconGearRegular from "phosphor-icons-svelte/IconGearRegular.svelte";
+	import IconMagnifyingGlassRegular from "phosphor-icons-svelte/IconMagnifyingGlassRegular.svelte";
 	import IconPlusRegular from "phosphor-icons-svelte/IconPlusRegular.svelte";
-	import IconSignOutRegular from "phosphor-icons-svelte/IconSignOutRegular.svelte";
-	import { clearServerSession } from "../api/login.remote";
 
-	const content = defineContent({
-		en: {
-			createProject: "New project",
-			createUser: "New user",
-			settings: "Settings",
-			logOut: "Log out",
-			shareOfVoice: "Share of voice",
-			keywordSimilarities: "Keyword similarities",
-		},
-		fr: {
-			createProject: "Nouveau projet",
-			createUser: "Nouvel utilisateur",
-			settings: "Paramètres",
-			logOut: "Se déconnecter",
-			shareOfVoice: "Part de voix",
-			keywordSimilarities: "Similarités entre mots-clés",
-		},
-	});
+	let search = $state("");
+	let searchFocused = $state(false);
+	const selectedClientId = $derived(context.project?.clientId ?? "");
 
-	const projectId = $derived(context.project?.id);
+	const clientProjects = $derived(
+		selectedClientId
+			? (context.projects?.filter(
+					({ clientId }) => clientId === selectedClientId,
+				) ?? [])
+			: [],
+	);
+	const selectedClient = $derived(
+		context.clients?.find(({ id }) => id === selectedClientId),
+	);
+	const selectedProject = $derived(
+		context.project?.clientId === selectedClientId ? context.project : undefined,
+	);
+	const searchResults = $derived(
+		search.trim().length < 2
+			? []
+			: (context.projects ?? [])
+					.filter((project) => {
+						const query = search.trim().toLocaleLowerCase();
+						return `${project.clientName} ${project.domain}`
+							.toLocaleLowerCase()
+							.includes(query);
+					})
+					.slice(0, 6),
+	);
 
-	async function logout() {
-		void clearServerSession();
-		localStorage.removeItem("bearer");
-		localStorage.removeItem("user");
-		await goto("/login");
-		context.user = null;
+	function projectPath(projectId: string) {
+		return getProjectPath(projectId, page.url.pathname);
+	}
+
+	async function openProject(projectId: string) {
+		search = "";
+		searchFocused = false;
+		await goto(`/projects/${projectId}/share-of-voice`);
 	}
 </script>
 
-<div
-	class="AppHeader w-full justify-between items-center gap-5 px-10 bg-base-100 {projectId
-		? 'grid grid-cols-3'
-		: 'row'}"
->
-	<div class="row">
-		<a href="/" class="center">
-			<img src={WeBurstLogo} alt="Weburst Logo" class="h-14" />
-		</a>
-	</div>
+<header class="AppHeader">
+	<a href="/" class="Logo" aria-label="Accueil">
+		<img class="FullLogo" src={WeBurstLogo} alt="" />
+		<img class="LogoMark" src={WeBurstMark} alt="" />
+	</a>
 
-	{#if projectId}
-		<div role="tablist" class="center">
-			<div class="tabs">
-				<a
-					href="/projects/{context.project!.id}/share-of-voice"
-					role="tab"
-					class="tab w-[14rem]"
-					class:tab-active={page.url.pathname.endsWith("/share-of-voice")}
-				>
-					{$content.shareOfVoice}
-				</a>
-				<a
-					href="/projects/{context.project!.id}/keyword-similarities"
-					role="tab"
-					class="tab w-[14rem]"
-					class:tab-active={page.url.pathname.endsWith("/keyword-similarities")}
-				>
-					{$content.keywordSimilarities}
-				</a>
-			</div>
-		</div>
-	{/if}
+	<div class="HeaderContent">
+		<div class="SearchWrap">
+			<label class="Search" aria-label="Rechercher un projet ou un contenu">
+				<IconMagnifyingGlassRegular />
+				<input
+					bind:value={search}
+					onfocus={() => (searchFocused = true)}
+					onblur={() => setTimeout(() => (searchFocused = false), 120)}
+					placeholder="Rechercher un projet, un contenu..."
+				/>
+			</label>
 
-	<div class="Actions row items-center justify-end gap-4">
-		{#if !projectId}
-			{#if context.user!.role == "admin"}
-				<button
-					class="btn btn-large h-12! px-6!"
-					onclick={() => context.openUserDialog?.("create")}
-				>
-					<IconPlusRegular class="icon" />
-					{$content.createUser}
-				</button>
+			{#if searchFocused && search.length >= 2}
+				<div class="SearchResults">
+					{#if searchResults.length === 0}
+						<p>Aucun projet trouvé.</p>
+					{:else}
+						{#each searchResults as project (project.id)}
+							<button onclick={() => openProject(project.id)}>
+								<span>{project.clientName}</span>
+								<small>{project.domain}</small>
+							</button>
+						{/each}
+					{/if}
+				</div>
 			{/if}
+		</div>
 
-			<button
-				class="btn btn-primary h-12! px-6!"
-				onclick={() => context.openProjectDialog?.()}
-			>
-				<IconPlusRegular class="icon" />
-				{$content.createProject}
-			</button>
-		{/if}
+		{#if context.project}
+			<div class="HeaderSelectors">
+				<div class="dropdown dropdown-bottom dropdown-end ProjectSwitcher">
+					<button
+						tabindex="0"
+						class="btn control-size-3 CurrentProject"
+						aria-label="Changer de projet"
+					>
+						<span class="ProjectMark">
+							{selectedProject?.domain.slice(0, 1).toLocaleUpperCase() ?? "P"}
+						</span>
+						<span class="ProjectName">{selectedProject?.domain ?? "Choisir un projet"}</span>
+						<IconCaretDownRegular class="Caret" />
+					</button>
 
-		<div class="dropdown dropdown-bottom dropdown-end">
-			<div
-				tabindex="0"
-				role="button"
-				class="row center h-12 gap-3 p-1 cursor-pointer active:translate-y-[1px] font-bold"
-			>
-				<Avatar />
-
-				{context.user!.firstName}
-				{context.user!.lastName}
-
-				<div class="Caret center">
-					<IconCaretDownRegular class="text-md" />
+					<ul
+						tabindex="0"
+						class="dropdown-content menu bg-base-100 rounded-box z-20 mt-2 w-[19rem] shadow-md"
+					>
+						<li class="ClientName">{selectedClient?.name ?? context.project.clientName}</li>
+						{#each clientProjects as project (project.id)}
+							<li>
+								<a
+									href={projectPath(project.id)}
+									class:menu-active={project.id === context.project?.id}
+								>
+									{project.domain}
+								</a>
+							</li>
+						{/each}
+					</ul>
 				</div>
 			</div>
-
-			<ul
-				tabindex="0"
-				class="dropdown-content menu bg-base-100 rounded-box z-1 w-[18.75rem] shadow-md"
+		{:else if context.user?.role === "admin"}
+			<button
+				class="btn control-size-2"
+				onclick={() => context.openUserDialog?.("create")}
 			>
-				<header class="col gap-3 center p-4 text-light">
-					<Avatar />
-
-					<div class="col center">
-						<span class="text-lg">
-							{$userRoles[context.user!.role]}
-						</span>
-						<span class="text-md font-medium">
-							{context.user!.email}
-						</span>
-					</div>
-				</header>
-
-				<hr class="mb-1 text-border" />
-
-				<li>
-					<a onclick={() => context.openUserDialog?.("account")}>
-						<IconGearRegular class="icon" />
-						{$content.settings}
-					</a>
-				</li>
-				<li>
-					<a onclick={logout}>
-						<IconSignOutRegular class="icon" />
-						{$content.logOut}
-					</a>
-				</li>
-			</ul>
-		</div>
+				<IconPlusRegular class="icon" />
+				Nouvel utilisateur
+			</button>
+		{/if}
 	</div>
-</div>
+</header>
 
 <style>
 	.AppHeader {
-		height: var(--app-header-height);
+		grid-column: 1 / -1;
+		grid-row: 1;
+		position: sticky;
+		top: 0;
+		display: grid;
+		grid-template-columns: var(--app-sidebar-width) minmax(0, 1fr);
+		background: var(--color-base-100);
+		border-bottom: 1px solid var(--color-border);
+		z-index: 30;
 	}
 
-	.Caret {
-		transition: transform 110ms ease-in-out;
+	.Logo {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 1.5rem 2rem;
+		border-right: 1px solid var(--color-border);
 	}
 
-	.dropdown:focus-within .Caret {
+	.FullLogo {
+		width: min(12.75rem, 100%);
+		height: auto;
+	}
+
+	.LogoMark {
+		display: none;
+	}
+
+	.HeaderContent {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 2rem;
+		padding: 1.25rem 2rem;
+	}
+
+	.SearchWrap {
+		position: relative;
+		width: min(31rem, 48%);
+	}
+
+	.Search {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		height: 48px;
+		padding: 0 1.15rem;
+		border: 1px solid var(--input);
+		border-radius: 0.75rem;
+		background: var(--color-base-100);
+		box-shadow: 0 1px 2px rgb(0 0 0 / 0.02);
+	}
+
+	.Search :global(svg) {
+		flex: 0 0 auto;
+		width: 1.65rem;
+		height: 1.65rem;
+	}
+
+	.Search input {
+		width: 100%;
+		font-size: 1.05rem;
+		background: transparent;
+	}
+
+	.SearchResults {
+		position: absolute;
+		top: calc(100% + 0.5rem);
+		left: 0;
+		right: 0;
+		padding: 0.5rem;
+		border: 1px solid var(--color-border);
+		border-radius: 0.75rem;
+		background: var(--color-base-100);
+		box-shadow: 0 0.75rem 2rem rgb(0 0 0 / 0.08);
+	}
+
+	.SearchResults p {
+		padding: 0.75rem;
+		color: var(--color-text-light);
+	}
+
+	.SearchResults button {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		width: 100%;
+		padding: 0.75rem;
+		border-radius: 0.5rem;
+		cursor: pointer;
+	}
+
+	.SearchResults button:hover {
+		background: var(--color-gray-1);
+	}
+
+	.SearchResults small {
+		color: var(--color-text-light);
+	}
+
+	.HeaderSelectors {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		min-width: 0;
+	}
+
+	.CurrentProject {
+		display: grid;
+		grid-template-columns: 40px minmax(0, 1fr) 1.25rem;
+		align-items: center;
+		gap: 1rem;
+		min-width: 19.5rem;
+		padding-inline: 0.5rem;
+		font-weight: 700;
+		cursor: pointer;
+	}
+
+	.ProjectMark {
+		display: grid;
+		place-items: center;
+		width: 40px;
+		height: 40px;
+		border-radius: 9999px;
+		background: #ffc0c2;
+		color: #8f3439;
+		font-size: 1.25rem;
+	}
+
+	.ProjectName {
+		overflow: hidden;
+		text-align: left;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	:global(.Caret) {
+		transition: transform 120ms ease;
+	}
+
+	.ProjectSwitcher:focus-within :global(.Caret) {
 		transform: rotate(180deg);
 	}
 
-	.dropdown-content {
-		transform: translateY(0.75rem);
+	.ClientName {
+		padding: 0.75rem 1rem 0.5rem;
+		color: var(--color-text-light);
+		font-size: 0.75rem;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+	}
+
+	@media (max-width: 1100px) {
+		.Logo {
+			justify-content: center;
+			padding: 1rem;
+		}
+
+		.FullLogo {
+			display: none;
+		}
+
+		.LogoMark {
+			display: block;
+			width: 3rem;
+			height: 3rem;
+		}
+
+		.HeaderContent {
+			padding-inline: 1rem;
+		}
+
+		.SearchWrap {
+			width: min(28rem, 55%);
+		}
+
+		.CurrentProject {
+			min-width: 15rem;
+		}
+	}
+
+	@media (max-width: 640px) {
+		.HeaderContent {
+			gap: 0.75rem;
+		}
+
+		.SearchWrap {
+			width: 100%;
+		}
+
+		.Search input {
+			font-size: 0.9rem;
+		}
+
+		.CurrentProject {
+			grid-template-columns: 40px 1.25rem;
+			min-width: auto;
+			gap: 0.5rem;
+		}
+
+		.ProjectName {
+			display: none;
+		}
 	}
 </style>

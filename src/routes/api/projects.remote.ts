@@ -29,6 +29,7 @@ import {
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { CreateProject as CreateProjectInput, ProjectUpdate } from "./projects.schema";
 import { CreateProject, DeleteProject, UpdateProject } from "./projects.schema";
+import { listClients } from "./clients.remote";
 import { getRequestUser } from "./utilities";
 
 export const createProject = command(CreateProject, async (input): Promise<void> => {
@@ -52,6 +53,7 @@ export const createProject = command(CreateProject, async (input): Promise<void>
 	}
 
 	await listProjects().refresh();
+	await listClients().refresh();
 });
 
 export const listProjects = query(async (): Promise<ProjectInfo[]> => {

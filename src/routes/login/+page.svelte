@@ -68,9 +68,7 @@
 			}
 		} else if (stage == "code") {
 			loading = true;
-			console.log("verifyCode called");
 			const response = await verifyCode({ email, code });
-			console.log("verifyCode response:", response);
 			if (response) {
 				localStorage.setItem("bearer", response);
 				goto("/");

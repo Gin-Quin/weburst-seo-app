@@ -27,7 +27,7 @@
 </script>
 
 <div class="dropdown dropdown-bottom dropdown-end z-1">
-	<div class="btn center gap-2" tabindex="0" role="button">
+	<div class="btn control-size-1 center gap-2" tabindex="0" role="button">
 		<IconGearRegular class="icon text-accent" />
 		{$content.settings}
 		<div class="Caret center">

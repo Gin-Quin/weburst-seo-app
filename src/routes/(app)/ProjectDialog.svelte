@@ -7,15 +7,19 @@
 	} from "$lib/i18n/contents/projects";
 	import { defineContent } from "$lib/i18n/locale.svelte";
 	import { deepEqual } from "$lib/objects";
+	import { context } from "$lib/stores/context.svelte";
 	import { createId } from "@paralleldrive/cuid2";
+	import IconFileRegular from "phosphor-icons-svelte/IconFileRegular.svelte";
 	import IconFolderRegular from "phosphor-icons-svelte/IconFolderRegular.svelte";
 	import IconGlobeRegular from "phosphor-icons-svelte/IconGlobeRegular.svelte";
 	import IconLinkRegular from "phosphor-icons-svelte/IconLinkRegular.svelte";
 	import IconRepeatRegular from "phosphor-icons-svelte/IconRepeatRegular.svelte";
 	import IconTrashRegular from "phosphor-icons-svelte/IconTrashRegular.svelte";
 	import IconUserRegular from "phosphor-icons-svelte/IconUserRegular.svelte";
+	import type { ClientInfo } from "../api/clients.remote";
+	import { listClients } from "../api/clients.remote";
 	import type { ProjectInfo } from "../api/projects.remote";
-	import { createProject, updateProject } from "../api/projects.remote";
+	import { createProject, listProjects, updateProject } from "../api/projects.remote";
 	import type { CreateProject } from "../api/projects.schema";
 	import { toast } from "svelte-sonner";
 
@@ -26,8 +30,10 @@
 			cancel: "Cancel",
 			create: "Create project",
 			save: "Save",
-			clientName: "Client name",
+			clientName: "Client",
+			selectClient: "Select a client",
 			domain: "Domain",
+			articleLimit: "Article limit",
 			keywordAnalysisFrequency: "Keyword analysis",
 			type: "Type",
 			websiteUrl: "Website URL",
@@ -43,8 +49,10 @@
 			cancel: "Annuler",
 			create: "Créer projet",
 			save: "Sauvegarder",
-			clientName: "Nom du client",
+			clientName: "Client",
+			selectClient: "Sélectionner un client",
 			domain: "Domaine",
+			articleLimit: "Limite d'articles",
 			keywordAnalysisFrequency: "Analyse des mots-clés",
 			type: "Type",
 			websiteUrl: "URL du site web",
@@ -63,24 +71,28 @@
 	}: {
 		ref?: HTMLDialogElement;
 		edit?: ProjectInfo;
-		openProjectDialog?: (project?: ProjectInfo) => void;
+		openProjectDialog?: (project?: ProjectInfo, client?: ClientInfo) => void;
 	} = $props();
 
 	let updating = $state(false);
+	let presetClient = $state<ClientInfo | undefined>();
 	let project = $state<CreateProject>(getDefaultValues());
 
 	const hasValidChanges = $derived(
-		project.clientName &&
+		project.clientId &&
 			project.domain &&
 			project.keywordAnalysisFrequency &&
 			project.type &&
 			project.websiteUrl &&
+			(project.type !== "monthly_subscription" ||
+				(Number.isInteger(project.articleLimit) && project.articleLimit >= 0)) &&
 			(edit ? true : project.leaderIds.length > 0) &&
 			(!edit || !deepEqual(edit, project)),
 	);
 
-	openProjectDialog = (existingProject) => {
+	openProjectDialog = (existingProject, client) => {
 		edit = existingProject;
+		presetClient = client;
 		project = getDefaultValues();
 		ref?.showModal();
 	};
@@ -104,6 +116,8 @@
 				toast.error($content.projectCreationFailed, { richColors: true });
 			}
 		}
+		context.projects = await listProjects();
+		context.clients = await listClients();
 		updating = false;
 		ref?.close();
 	}
@@ -111,11 +125,13 @@
 	function getDefaultValues(): CreateProject {
 		return {
 			id: edit?.id ?? createId(),
-			clientName: edit?.clientName ?? "",
+			clientName: edit?.clientName ?? presetClient?.name ?? "",
+			clientId: edit?.clientId ?? presetClient?.id,
 			domain: edit?.domain ?? "",
 			keywordAnalysisFrequency: edit?.keywordAnalysisFrequency ?? "1/month",
 			type: edit?.type ?? "audit",
 			websiteUrl: edit?.websiteUrl ?? "",
+			articleLimit: edit?.articleLimit ?? 10,
 			leaderIds: edit?.leaders.map((leader) => leader.id) ?? [],
 		};
 	}
@@ -131,21 +147,26 @@
 			<div class="grid grid-cols-2 gap-3">
 				<div class="field grow">
 					<div class="field-title">{$content.clientName}</div>
-					<label class="input w-full">
+					<label class="select control-size-3 w-full">
 						<IconUserRegular class="icon" />
-						<input
-							class="grow"
-							name="clientName"
-							bind:value={project.clientName}
-							placeholder={$content.clientName}
+						<select
+							class="select control-size-3"
+							name="clientId"
+							bind:value={project.clientId}
+							disabled={!!presetClient && !edit}
 							required
-						/>
+						>
+							<option value={undefined} disabled>{$content.selectClient}</option>
+							{#each context.clients ?? [] as client (client.id)}
+								<option value={client.id}>{client.name}</option>
+							{/each}
+						</select>
 					</label>
 				</div>
 
 				<div class="field grow">
 					<div class="field-title">{$content.domain}</div>
-					<label class="input w-full">
+					<label class="input control-size-3 w-full">
 						<IconGlobeRegular class="icon" />
 						<input
 							class="grow"
@@ -161,7 +182,7 @@
 			<div class="row gap-3">
 				<div class="field grow">
 					<div class="field-title">{$content.websiteUrl}</div>
-					<label class="input w-full">
+					<label class="input control-size-3 w-full">
 						<IconLinkRegular class="icon" />
 						<input
 							class="grow"
@@ -175,15 +196,15 @@
 			</div>
 
 			<div
-				class="grid gap-3 {project.type == 'audit'
-					? 'grid-cols-2'
-					: 'grid-cols-1'}"
+				class="grid gap-3 {project.type === 'prospect'
+					? 'grid-cols-1'
+					: 'grid-cols-2'}"
 			>
 				<div class="field">
 					<div class="field-title">{$content.type}</div>
-					<label class="select w-full">
+					<label class="select control-size-3 w-full">
 						<IconFolderRegular class="icon" />
-						<select class="select" bind:value={project.type}>
+						<select class="select control-size-3" bind:value={project.type}>
 							{#each Object.entries($projectTypes) as [value, label]}
 								<option {value}>{label}</option>
 							{/each}
@@ -191,19 +212,37 @@
 					</label>
 				</div>
 
-				{#if project.type == "audit"}
+				{#if project.type === "audit" || project.type === "monthly_subscription"}
 					<div class="field">
 						<div class="field-title">{$content.keywordAnalysisFrequency}</div>
-						<label class="select w-full">
+						<label class="select control-size-3 w-full">
 							<IconRepeatRegular class="icon" />
 							<select
-								class="select"
+								class="select control-size-3"
 								bind:value={project.keywordAnalysisFrequency}
 							>
 								{#each Object.entries($keywordAnalysisFrequencies) as [value, label]}
 									<option {value}>{label}</option>
 								{/each}
 							</select>
+						</label>
+					</div>
+				{/if}
+
+				{#if project.type === "monthly_subscription"}
+					<div class="field">
+						<div class="field-title">{$content.articleLimit}</div>
+						<label class="input control-size-3 w-full">
+							<IconFileRegular class="icon" />
+							<input
+								class="grow"
+								name="articleLimit"
+								type="number"
+								min="0"
+								step="1"
+								bind:value={project.articleLimit}
+								required
+							/>
 						</label>
 					</div>
 				{/if}
@@ -217,7 +256,7 @@
 							<div class="row items-center w-full gap-2">
 								<SelectUser
 									bind:userId={project.leaderIds[index]!}
-									class="grow"
+									class="control-size-3 grow"
 									exclude={project.leaderIds.filter((id) => id !== leaderId)}
 								/>
 								<button
@@ -237,15 +276,15 @@
 				</div>
 
 				<PickUser
-					class="w-full"
+					class="control-size-3 w-full"
 					onPickUser={(userId) => project.leaderIds.push(userId)}
 					exclude={project.leaderIds}
 				/>
 			</div>
 
-			<div class="row gap-3 pt-2">
+			<div class="grid grid-cols-2 gap-3 pt-2">
 				<button
-					class="btn btn-large grow"
+					class="btn control-size-2"
 					disabled={updating}
 					type="button"
 					onclick={() => ref?.close()}
@@ -254,7 +293,7 @@
 				</button>
 				<button
 					type="submit"
-					class="btn btn-primary grow"
+					class="btn btn-primary"
 					disabled={!hasValidChanges || updating}
 					onclick={save}
 				>

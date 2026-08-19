@@ -45,6 +45,7 @@
 	let analysisRunning = $state(false);
 	let lastAnalysisStatus = $state<KeywordAnalysisStatus | undefined>();
 	let fetchLastAnalysisStatusTimeout: ReturnType<typeof setTimeout>;
+	const isContentsPage = $derived(page.url.pathname.endsWith("/contents"));
 
 	$inspect({ lastAnalysisStatus });
 
@@ -118,7 +119,11 @@
 	}
 </script>
 
-{#if context.project && projectContext.analysisResultsWithTrendQuery && projectContext.keywordClustersQuery}
+{#if context.project && isContentsPage}
+	<div class="EmptyPage" in:fade={{ duration: 300 }}>
+		{@render children()}
+	</div>
+{:else if context.project && projectContext.analysisResultsWithTrendQuery && projectContext.keywordClustersQuery}
 	<AddKeywordsDialog
 		bind:openAddKeywordsDialog={projectContext.openAddKeywordsDialog}
 	/>
@@ -129,10 +134,10 @@
 				.split('/')
 				.at(-1)} px-10 py-8 w-full gap-5 grid"
 		>
-			<header class="row justify-between gap-3">
-				<div class="row justify-between gap-3">
+			<header class="ProjectToolbar">
+				<div class="ToolbarActions">
 					<button
-						class="btn"
+						class="btn control-size-1"
 						onclick={() =>
 							projectContext.openAddKeywordsDialog?.({
 								afterAnalysis: () => {
@@ -144,13 +149,13 @@
 						<IconDownloadSimpleRegular class="icon text-accent" />
 						{$content.addKeywords}
 					</button>
-					<button class="btn" onclick={startAnalysis}>
+					<button class="btn control-size-1" onclick={startAnalysis}>
 						<IconArrowsClockwiseRegular class="icon text-accent" />
 						{$content.startAnalysis}
 					</button>
 					{#if page.url.pathname.endsWith("keyword-similarities")}
 						<button
-							class="btn"
+							class="btn control-size-1"
 							onclick={async () => {
 								const keywordClusters =
 									await projectContext.keywordClustersQuery;
@@ -169,7 +174,7 @@
 					{/if}
 				</div>
 
-				<div class="row justify-between gap-3">
+				<div class="ToolbarSettings">
 					<ProjectSettingsDropdown />
 				</div>
 			</header>
@@ -184,15 +189,64 @@
 		height: calc(100dvh - var(--app-header-height));
 	}
 
+	.EmptyPage {
+		min-height: calc(100dvh - var(--app-header-height));
+	}
+
 	.Page-share-of-voice {
 		min-height: 800px;
 		grid-template-columns: 1fr;
 		grid-template-rows: 2.5rem 1fr 1fr;
 	}
 
+	.ProjectToolbar,
+	.ToolbarActions,
+	.ToolbarSettings {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.ProjectToolbar {
+		justify-content: space-between;
+		min-width: 0;
+	}
+
+	.ToolbarActions {
+		flex-wrap: wrap;
+		min-width: 0;
+	}
+
+	.ToolbarSettings {
+		flex: 0 0 auto;
+		margin-left: auto;
+	}
+
 	.Page-keyword-similarities {
 		grid-template-columns: 1fr;
 		grid-template-rows: 2.5rem 1fr /*1fr*/;
 		min-height: 600px;
+	}
+
+	@media (max-width: 900px) {
+		.Page-share-of-voice {
+			height: auto;
+			grid-template-rows: auto;
+		}
+
+		.ProjectToolbar {
+			align-items: flex-start;
+			flex-wrap: wrap;
+		}
+	}
+
+	@media (max-width: 720px) {
+		.Page {
+			padding: 1rem;
+		}
+
+		.ToolbarActions {
+			width: 100%;
+		}
 	}
 </style>

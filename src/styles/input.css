@@ -1,9 +1,13 @@
 @layer utilities {
 	.input,
 	.select {
-		border-radius: 2.5rem;
-		height: 3.5rem;
-		padding-inline: 1.25rem;
+		--control-height: var(--control-size-3-height);
+		--control-radius: var(--control-size-3-radius);
+		--control-padding-inline: var(--control-size-3-padding-inline);
+		border-radius: var(--control-radius);
+		height: var(--control-height);
+		min-height: var(--control-height);
+		padding-inline: var(--control-padding-inline);
 		font-size: 1rem;
 
 		&:is(:disabled, [disabled]),
@@ -42,6 +46,19 @@
 			flex-grow: 1;
 			padding: 0;
 			margin: 0;
+		}
+	}
+
+	@supports (appearance: base-select) {
+		select.select,
+		select.select::picker(select) {
+			appearance: base-select;
+		}
+
+		select.select::picker(select) {
+			border: 1px solid var(--input);
+			border-radius: 0.5rem;
+			background: var(--color-base-100);
 		}
 	}
 }

@@ -5,13 +5,17 @@ import { db } from "$lib/server/db";
 import { projects } from "$lib/server/db/schema";
 import { normalizeUrlForSimilarity } from "$lib/strings/normalizeUrlForSimilarity";
 import { DAY, MINUTE } from "$lib/timeUnits";
-import { and, eq, inArray, isNull } from "drizzle-orm";
-import type { KeywordAnalysisFrequency } from "../../../../routes/api/projects.schema";
+import { and, inArray, isNull } from "drizzle-orm";
 import { getClickhouseClient } from "../index";
 import type { ClickhouseTable } from "../migrations";
 import { parseClickhouseCsvRows } from "../parseClickhouseCsvRow";
 import type { DataForSeo } from "./DataForSeo";
-import { hasEveryTaskFinished } from "./analysisCompletion";
+import { getAnalysisCompletionOutcome } from "./analysisCompletion";
+import {
+	runDueProjectAnalyses,
+	selectProjectsDueForAnalysis,
+	type LatestAnalysisState,
+} from "./analysisScheduler";
 import { getReadySerpTasks } from "./getReadySerpTasks";
 import { selectLatestAnalysisPerDay } from "./selectLatestAnalysisPerDay";
 
@@ -82,8 +86,10 @@ export namespace KeywordsService {
 	const ANALYSIS_TIMEOUT = DAY;
 	const analysisMetadata = new Map<string, AnalysisMetadata>();
 	const keywordsBySetId = new Map<string, Map<string, number>>();
+	const analysisStartLocks = new Map<string, Promise<"ok">>();
 	const taskSaveLocks = new Map<string, Promise<void>>();
 	const analysisCompletionLocks = new Map<string, Promise<void>>();
+	let scheduledAnalysisRun: Promise<void> | undefined;
 
 	/**
 	 * Return the total volume of a keyword set.
@@ -156,22 +162,19 @@ export namespace KeywordsService {
 					getAnalysisTaskStats(analysisId),
 				]);
 				if (stats.status !== "pending") return;
-				if (
-					!hasEveryTaskFinished({
-						keywordsCount,
-						startedTasks: stats.totalTasks,
-						completedTasks: stats.completedTasks,
-						failedTasks: stats.failedTasks,
-					})
-				) {
-					return;
-				}
+				const outcome = getAnalysisCompletionOutcome({
+					keywordsCount,
+					startedTasks: stats.totalTasks,
+					completedTasks: stats.completedTasks,
+					failedTasks: stats.failedTasks,
+				});
+				if (outcome === "pending") return;
 
-				if (stats.completedTasks === 0) {
+				if (outcome === "failed") {
 					await updateAnalysisState({
 						analysisId,
 						status: "failed",
-						error: "All keyword analysis tasks failed",
+						error: `${stats.failedTasks}/${stats.totalTasks} keyword analysis tasks failed`,
 					});
 					return;
 				}
@@ -353,10 +356,35 @@ export namespace KeywordsService {
 	 * Start keyword analysis for a project.
 	 * @param projectId - The ID of the project.
 	 */
-	export async function startKeywordAnalysis(
+	export function startKeywordAnalysis(projectId: string, { priority = 2 } = {}): Promise<"ok"> {
+		const previousStart = analysisStartLocks.get(projectId) ?? Promise.resolve("ok" as const);
+		const currentStart = previousStart
+			.catch(() => "ok" as const)
+			.then(() => startKeywordAnalysisUnlocked(projectId, { priority }));
+
+		analysisStartLocks.set(projectId, currentStart);
+		const clearStartLock = () => {
+			if (analysisStartLocks.get(projectId) === currentStart) {
+				analysisStartLocks.delete(projectId);
+			}
+		};
+		void currentStart.then(clearStartLock, clearStartLock);
+
+		return currentStart;
+	}
+
+	async function startKeywordAnalysisUnlocked(
 		projectId: string,
-		{ priority = 2 } = {},
+		{ priority }: { priority: number },
 	): Promise<"ok"> {
+		const pendingAnalysisId = await getProjectPendingAnalysisId(projectId);
+		if (pendingAnalysisId) {
+			console.log(
+				`Skipping analysis for project ${projectId}; analysis ${pendingAnalysisId} is still pending`,
+			);
+			return "ok";
+		}
+
 		const setId = await getCurrentKeywordSet(projectId);
 		if (!setId) {
 			throw new Error(`No keyword set found for project ${projectId}`);
@@ -398,14 +426,14 @@ export namespace KeywordsService {
 			format: "JSON",
 		});
 
-		const valuesToInsert: Array<KeywordAnalysisTaskInput> = [];
 		const taskIdsToPoll: string[] = [];
 
 		try {
-			await Promise.all(
+			const chunkResults = await Promise.allSettled(
 				chunks.map(async (chunk) => {
 					const body = chunk.map(([keyword]) => ({
 						keyword,
+						tag: analysisId,
 						location_code: 2250,
 						language_code: "fr",
 						depth: ANALYSIS_DEPTH,
@@ -437,14 +465,9 @@ export namespace KeywordsService {
 						throw new Error(`Error starting keyword analysis: ${result.status_message}`);
 					}
 
-					if (result.tasks.length !== chunk.length) {
-						throw new Error(
-							`DataForSEO created ${result.tasks.length}/${chunk.length} expected tasks`,
-						);
-					}
-
+					const taskRows: KeywordAnalysisTaskInput[] = [];
 					for (const task of result.tasks) {
-						valuesToInsert.push({
+						taskRows.push({
 							id: task.id,
 							analysisId: analysisId,
 							status: task.status_code === 20100 ? "pending" : "failed",
@@ -462,14 +485,29 @@ export namespace KeywordsService {
 							);
 						}
 					}
+
+					// Persist provider task IDs per chunk. If another chunk fails, callbacks
+					// for successful chunks can still be correlated and saved safely.
+					if (taskRows.length > 0) {
+						await clickhouse.insert<KeywordAnalysisTaskInput>({
+							table: "keywordAnalysisTasks",
+							values: taskRows,
+							format: "JSON",
+						});
+					}
+
+					if (result.tasks.length !== chunk.length) {
+						throw new Error(
+							`DataForSEO created ${result.tasks.length}/${chunk.length} expected tasks`,
+						);
+					}
 				}),
 			);
 
-			await clickhouse.insert<KeywordAnalysisTaskInput>({
-				table: "keywordAnalysisTasks",
-				values: valuesToInsert,
-				format: "JSON",
-			});
+			const failedChunk = chunkResults.find(
+				(result): result is PromiseRejectedResult => result.status === "rejected",
+			);
+			if (failedChunk) throw failedChunk.reason;
 		} catch (error) {
 			await updateAnalysisState({
 				analysisId,
@@ -486,6 +524,23 @@ export namespace KeywordsService {
 		await checkAnalysisCompletionAndTriggerNext({ analysisId });
 
 		return "ok";
+	}
+
+	async function getProjectPendingAnalysisId(projectId: string): Promise<string | null> {
+		const clickhouse = getClickhouseClient();
+		const response = await clickhouse.query({
+			query: `
+				SELECT id
+				FROM keywordAnalysis
+				WHERE projectId = {projectId:String} AND status = 'pending'
+				ORDER BY createdAt DESC
+				LIMIT 1
+			`,
+			query_params: { projectId },
+			format: "JSON",
+		});
+		const result = await response.json<{ id: string }>();
+		return result.data[0]?.id ?? null;
 	}
 
 	/**
@@ -907,7 +962,7 @@ export namespace KeywordsService {
 	export async function getKeywordAnalysisResponses({
 		analysisId,
 		positionLimit,
-		limit = 10000,
+		limit,
 		offset = 0,
 	}: {
 		analysisId: string;
@@ -923,9 +978,9 @@ export namespace KeywordsService {
 				FROM keywordAnalysisResponses
 				WHERE analysisId = {analysisId:String}
 				${positionLimit ? `AND position <= ${positionLimit} ORDER BY position ASC` : ""}
-				LIMIT {limit:UInt64} OFFSET {offset:UInt64}
+				${limit === undefined ? "" : "LIMIT {limit:UInt64} OFFSET {offset:UInt64}"}
 			`,
-			query_params: { analysisId, limit, offset },
+			query_params: { analysisId, limit: limit ?? 0, offset },
 			format: "CSV",
 		});
 
@@ -1433,43 +1488,122 @@ export namespace KeywordsService {
 		return cluster.reduce((acc, item) => acc + item.volume, 0);
 	}
 
-	/**
-	 * Check every project if it needs to be analyzed again.
-	 *
-	 */
-	export async function startAllKeywordAnalysis() {
-		console.log("⏰ Starting daily keyword analysis");
+	async function getLatestAnalysisByProjectId(
+		projectIds: string[],
+	): Promise<Map<string, LatestAnalysisState>> {
+		if (projectIds.length === 0) return new Map();
 
-		const frequencies: Array<KeywordAnalysisFrequency> = ["1/day"];
-		const date = new Date().getDate();
+		const clickhouse = getClickhouseClient();
+		const response = await clickhouse.query({
+			query: `
+				SELECT
+					projectId,
+					argMax(status, tuple(createdAt, id)) AS status,
+					toUnixTimestamp(argMax(createdAt, tuple(createdAt, id))) * 1000 AS createdAtMs
+				FROM keywordAnalysis
+				WHERE projectId IN {projectIds:Array(String)}
+				GROUP BY projectId
+			`,
+			query_params: { projectIds },
+			format: "JSON",
+		});
+		const result = await response.json<{
+			projectId: string;
+			status: ClickhouseTable.KeywordAnalysis["status"];
+			createdAtMs: string;
+		}>();
 
-		if (date == 1) frequencies.push("1/month", "1/week", "2/month");
-		if (date == 7) frequencies.push("1/week");
-		if (date == 15) frequencies.push("1/week", "2/month");
-		if (date == 22) frequencies.push("1/week");
+		return new Map(
+			result.data.map(({ projectId, status, createdAtMs }) => [
+				projectId,
+				{ status, createdAtMs: Number.parseInt(createdAtMs, 10) },
+			]),
+		);
+	}
 
-		console.log(`Checking projects with frequencies: ${frequencies.join(", ")}`);
+	async function getProjectIdsWithCurrentKeywords(projectIds: string[]): Promise<Set<string>> {
+		if (projectIds.length === 0) return new Set();
 
-		const auditProjects = await db.query.projects.findMany({
+		const clickhouse = getClickhouseClient();
+		const response = await clickhouse.query({
+			query: `
+				SELECT currentSets.projectId
+				FROM
+				(
+					SELECT projectId, argMax(id, tuple(createdAt, id)) AS setId
+					FROM keywordSets
+					WHERE projectId IN {projectIds:Array(String)}
+					GROUP BY projectId
+				) AS currentSets
+				INNER JOIN keywords ON keywords.setId = currentSets.setId
+				GROUP BY currentSets.projectId
+				HAVING count(*) > 0
+			`,
+			query_params: { projectIds },
+			format: "JSON",
+		});
+		const result = await response.json<{ projectId: string }>();
+		return new Set(result.data.map(({ projectId }) => projectId));
+	}
+
+	/** Check every active project with recurring analysis and start analyses whose interval elapsed. */
+	export function startAllKeywordAnalysis(): Promise<void> {
+		if (scheduledAnalysisRun) {
+			console.log("Keyword analysis scheduler is already running; skipping overlapping run");
+			return scheduledAnalysisRun;
+		}
+
+		const currentRun = runScheduledKeywordAnalyses();
+		scheduledAnalysisRun = currentRun;
+		const clearScheduledRun = () => {
+			if (scheduledAnalysisRun === currentRun) scheduledAnalysisRun = undefined;
+		};
+		void currentRun.then(clearScheduledRun, clearScheduledRun);
+		return currentRun;
+	}
+
+	async function runScheduledKeywordAnalyses(): Promise<void> {
+		console.log("⏰ Checking for due keyword analyses");
+
+		const recurringAnalysisProjects = await db.query.projects.findMany({
 			where: and(
-				eq(projects.type, "audit"),
-				inArray(projects.keywordAnalysisFrequency, frequencies),
+				inArray(projects.type, ["audit", "monthly_subscription"]),
 				isNull(projects.deletedAt),
 			),
+			columns: { id: true, keywordAnalysisFrequency: true },
+		});
+		const projectIds = recurringAnalysisProjects.map(({ id }) => id);
+		const [latestAnalysisByProjectId, projectIdsWithKeywords] = await Promise.all([
+			getLatestAnalysisByProjectId(projectIds),
+			getProjectIdsWithCurrentKeywords(projectIds),
+		]);
+		const analyzableProjects = recurringAnalysisProjects.filter(({ id }) =>
+			projectIdsWithKeywords.has(id),
+		);
+		const dueProjects = selectProjectsDueForAnalysis({
+			projects: analyzableProjects,
+			latestAnalysisByProjectId,
+			nowMs: Date.now(),
 		});
 
-		console.log(`Found ${auditProjects.length} projects to audit.`);
+		console.log(
+			`Found ${dueProjects.length}/${analyzableProjects.length} analyzable recurring projects due; ${recurringAnalysisProjects.length - analyzableProjects.length} have no current keywords.`,
+		);
 
-		for (const project of auditProjects) {
-			await startKeywordAnalysis(project.id, { priority: 1 })
-				.then(() => {
-					console.log(`Started analysis for project ${project.id}`);
-				})
-				.catch((error) => {
-					console.error(`Error starting analysis for project ${project.id}: ${error}`);
-				});
+		const results = await runDueProjectAnalyses({
+			projects: dueProjects,
+			startAnalysis: (projectId) => startKeywordAnalysis(projectId, { priority: 1 }),
+			waitBetweenProjects: () => new Promise((resolve) => setTimeout(resolve, 2 * MINUTE)),
+		});
 
-			await new Promise((resolve) => setTimeout(resolve, 2 * MINUTE));
+		for (const result of results) {
+			if (result.status === "started") {
+				console.log(`Started scheduled analysis for project ${result.projectId}`);
+			} else {
+				console.error(
+					`Error starting scheduled analysis for project ${result.projectId}: ${result.error}`,
+				);
+			}
 		}
 	}
 
@@ -1503,6 +1637,22 @@ export namespace KeywordsService {
 			clickhouse_settings: { mutations_sync: "1" },
 		});
 		console.warn(`Marked ${analysisIds.length} stale keyword analyses as failed`);
+	}
+
+	/** Recover completion work that may have been interrupted by a process restart. */
+	export async function reconcilePendingKeywordAnalyses(): Promise<void> {
+		const clickhouse = getClickhouseClient();
+		const response = await clickhouse.query({
+			query: `SELECT id FROM keywordAnalysis WHERE status = 'pending'`,
+			format: "JSON",
+		});
+		const result = await response.json<Pick<ClickhouseTable.KeywordAnalysis, "id">>();
+
+		for (const { id: analysisId } of result.data) {
+			await checkAnalysisCompletionAndTriggerNext({ analysisId }).catch((error) => {
+				console.error(`Error reconciling pending analysis ${analysisId}: ${error}`);
+			});
+		}
 	}
 
 	/**
@@ -1548,6 +1698,9 @@ export namespace KeywordsService {
 		} catch (error) {
 			console.error(`Error fetching tasks ready: ${error}`);
 		} finally {
+			await reconcilePendingKeywordAnalyses().catch((error) => {
+				console.error(`Error reconciling pending keyword analyses: ${error}`);
+			});
 			await failStaleKeywordAnalyses().catch((error) => {
 				console.error(`Error failing stale keyword analyses: ${error}`);
 			});

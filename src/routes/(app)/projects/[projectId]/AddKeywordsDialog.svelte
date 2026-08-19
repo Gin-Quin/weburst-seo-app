@@ -130,16 +130,16 @@
 				<div class="py-1 text-error bold">{String(keywords)}</div>
 			{/if}
 
-			<div class="row gap-3 pt-2">
+			<div class="grid grid-cols-2 gap-3 pt-2">
 				<button
-					class="btn btn-large grow"
+					class="btn control-size-2"
 					type="button"
 					onclick={() => ref?.close()}
 				>
 					{$content.cancel}
 				</button>
 				<button
-					class="btn btn-primary grow"
+					class="btn btn-primary"
 					type="submit"
 					disabled={!Array.isArray(keywords) || loading}
 					onclick={submit}

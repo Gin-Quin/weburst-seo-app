@@ -120,6 +120,44 @@ export async function setClientProjectManagers(
 	});
 }
 
+export async function setClientUsers(clientId: string, clientUserIds: string[]): Promise<void> {
+	const desiredClientUserIds = [...new Set(clientUserIds)];
+	const desiredClientUsers =
+		desiredClientUserIds.length === 0
+			? []
+			: await db.select().from(users).where(inArray(users.id, desiredClientUserIds));
+
+	if (
+		desiredClientUsers.length !== desiredClientUserIds.length ||
+		desiredClientUsers.some((user) => user.role !== "client")
+	) {
+		throw new Error("Only client users can be assigned as client users");
+	}
+
+	const currentClientUsers = await db
+		.select({ userId: usersToClients.userId })
+		.from(usersToClients)
+		.innerJoin(users, eq(users.id, usersToClients.userId))
+		.where(and(eq(usersToClients.clientId, clientId), eq(users.role, "client")));
+	const currentClientUserIds = currentClientUsers.map(({ userId }) => userId);
+
+	await db.transaction(async (tx) => {
+		if (currentClientUserIds.length > 0) {
+			await tx
+				.delete(usersToClients)
+				.where(inArray(usersToClients.userId, currentClientUserIds));
+		}
+		if (desiredClientUserIds.length > 0) {
+			await tx
+				.delete(usersToClients)
+				.where(inArray(usersToClients.userId, desiredClientUserIds));
+			await tx
+				.insert(usersToClients)
+				.values(desiredClientUserIds.map((userId) => ({ userId, clientId })));
+		}
+	});
+}
+
 export async function validateProjectManagerIds(projectManagerIds: string[]): Promise<string[]> {
 	const desiredManagerIds = [...new Set(projectManagerIds)];
 	const desiredManagers =
