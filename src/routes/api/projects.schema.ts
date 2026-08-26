@@ -9,6 +9,7 @@ export const ProjectType = v.union([
 export type ProjectType = v.InferOutput<typeof ProjectType>;
 
 export const ArticleLimit = v.pipe(v.number(), v.integer(), v.minValue(0));
+export const ProjectName = v.pipe(v.string(), v.trim(), v.minLength(1));
 
 export const KeywordAnalysisFrequency = v.union([
 	v.literal("1/day"),
@@ -21,6 +22,7 @@ export type KeywordAnalysisFrequency = v.InferOutput<typeof KeywordAnalysisFrequ
 // createProject(input: ProjectInsert)
 export const CreateProject = v.object({
 	id: v.string(),
+	name: ProjectName,
 	clientName: v.optional(v.string(), ""),
 	clientId: v.optional(v.string()),
 	domain: v.string(),
@@ -40,6 +42,7 @@ export type GetProjectById = v.InferOutput<typeof GetProjectById>;
 // updateProject(id: string, updates: ProjectUpdate)
 export const ProjectUpdate = v.partial(
 	v.object({
+		name: ProjectName,
 		clientName: v.string(),
 		clientId: v.string(),
 		domain: v.string(),

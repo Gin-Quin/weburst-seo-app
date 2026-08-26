@@ -6,19 +6,12 @@ import {
 } from "$lib/server/clickhouse/services/keywords";
 import * as v from "valibot";
 import { getRequestUser } from "../utilities";
+import { AddKeywords } from "../keywords.schema";
 
-export const addKeywords = command(
-	v.object({
-		projectId: v.string(),
-		keywords: v.array(
-			v.union([v.tuple([v.string(), v.number()]), v.tuple([v.string(), v.number(), v.string()])]),
-		),
-	}),
-	async ({ projectId, keywords }) => {
-		await requireProjectAccess(await getRequestUser(), projectId, "manage_keywords");
-		await KeywordsService.addKeywords(projectId, keywords);
-	},
-);
+export const addKeywords = command(AddKeywords, async ({ projectId, keywords }) => {
+	await requireProjectAccess(await getRequestUser(), projectId, "manage_keywords");
+	await KeywordsService.addKeywords(projectId, keywords);
+});
 
 export const startKeywordAnalysis = command(
 	v.object({

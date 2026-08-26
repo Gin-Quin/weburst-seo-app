@@ -1,4 +1,5 @@
 <script lang="ts">
+	import IntegerInput from "$lib/components/IntegerInput.svelte";
 	import PickUser from "$lib/components/PickUser.svelte";
 	import SelectUser from "$lib/components/SelectUser.svelte";
 	import {
@@ -14,6 +15,7 @@
 	import IconGlobeRegular from "phosphor-icons-svelte/IconGlobeRegular.svelte";
 	import IconLinkRegular from "phosphor-icons-svelte/IconLinkRegular.svelte";
 	import IconRepeatRegular from "phosphor-icons-svelte/IconRepeatRegular.svelte";
+	import IconTagRegular from "phosphor-icons-svelte/IconTagRegular.svelte";
 	import IconTrashRegular from "phosphor-icons-svelte/IconTrashRegular.svelte";
 	import IconUserRegular from "phosphor-icons-svelte/IconUserRegular.svelte";
 	import type { ClientInfo } from "../api/clients.remote";
@@ -30,6 +32,7 @@
 			cancel: "Cancel",
 			create: "Create project",
 			save: "Save",
+			projectName: "Project name",
 			clientName: "Client",
 			selectClient: "Select a client",
 			domain: "Domain",
@@ -42,6 +45,8 @@
 			projectUpdated: "Project updated",
 			projectCreationFailed: "Project creation failed",
 			projectUpdateFailed: "Project update failed",
+			incrementArticleLimit: "Increase article limit",
+			decrementArticleLimit: "Decrease article limit",
 		},
 		fr: {
 			createProject: "Créer un nouveau projet",
@@ -49,6 +54,7 @@
 			cancel: "Annuler",
 			create: "Créer projet",
 			save: "Sauvegarder",
+			projectName: "Nom du projet",
 			clientName: "Client",
 			selectClient: "Sélectionner un client",
 			domain: "Domaine",
@@ -61,6 +67,8 @@
 			projectUpdated: "Le projet a été mis à jour",
 			projectCreationFailed: "Échec de la création du projet",
 			projectUpdateFailed: "Échec de la mise à jour du projet",
+			incrementArticleLimit: "Augmenter la limite d’articles",
+			decrementArticleLimit: "Diminuer la limite d’articles",
 		},
 	});
 
@@ -79,14 +87,14 @@
 	let project = $state<CreateProject>(getDefaultValues());
 
 	const hasValidChanges = $derived(
-		project.clientId &&
+		project.name.trim() &&
+			project.clientId &&
 			project.domain &&
 			project.keywordAnalysisFrequency &&
 			project.type &&
 			project.websiteUrl &&
 			(project.type !== "monthly_subscription" ||
 				(Number.isInteger(project.articleLimit) && project.articleLimit >= 0)) &&
-			(edit ? true : project.leaderIds.length > 0) &&
 			(!edit || !deepEqual(edit, project)),
 	);
 
@@ -125,6 +133,7 @@
 	function getDefaultValues(): CreateProject {
 		return {
 			id: edit?.id ?? createId(),
+			name: edit?.name ?? "",
 			clientName: edit?.clientName ?? presetClient?.name ?? "",
 			clientId: edit?.clientId ?? presetClient?.id,
 			domain: edit?.domain ?? "",
@@ -144,6 +153,20 @@
 		</header>
 
 		<form method="dialog" class="col gap-6 items-stretch">
+			<div class="field grow">
+				<div class="field-title">{$content.projectName}</div>
+				<label class="input control-size-3 w-full">
+					<IconTagRegular class="icon" />
+					<input
+						class="grow"
+						name="name"
+						bind:value={project.name}
+						placeholder={$content.projectName}
+						required
+					/>
+				</label>
+			</div>
+
 			<div class="grid grid-cols-2 gap-3">
 				<div class="field grow">
 					<div class="field-title">{$content.clientName}</div>
@@ -230,20 +253,21 @@
 				{/if}
 
 				{#if project.type === "monthly_subscription"}
-					<div class="field">
+					<div class="field col-span-2">
 						<div class="field-title">{$content.articleLimit}</div>
-						<label class="input control-size-3 w-full">
-							<IconFileRegular class="icon" />
-							<input
-								class="grow"
-								name="articleLimit"
-								type="number"
-								min="0"
-								step="1"
-								bind:value={project.articleLimit}
-								required
-							/>
-						</label>
+						<IntegerInput
+							class="control-size-3 w-full"
+							name="articleLimit"
+							min={0}
+							bind:value={project.articleLimit}
+							incrementLabel={$content.incrementArticleLimit}
+							decrementLabel={$content.decrementArticleLimit}
+							required
+						>
+							{#snippet leading()}
+								<IconFileRegular class="icon" />
+							{/snippet}
+						</IntegerInput>
 					</div>
 				{/if}
 			</div>

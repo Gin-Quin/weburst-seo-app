@@ -72,6 +72,7 @@ export const projects = sqliteTable(
 	"projects",
 	{
 		id: text("id").primaryKey(),
+		name: text("name").notNull(),
 		// Kept temporarily so the migration can be deployed before every caller
 		// switches to clientId.
 		clientName: text("client_name").notNull(),

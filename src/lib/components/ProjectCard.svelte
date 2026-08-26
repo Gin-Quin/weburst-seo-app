@@ -39,7 +39,7 @@
 		onEdit = (project) => context.openProjectDialog?.(project),
 		onDelete = (project) =>
 			context.openConfirmDialog?.({
-				title: $content.confirmDeleteProject(project.domain),
+				title: $content.confirmDeleteProject(project.name),
 				then: () => deleteProject(project.id),
 			}),
 	}: {
@@ -109,9 +109,15 @@
 			{/each}
 		</div>
 
-		<div class="col grow gap-1 text-start">
-			<div class="text-4xl font-bold">{project.clientName}</div>
-			<div class="text-md text-base-content/70">{project.domain}</div>
+		<div class="ProjectIdentity row justify-between items-end gap-4 w-full text-start">
+			<div class="col grow gap-1 min-w-0">
+				<div class="ProjectName text-4xl font-bold">{project.name}</div>
+				<div class="ProjectDomain text-md text-base-content/70">{project.domain}</div>
+			</div>
+
+			<div class="Client col gap-1 shrink-0 text-end">
+				<div class="ClientName text-md font-bold">{project.clientName}</div>
+			</div>
 		</div>
 
 		<hr class="w-full" style:margin-block="4px" />
@@ -158,5 +164,21 @@
 
 	.ProjectCard hr {
 		border-color: var(--input);
+	}
+
+	.ProjectName,
+	.ProjectDomain,
+	.ClientName {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.ProjectName {
+		line-height: normal;
+	}
+
+	.Client {
+		max-width: 40%;
 	}
 </style>

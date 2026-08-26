@@ -49,7 +49,7 @@
 			<a
 				onclick={() =>
 					context.openConfirmDialog?.({
-						title: $content.confirmDeleteProject(context.project!.domain),
+						title: $content.confirmDeleteProject(context.project!.name),
 						then: async () => {
 							void goto("/");
 							void deleteProject(context.project!.id);

@@ -17,7 +17,9 @@
 	});
 	const filteredProjects = $derived.by(() =>
 		[...(context.projects ?? [])]
-			.filter((project) => fuzzyMatch(search, [project.clientName, project.domain]))
+			.filter((project) =>
+				fuzzyMatch(search, [project.name, project.clientName, project.domain]),
+			)
 			.filter((project) => !clientId || project.clientId === clientId)
 			.filter(
 				(project) =>
@@ -27,7 +29,7 @@
 				const recency =
 					(context.projectLastOpened[b.id] ?? 0) -
 					(context.projectLastOpened[a.id] ?? 0);
-				return recency || a.domain.localeCompare(b.domain);
+				return recency || a.name.localeCompare(b.name);
 			}),
 	);
 </script>

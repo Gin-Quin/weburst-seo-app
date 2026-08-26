@@ -32,7 +32,7 @@
 			: (context.projects ?? [])
 					.filter((project) => {
 						const query = search.trim().toLocaleLowerCase();
-						return `${project.clientName} ${project.domain}`
+						return `${project.name} ${project.clientName} ${project.domain}`
 							.toLocaleLowerCase()
 							.includes(query);
 					})
@@ -75,7 +75,7 @@
 					{:else}
 						{#each searchResults as project (project.id)}
 							<button onclick={() => openProject(project.id)}>
-								<span>{project.clientName}</span>
+								<span>{project.name}</span>
 								<small>{project.domain}</small>
 							</button>
 						{/each}

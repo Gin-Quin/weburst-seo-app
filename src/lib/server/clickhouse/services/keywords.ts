@@ -3,7 +3,7 @@ import {
 	getKeywordClusterSummaries,
 	type KeywordClusterSummary,
 } from "$lib/keywords/getKeywordClusterSummaries";
-import { getWeightedVolume } from "$lib/keywords/getWeightedVolume";
+import { getWeightedVolume, POSITION_WEIGHTS_PERCENT } from "$lib/keywords/getWeightedVolume";
 import { getSimilarity } from "$lib/numbers/getSimilarity";
 import { db } from "$lib/server/db";
 import { projects } from "$lib/server/db/schema";
@@ -47,8 +47,15 @@ export type KeywordAnalysisStatus = {
 export type AggregatedKeywordAnalysis = {
 	totalVolume: number;
 	keywordCount: number;
-	clusters: Array<KeywordClusterSummary>;
+	clusters: Array<KeywordClusterAnalysis>;
 	data: Array<ClickhouseTable.AggregatedKeywordAnalysisData>;
+};
+
+export type KeywordClusterAnalysis = KeywordClusterSummary & {
+	domains: Array<{
+		domain: string;
+		volume: number;
+	}>;
 };
 
 export type AggregatedKeywordAnalysisData = ClickhouseTable.AggregatedKeywordAnalysisData;
@@ -1267,19 +1274,82 @@ export namespace KeywordsService {
 		if (!keywords) return null;
 
 		const totalVolume = getTotalVolume(keywords);
+		const clusterSummaries = getKeywordClusterSummaries(keywordDetails.values());
 
-		const data = await getAggregatedAnalysisResults({
-			analysisId,
-			limit: 100,
-		});
+		const [data, clusters] = await Promise.all([
+			getAggregatedAnalysisResults({
+				analysisId,
+				limit: 100,
+			}),
+			clusterSummaries.length >= 2
+				? getAggregatedAnalysisResultsByCluster({
+						analysisId,
+						setId: analysis.setId,
+						clusters: clusterSummaries,
+					})
+				: Promise.resolve(clusterSummaries.map((cluster) => ({ ...cluster, domains: [] }))),
+		]);
 		if (!data) return null;
 
 		return {
 			keywordCount: keywords.size,
 			totalVolume,
-			clusters: getKeywordClusterSummaries(keywordDetails.values()),
+			clusters,
 			data,
 		};
+	}
+
+	/** Return the latest weighted share-of-voice volume grouped by cluster and domain. */
+	async function getAggregatedAnalysisResultsByCluster({
+		analysisId,
+		setId,
+		clusters,
+	}: {
+		analysisId: string;
+		setId: string;
+		clusters: Array<KeywordClusterSummary>;
+	}): Promise<Array<KeywordClusterAnalysis>> {
+		const clickhouse = getClickhouseClient();
+		const positionWeightSql = POSITION_WEIGHTS_PERCENT.flatMap((weight, index) => [
+			`responses.position = ${index + 1}`,
+			(weight / 100).toFixed(4),
+		]).join(", ");
+		const response = await clickhouse.query({
+			query: `
+				SELECT
+					trim(keywords.clusters) AS cluster,
+					responses.domain AS domain,
+					round(sum(keywords.volume * multiIf(${positionWeightSql}, 0.0015))) AS volume
+				FROM keywordAnalysisResponses AS responses
+				INNER JOIN keywords
+					ON keywords.setId = {setId:UUID} AND keywords.name = responses.keyword
+				WHERE responses.analysisId = {analysisId:String}
+					AND notEmpty(trim(keywords.clusters))
+				GROUP BY cluster, domain
+				ORDER BY cluster ASC, volume DESC
+			`,
+			query_params: { analysisId, setId },
+			format: "CSV",
+		});
+
+		const domainsByCluster = new Map<string, Array<{ domain: string; volume: number }>>();
+		for await (const rows of response.stream()) {
+			const parsedRows = parseClickhouseCsvRows(rows, {
+				cluster: "string",
+				domain: "string",
+				volume: "number",
+			});
+			for (const row of parsedRows) {
+				const domains = domainsByCluster.get(row.cluster) ?? [];
+				domains.push({ domain: row.domain, volume: row.volume });
+				domainsByCluster.set(row.cluster, domains);
+			}
+		}
+
+		return clusters.map((cluster) => ({
+			...cluster,
+			domains: domainsByCluster.get(cluster.name) ?? [],
+		}));
 	}
 
 	/**
