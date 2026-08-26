@@ -1,4 +1,8 @@
 import { env } from "$env/dynamic/private";
+import {
+	getKeywordClusterSummaries,
+	type KeywordClusterSummary,
+} from "$lib/keywords/getKeywordClusterSummaries";
 import { getWeightedVolume } from "$lib/keywords/getWeightedVolume";
 import { getSimilarity } from "$lib/numbers/getSimilarity";
 import { db } from "$lib/server/db";
@@ -22,8 +26,10 @@ import { selectLatestAnalysisPerDay } from "./selectLatestAnalysisPerDay";
 const ANALYSIS_DEPTH = env.SEARCH_DEPTH;
 const SIMILARITY_THRESHOLD = 0.6;
 
-export type KeywordTuple = [name: string, volume: number];
-export type Keyword = { name: string; volume: number };
+export type KeywordTuple =
+	| [name: string, volume: number]
+	| [name: string, volume: number, clusters: string];
+export type Keyword = { name: string; volume: number; clusters: string };
 export type KeywordSet = { setId: string; createdAt: string };
 
 export type KeywordAnalysisInput = Omit<ClickhouseTable.KeywordAnalysis, "createdAt">;
@@ -41,6 +47,7 @@ export type KeywordAnalysisStatus = {
 export type AggregatedKeywordAnalysis = {
 	totalVolume: number;
 	keywordCount: number;
+	clusters: Array<KeywordClusterSummary>;
 	data: Array<ClickhouseTable.AggregatedKeywordAnalysisData>;
 };
 
@@ -73,6 +80,7 @@ export type KeywordCluster = Array<KeywordClusterData>;
 export type KeywordClusterData = {
 	keyword: string;
 	volume: number;
+	clusters: string;
 	items: Array<KeywordClusterItem>;
 };
 
@@ -86,6 +94,7 @@ export namespace KeywordsService {
 	const ANALYSIS_TIMEOUT = DAY;
 	const analysisMetadata = new Map<string, AnalysisMetadata>();
 	const keywordsBySetId = new Map<string, Map<string, number>>();
+	const keywordDetailsBySetId = new Map<string, Map<string, Keyword>>();
 	const analysisStartLocks = new Map<string, Promise<"ok">>();
 	const taskSaveLocks = new Map<string, Promise<void>>();
 	const analysisCompletionLocks = new Map<string, Promise<void>>();
@@ -210,7 +219,17 @@ export namespace KeywordsService {
 			([name], index, self) => !self.slice(0, index).some(([otherName]) => otherName === name),
 		);
 
-		keywordsBySetId.set(setId, new Map(uniqueKeywords));
+		const keywordDetails = new Map(
+			uniqueKeywords.map(([name, volume, clusters = ""]) => [
+				name,
+				{ name, volume, clusters: clusters.trim() },
+			]),
+		);
+		keywordDetailsBySetId.set(setId, keywordDetails);
+		keywordsBySetId.set(
+			setId,
+			new Map([...keywordDetails].map(([name, keyword]) => [name, keyword.volume])),
+		);
 
 		await clickhouse.insert({
 			table: "keywordSets",
@@ -220,9 +239,48 @@ export namespace KeywordsService {
 
 		await clickhouse.insert({
 			table: "keywords",
-			values: uniqueKeywords.map(([name, volume]) => ({ setId, name, volume })),
+			values: [...keywordDetails.values()].map(({ name, volume, clusters }) => ({
+				setId,
+				name,
+				volume,
+				clusters,
+			})),
 			format: "JSON",
 		});
+	}
+
+	/** Return all persisted keyword fields for a specific set. */
+	export async function getKeywordDetails(setId: string): Promise<Map<string, Keyword>> {
+		const cached = keywordDetailsBySetId.get(setId);
+		if (cached) return cached;
+
+		const clickhouse = getClickhouseClient();
+		const response = await clickhouse.query({
+			query: `
+				SELECT name, volume, clusters
+				FROM keywords
+				WHERE setId = {setId:UUID}
+				ORDER BY volume DESC
+			`,
+			format: "CSV",
+			query_params: { setId },
+		});
+
+		const data = new Map<string, Keyword>();
+		for await (const rows of response.stream()) {
+			const parsedRows = parseClickhouseCsvRows(rows, {
+				name: "string",
+				volume: "number",
+				clusters: "string",
+			});
+			for (const keyword of parsedRows) {
+				if (!data.has(keyword.name)) data.set(keyword.name, keyword);
+			}
+		}
+
+		keywordDetailsBySetId.set(setId, data);
+		keywordsBySetId.set(setId, new Map([...data].map(([name, keyword]) => [name, keyword.volume])));
+		return data;
 	}
 
 	/**
@@ -1201,7 +1259,11 @@ export namespace KeywordsService {
 		const analysisId = await getProjectLastAnalysisId({ projectId });
 		if (!analysisId) return null;
 
-		const keywords = await getKeywords({ projectId });
+		const analysis = await getAnalysisMetadata({ analysisId });
+		if (!analysis) return null;
+
+		const keywordDetails = await getKeywordDetails(analysis.setId);
+		const keywords = await getKeywords({ setId: analysis.setId });
 		if (!keywords) return null;
 
 		const totalVolume = getTotalVolume(keywords);
@@ -1212,7 +1274,12 @@ export namespace KeywordsService {
 		});
 		if (!data) return null;
 
-		return { keywordCount: keywords.size, totalVolume, data };
+		return {
+			keywordCount: keywords.size,
+			totalVolume,
+			clusters: getKeywordClusterSummaries(keywordDetails.values()),
+			data,
+		};
 	}
 
 	/**
@@ -1368,6 +1435,7 @@ export namespace KeywordsService {
 
 		const keywords = await getKeywords({ setId });
 		if (!keywords?.size) return null;
+		const keywordDetails = await getKeywordDetails(setId);
 
 		const clickhouse = getClickhouseClient();
 
@@ -1440,6 +1508,7 @@ export namespace KeywordsService {
 					keyword,
 					items,
 					volume: keywords.get(keyword) ?? 0,
+					clusters: keywordDetails.get(keyword)?.clusters ?? "",
 				},
 			];
 
@@ -1469,6 +1538,7 @@ export namespace KeywordsService {
 						keyword: otherKeyword,
 						items: otherItems.filter((item) => !urlsInCluster.has(item.url)),
 						volume: keywords.get(otherKeyword) ?? 0,
+						clusters: keywordDetails.get(otherKeyword)?.clusters ?? "",
 					});
 
 					clusteredKeywords.add(otherKeyword);

@@ -4,10 +4,11 @@ import Papa from "papaparse";
 export async function parseKeywordsCsv(file: File | string): Promise<Array<KeywordTuple> | Error> {
 	try {
 		const raw = file instanceof File ? await file.text() : file;
-		const { data, errors } = Papa.parse<[string, string]>(raw, {
+		const { data, errors } = Papa.parse<string[]>(raw, {
 			header: false,
 			dynamicTyping: false,
 			delimitersToGuess: [",", ";", "\t"],
+			skipEmptyLines: "greedy",
 		});
 		if (errors.length) {
 			errors.map((error) => console.error(error));
@@ -16,12 +17,12 @@ export async function parseKeywordsCsv(file: File | string): Promise<Array<Keywo
 		if (!data.length) {
 			return [];
 		}
-		const hasHeader = Number.isNaN(parseInt(data[0]![1], 10));
-		const parsed = data
+		const hasHeader = Number.isNaN(Number(data[0]![1]));
+		return data
 			.slice(hasHeader ? 1 : 0)
-			.filter((row) => row.length === 2 && row[0])
-			.map((row) => [row[0], parseInt(row[1], 10)]) as Array<KeywordTuple>;
-		return parsed;
+			.filter((row) => (row.length === 2 || row.length === 3) && row[0]?.trim() && row[1]?.trim())
+			.map((row) => [row[0]!.trim(), Number(row[1]), row[2]?.trim() ?? ""] as KeywordTuple)
+			.filter(([, volume]) => Number.isFinite(volume));
 	} catch (error) {
 		console.error(error);
 		return new Error(`Failed to parse CSV file: ${error}`);

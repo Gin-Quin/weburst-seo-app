@@ -10,7 +10,9 @@ import { getRequestUser } from "../utilities";
 export const addKeywords = command(
 	v.object({
 		projectId: v.string(),
-		keywords: v.array(v.tuple([v.string(), v.number()])),
+		keywords: v.array(
+			v.union([v.tuple([v.string(), v.number()]), v.tuple([v.string(), v.number(), v.string()])]),
+		),
 	}),
 	async ({ projectId, keywords }) => {
 		await requireProjectAccess(await getRequestUser(), projectId, "manage_keywords");

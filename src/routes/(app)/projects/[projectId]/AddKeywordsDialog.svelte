@@ -16,7 +16,7 @@
 			cancel: "Cancel",
 			submit: "Submit",
 			instructions: [
-				"The file must contain two columns: the keyword and the volume associated.",
+				"The file must contain the keyword and its volume. A third clusters column can group keywords together.",
 				"The file can include or not a header.",
 			],
 			keywordsAddedSuccessfully: "Keywords added successfully.",
@@ -30,7 +30,7 @@
 			cancel: "Annuler",
 			submit: "Ajouter",
 			instructions: [
-				"Le fichier doit contenir deux colonnes : le mot-clé et le volume associé.",
+				"Le fichier doit contenir le mot-clé et son volume. Une troisième colonne clusters peut regrouper les mots-clés.",
 				"Le fichier peut inclure ou non un header.",
 			],
 			keywordsAddedSuccessfully: "Mots-clés ajoutés avec succès.",

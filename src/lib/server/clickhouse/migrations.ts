@@ -13,6 +13,7 @@ export namespace ClickhouseTable {
 		setId: string; // UUID
 		name: string;
 		volume: number; // UInt32
+		clusters: string;
 	};
 
 	export type KeywordAnalysis = {
@@ -427,5 +428,10 @@ export const clickhouseMigrations: Array<ClickhouseMigration> = [
 			`ALTER TABLE ${database}.keywordAnalysisTasks MATERIALIZE INDEX analysisId_bloom_filter`,
 			`ALTER TABLE ${database}.keywordAnalysisTasks MATERIALIZE INDEX taskId_bloom_filter`,
 		],
+	},
+	{
+		name: "Add clusters column to keywords",
+		query: (database: string) =>
+			`ALTER TABLE ${database}.keywords ADD COLUMN clusters String DEFAULT ''`,
 	},
 ];
