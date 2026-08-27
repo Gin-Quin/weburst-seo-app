@@ -72,7 +72,6 @@ import { get } from "svelte/store";
 			);
 			const urlList = (cluster ?? [])
 				.flatMap((c) => c?.items ?? [])
-				.filter((item) => item?.domain == context.project!.domain)
 				.map((item) => item?.url)
 				.filter((u) => !!u);
 			const urls = urlList.length ? urlList.join(", ") : "-";

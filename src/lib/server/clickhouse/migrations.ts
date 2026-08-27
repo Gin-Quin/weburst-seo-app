@@ -434,4 +434,9 @@ export const clickhouseMigrations: Array<ClickhouseMigration> = [
 		query: (database: string) =>
 			`ALTER TABLE ${database}.keywords ADD COLUMN clusters String DEFAULT ''`,
 	},
+	{
+		name: "Store estimated traffic with decimal precision",
+		query: (database: string) =>
+			`ALTER TABLE ${database}.aggregatedKeywordAnalysisData MODIFY COLUMN volume Float64`,
+	},
 ];

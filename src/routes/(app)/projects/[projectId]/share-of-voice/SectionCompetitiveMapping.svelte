@@ -58,7 +58,7 @@
 		client: AggregatedKeywordAnalysisData;
 	} = $props();
 
-	const { data, totalVolume } = $derived(analysisResultsWithTrend);
+	const { data, totalTraffic } = $derived(analysisResultsWithTrend);
 
 	const { chartConfig, chartData } = $derived(
 		getChartData({
@@ -92,7 +92,7 @@
 							{
 								domain: item.domain,
 								x: item.positionnedKeywordCount,
-								y: (item.volume / totalVolume) * 100,
+								y: (item.volume / (totalTraffic || 1)) * 100,
 								r: 4 + Math.sqrt(5 * item.topThreeKeywordCount),
 								source: item,
 							},

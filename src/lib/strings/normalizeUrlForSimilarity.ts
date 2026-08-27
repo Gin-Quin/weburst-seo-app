@@ -1,22 +1,31 @@
-import { removeUrlParam } from "./removeUrlParam";
-
 /**
- * - Remove utm parameters from URL
- * - Remove http:// and https:// from URL
- * - Remove `www.` prefix from URL
+ * Normalize a SERP URL with the same rules as the Python analytics pipeline.
  */
 export function normalizeUrlForSimilarity(url: string): string {
-	const normalized = removeUrlParam(url, ["srsltid", "gclid", "fbclid", "utm"]);
+	const input = url.trim();
+	if (!input) return "";
 
-	// if (normalized.startsWith("http://")) {
-	// 	normalized = normalized.slice("http://".length);
-	// } else if (normalized.startsWith("https://")) {
-	// 	normalized = normalized.slice("https://".length);
-	// }
+	try {
+		const parsed = new URL(input);
+		parsed.hash = "";
+		parsed.hostname = parsed.hostname.toLowerCase().replace(/^www\./, "");
 
-	// if (normalized.startsWith("www.")) {
-	// 	normalized = normalized.slice("www.".length);
-	// }
+		for (const key of [...parsed.searchParams.keys()]) {
+			const normalizedKey = key.toLowerCase();
+			if (
+				normalizedKey.startsWith("utm_") ||
+				["gclid", "fbclid", "srsltid", "mc_eid", "igshid"].includes(normalizedKey)
+			) {
+				parsed.searchParams.delete(key);
+			}
+		}
 
-	return normalized;
+		if (parsed.pathname !== "/" && parsed.pathname.endsWith("/")) {
+			parsed.pathname = parsed.pathname.slice(0, -1);
+		}
+
+		return `${parsed.host}${parsed.pathname}${parsed.search}`;
+	} catch {
+		return "";
+	}
 }

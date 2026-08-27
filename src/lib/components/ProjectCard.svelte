@@ -2,6 +2,7 @@
 	import { goto } from "$app/navigation";
 	import { projectTypes } from "$lib/i18n/contents/projects";
 	import { defineContent } from "$lib/i18n/locale.svelte";
+	import { extractHost } from "$lib/keywords/serpAnalytics";
 	import { formatPercent } from "$lib/numbers/formatPercent";
 	import type { User } from "$lib/server/db/schema";
 	import { context } from "$lib/stores/context.svelte";
@@ -49,7 +50,7 @@
 	} = $props();
 
 	const analysisData = $derived(
-		project.analysis?.data.find((item) => item.domain === project.domain),
+		project.analysis?.data.find((item) => item.domain === extractHost(project.domain)),
 	);
 </script>
 
@@ -142,7 +143,7 @@
 					<div class="text-sm">
 						{#if project.analysis && analysisData}
 							{formatPercent(
-								analysisData.volume / project.analysis.totalVolume,
+								analysisData.volume / (project.analysis.totalTraffic || 1),
 							)}
 						{:else}
 							<span class="w-5"> - </span>

@@ -3,13 +3,13 @@ import {
 	getKeywordClusterSummaries,
 	type KeywordClusterSummary,
 } from "$lib/keywords/getKeywordClusterSummaries";
-import { getWeightedVolume, POSITION_WEIGHTS_PERCENT } from "$lib/keywords/getWeightedVolume";
-import { getSimilarity } from "$lib/numbers/getSimilarity";
+import { getPivotClusters } from "$lib/keywords/pivotClustering";
+import { extractHost, getDomainMetrics, hostMatchesTarget } from "$lib/keywords/serpAnalytics";
 import { db } from "$lib/server/db";
 import { projects } from "$lib/server/db/schema";
 import { normalizeUrlForSimilarity } from "$lib/strings/normalizeUrlForSimilarity";
 import { DAY, MINUTE } from "$lib/timeUnits";
-import { and, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { getClickhouseClient } from "../index";
 import type { ClickhouseTable } from "../migrations";
 import { parseClickhouseCsvRows } from "../parseClickhouseCsvRow";
@@ -23,8 +23,12 @@ import {
 import { getReadySerpTasks } from "./getReadySerpTasks";
 import { selectLatestAnalysisPerDay } from "./selectLatestAnalysisPerDay";
 
-const ANALYSIS_DEPTH = env.SEARCH_DEPTH;
-const SIMILARITY_THRESHOLD = 0.6;
+const CONFIGURED_ANALYSIS_DEPTH = Number(env.SEARCH_DEPTH || 50);
+const ANALYSIS_DEPTH = Number.isFinite(CONFIGURED_ANALYSIS_DEPTH)
+	? Math.max(50, Math.floor(CONFIGURED_ANALYSIS_DEPTH))
+	: 50;
+const SIMILARITY_THRESHOLD = 0.5;
+const SIMILARITY_URL_LIMIT = 12;
 
 export type KeywordTuple =
 	| [name: string, volume: number]
@@ -46,12 +50,14 @@ export type KeywordAnalysisStatus = {
 
 export type AggregatedKeywordAnalysis = {
 	totalVolume: number;
+	totalTraffic: number;
 	keywordCount: number;
 	clusters: Array<KeywordClusterAnalysis>;
 	data: Array<ClickhouseTable.AggregatedKeywordAnalysisData>;
 };
 
 export type KeywordClusterAnalysis = KeywordClusterSummary & {
+	totalTraffic: number;
 	domains: Array<{
 		domain: string;
 		volume: number;
@@ -72,7 +78,7 @@ export type KeywordAnalysisResponseInput = Omit<
 >;
 export type KeywordAnalysisMinimalResponse = Pick<
 	ClickhouseTable.KeywordAnalysisResponse,
-	"keyword" | "domain" | "position"
+	"keyword" | "domain" | "position" | "type"
 >;
 
 type AnalysisMetadata = Pick<ClickhouseTable.KeywordAnalysis, "projectId" | "setId">;
@@ -501,6 +507,8 @@ export namespace KeywordsService {
 						tag: analysisId,
 						location_code: 2250,
 						language_code: "fr",
+						device: "desktop",
+						os: "windows",
 						depth: ANALYSIS_DEPTH,
 						priority,
 						...callbackOptions,
@@ -1027,11 +1035,13 @@ export namespace KeywordsService {
 	export async function getKeywordAnalysisResponses({
 		analysisId,
 		positionLimit,
+		resultType,
 		limit,
 		offset = 0,
 	}: {
 		analysisId: string;
 		positionLimit?: number;
+		resultType?: string;
 		limit?: number;
 		offset?: number;
 	}): Promise<Array<KeywordAnalysisMinimalResponse>> {
@@ -1039,13 +1049,21 @@ export namespace KeywordsService {
 
 		const response = await clickhouse.query({
 			query: `
-				SELECT keyword, position, domain
+				SELECT keyword, position, domain, type
 				FROM keywordAnalysisResponses
 				WHERE analysisId = {analysisId:String}
-				${positionLimit ? `AND position <= ${positionLimit} ORDER BY position ASC` : ""}
+				${positionLimit ? "AND position <= {positionLimit:UInt32}" : ""}
+				${resultType ? "AND positionCaseInsensitive(type, {resultType:String}) > 0" : ""}
+				ORDER BY position ASC
 				${limit === undefined ? "" : "LIMIT {limit:UInt64} OFFSET {offset:UInt64}"}
 			`,
-			query_params: { analysisId, limit: limit ?? 0, offset },
+			query_params: {
+				analysisId,
+				positionLimit: positionLimit ?? 0,
+				resultType: resultType ?? "",
+				limit: limit ?? 0,
+				offset,
+			},
 			format: "CSV",
 		});
 
@@ -1059,6 +1077,7 @@ export namespace KeywordsService {
 					keyword: "string",
 					position: "number",
 					domain: "string",
+					type: "string",
 				}),
 			);
 		}
@@ -1086,83 +1105,35 @@ export namespace KeywordsService {
 		const keywords = await getKeywords({ setId });
 		if (!keywords?.size) return;
 
-		const lastMonth = await getLastMonthAggregatedAnalysis({
-			projectId,
-			limit: 100,
-		});
+		const [lastMonth, data] = await Promise.all([
+			getLastMonthAggregatedAnalysis({ projectId }),
+			getKeywordAnalysisResponses({
+				analysisId,
+				positionLimit: Math.min(positionLimit ?? 10, 10),
+				resultType: "organic",
+			}),
+		]);
 
-		const data = await getKeywordAnalysisResponses({ analysisId, positionLimit });
-
-		const totalVolume = getTotalVolume(keywords);
-		const distinctKeywords = new Set<string>();
-		const distinctKeywordsByDomain = new Map<string, Map<string, number>>();
-		const dataByDomain: Record<string, Omit<AggregatedKeywordAnalysisData, "createdAt">> = {};
-
-		for (const item of data) {
-			let domainDistinctKeywords = distinctKeywordsByDomain.get(item.domain);
-			if (!domainDistinctKeywords) {
-				domainDistinctKeywords = new Map();
-				distinctKeywordsByDomain.set(item.domain, domainDistinctKeywords);
-			}
-
-			const volume = keywords.get(item.keyword);
-			if (!volume) {
-				console.error(`Keyword ${item.keyword} not found in keywords`);
-				continue;
-			}
-
-			const weightedVolume = getWeightedVolume(volume, item.position);
-
-			if (!distinctKeywords.has(item.keyword)) {
-				distinctKeywords.add(item.keyword);
-			}
-
-			const domainData = (dataByDomain[item.domain] ??= {
+		const metrics = getDomainMetrics(data, keywords);
+		const totalTraffic = metrics.reduce((total, item) => total + item.estimatedTraffic, 0);
+		const valuesToInsert: Array<Omit<AggregatedKeywordAnalysisData, "createdAt">> = metrics.map(
+			(item) => ({
 				analysisId,
 				domain: item.domain,
-				volume: 0,
-				topThreeKeywordCount: 0,
-				topTenKeywordCount: 0,
-				positionnedKeywordCount: 0,
+				volume: item.estimatedTraffic,
+				topThreeKeywordCount: item.topThreeKeywordCount,
+				topTenKeywordCount: item.topTenKeywordCount,
+				positionnedKeywordCount: item.positionedKeywordCount,
 				trend: undefined,
-			});
-
-			domainData.volume += weightedVolume;
-
-			const previousPosition = domainDistinctKeywords.get(item.keyword);
-
-			if (!previousPosition) {
-				domainDistinctKeywords.set(item.keyword, item.position);
-				domainData.positionnedKeywordCount += 1;
-				if (item.position <= 3) {
-					domainData.topThreeKeywordCount += 1;
-				}
-				if (item.position <= 10) {
-					domainData.topTenKeywordCount += 1;
-				}
-			} else if (item.position < previousPosition) {
-				domainDistinctKeywords.set(item.keyword, item.position);
-				if (item.position <= 3 && previousPosition > 3) {
-					domainData.topThreeKeywordCount += 1;
-				}
-				if (item.position <= 10 && previousPosition > 10) {
-					domainData.topTenKeywordCount += 1;
-				}
-			}
-		}
-
-		const valuesToInsert = Object.values(dataByDomain).sort((a, b) => b.volume - a.volume);
-
-		for (const item of valuesToInsert) {
-			item.volume = Math.round(item.volume);
-		}
+			}),
+		);
 
 		if (lastMonth) {
 			for (const valueToInsert of valuesToInsert) {
 				const domain = valueToInsert.domain;
-				const domainLastMonth = lastMonth.data.find((item) => item.domain === domain);
+				const domainLastMonth = lastMonth.data.find((item) => extractHost(item.domain) === domain);
 				if (domainLastMonth) {
-					const currentVolumeShare = valueToInsert.volume / totalVolume;
+					const currentVolumeShare = totalTraffic ? valueToInsert.volume / totalTraffic : 0;
 					const lastMonthVolumeShare = domainLastMonth.volume / lastMonth.totalVolume;
 					valueToInsert.trend = currentVolumeShare - lastMonthVolumeShare;
 				}
@@ -1171,11 +1142,13 @@ export namespace KeywordsService {
 
 		const clickhouse = getClickhouseClient();
 
-		await clickhouse.insert({
-			table: "aggregatedKeywordAnalysisData",
-			values: valuesToInsert,
-			format: "JSONEachRow",
-		});
+		if (valuesToInsert.length > 0) {
+			await clickhouse.insert({
+				table: "aggregatedKeywordAnalysisData",
+				values: valuesToInsert,
+				format: "JSONEachRow",
+			});
+		}
 	}
 
 	/**
@@ -1239,20 +1212,14 @@ export namespace KeywordsService {
 
 		const analysis = await getAnalysisMetadata({ analysisId });
 		if (!analysis) return null;
-		const { setId } = analysis;
-
-		const keywords = await getKeywords({ setId });
-		if (!keywords) return null;
-
-		const totalVolume = getTotalVolume(keywords);
-
 		const data = await getAggregatedAnalysisResults({
 			analysisId,
 			domain,
 			limit,
 		});
 
-		return data ? { totalVolume, data } : null;
+		const totalTraffic = data?.reduce((total, item) => total + item.volume, 0) ?? 0;
+		return data ? { totalVolume: totalTraffic, data } : null;
 	}
 
 	/**
@@ -1279,7 +1246,6 @@ export namespace KeywordsService {
 		const [data, clusters] = await Promise.all([
 			getAggregatedAnalysisResults({
 				analysisId,
-				limit: 100,
 			}),
 			clusterSummaries.length >= 2
 				? getAggregatedAnalysisResultsByCluster({
@@ -1287,19 +1253,23 @@ export namespace KeywordsService {
 						setId: analysis.setId,
 						clusters: clusterSummaries,
 					})
-				: Promise.resolve(clusterSummaries.map((cluster) => ({ ...cluster, domains: [] }))),
+				: Promise.resolve(
+						clusterSummaries.map((cluster) => ({ ...cluster, totalTraffic: 0, domains: [] })),
+					),
 		]);
 		if (!data) return null;
+		const totalTraffic = data.reduce((total, item) => total + item.volume, 0);
 
 		return {
 			keywordCount: keywords.size,
 			totalVolume,
+			totalTraffic,
 			clusters,
-			data,
+			data: data.slice(0, 100),
 		};
 	}
 
-	/** Return the latest weighted share-of-voice volume grouped by cluster and domain. */
+	/** Return the latest estimated organic traffic grouped by cluster and domain. */
 	async function getAggregatedAnalysisResultsByCluster({
 		analysisId,
 		setId,
@@ -1310,46 +1280,68 @@ export namespace KeywordsService {
 		clusters: Array<KeywordClusterSummary>;
 	}): Promise<Array<KeywordClusterAnalysis>> {
 		const clickhouse = getClickhouseClient();
-		const positionWeightSql = POSITION_WEIGHTS_PERCENT.flatMap((weight, index) => [
-			`responses.position = ${index + 1}`,
-			(weight / 100).toFixed(4),
-		]).join(", ");
 		const response = await clickhouse.query({
 			query: `
 				SELECT
 					trim(keywords.clusters) AS cluster,
+					responses.keyword AS keyword,
+					keywords.volume AS keywordVolume,
 					responses.domain AS domain,
-					round(sum(keywords.volume * multiIf(${positionWeightSql}, 0.0015))) AS volume
+					responses.position AS position,
+					responses.type AS type
 				FROM keywordAnalysisResponses AS responses
 				INNER JOIN keywords
 					ON keywords.setId = {setId:UUID} AND keywords.name = responses.keyword
 				WHERE responses.analysisId = {analysisId:String}
 					AND notEmpty(trim(keywords.clusters))
-				GROUP BY cluster, domain
-				ORDER BY cluster ASC, volume DESC
+					AND responses.position <= 10
+				ORDER BY cluster ASC, responses.position ASC
 			`,
 			query_params: { analysisId, setId },
 			format: "CSV",
 		});
 
-		const domainsByCluster = new Map<string, Array<{ domain: string; volume: number }>>();
+		const rowsByCluster = new Map<
+			string,
+			{
+				volumes: Map<string, number>;
+				rows: Array<{ keyword: string; domain: string; position: number; type: string }>;
+			}
+		>();
 		for await (const rows of response.stream()) {
 			const parsedRows = parseClickhouseCsvRows(rows, {
 				cluster: "string",
+				keyword: "string",
+				keywordVolume: "number",
 				domain: "string",
-				volume: "number",
+				position: "number",
+				type: "string",
 			});
 			for (const row of parsedRows) {
-				const domains = domainsByCluster.get(row.cluster) ?? [];
-				domains.push({ domain: row.domain, volume: row.volume });
-				domainsByCluster.set(row.cluster, domains);
+				const data = rowsByCluster.get(row.cluster) ?? {
+					volumes: new Map<string, number>(),
+					rows: [],
+				};
+				data.volumes.set(row.keyword, row.keywordVolume);
+				data.rows.push(row);
+				rowsByCluster.set(row.cluster, data);
 			}
 		}
 
-		return clusters.map((cluster) => ({
-			...cluster,
-			domains: domainsByCluster.get(cluster.name) ?? [],
-		}));
+		return clusters.map((cluster) => {
+			const clusterData = rowsByCluster.get(cluster.name);
+			const domains = clusterData
+				? getDomainMetrics(clusterData.rows, clusterData.volumes).map((item) => ({
+						domain: item.domain,
+						volume: item.estimatedTraffic,
+					}))
+				: [];
+			return {
+				...cluster,
+				totalTraffic: domains.reduce((total, item) => total + item.volume, 0),
+				domains,
+			};
+		});
 	}
 
 	/**
@@ -1388,15 +1380,10 @@ export namespace KeywordsService {
 				),
 				analysisTotals AS
 				(
-					SELECT setId, sum(volume) AS totalVolume
-					FROM keywords
-					WHERE setId IN
-					(
-						SELECT setId
-						FROM keywordAnalysis
-						WHERE id IN {analysisIds:Array(UUID)}
-					)
-					GROUP BY setId
+					SELECT analysisId, sum(volume) AS totalVolume
+					FROM aggregatedKeywordAnalysisData
+					WHERE analysisId IN {analysisIds:Array(UUID)}
+					GROUP BY analysisId
 				)
 				SELECT
 					analysis.createdAt AS createdAt,
@@ -1405,7 +1392,7 @@ export namespace KeywordsService {
 					analysisTotals.totalVolume AS totalVolume
 				FROM aggregatedKeywordAnalysisData AS aggregated
 				INNER JOIN keywordAnalysis AS analysis ON analysis.id = aggregated.analysisId
-				INNER JOIN analysisTotals ON analysisTotals.setId = analysis.setId
+				INNER JOIN analysisTotals ON analysisTotals.analysisId = aggregated.analysisId
 				WHERE aggregated.analysisId IN {analysisIds:Array(UUID)}
 				${domain ? "AND aggregated.domain = {domain:String}" : "AND aggregated.domain IN (SELECT domain FROM selectedDomains)"}
 				ORDER BY analysis.createdAt ASC, aggregated.domain ASC
@@ -1506,25 +1493,31 @@ export namespace KeywordsService {
 		const keywords = await getKeywords({ setId });
 		if (!keywords?.size) return null;
 		const keywordDetails = await getKeywordDetails(setId);
+		const project = await db.query.projects.findFirst({
+			columns: { domain: true },
+			where: and(eq(projects.id, projectId), isNull(projects.deletedAt)),
+		});
+		const targetDomain = extractHost(project?.domain ?? "");
 
 		const clickhouse = getClickhouseClient();
 
 		const response = await clickhouse.query({
 			query: `
-				SELECT keyword, domain, url, position
+				SELECT keyword, domain, url, position, type
 				FROM keywordAnalysisResponses
 				WHERE analysisId = {analysisId: String}
-				AND position <= 10 ORDER BY position ASC
+					AND positionCaseInsensitive(type, 'organic') > 0
+				ORDER BY position ASC
 			`,
 			query_params: { analysisId },
 			format: "CSV",
 		});
 
 		const stream = response.stream();
-		const dataByKeyword: Record<
+		const dataByKeyword = new Map<
 			string,
-			Array<Pick<ClickhouseTable.KeywordAnalysisResponse, "domain" | "url" | "position">>
-		> = {};
+			Array<Pick<ClickhouseTable.KeywordAnalysisResponse, "domain" | "url" | "position" | "type">>
+		>([...keywords.keys()].map((keyword) => [keyword, []]));
 
 		for await (const rows of stream) {
 			const parsedRows = parseClickhouseCsvRows(rows, {
@@ -1532,94 +1525,72 @@ export namespace KeywordsService {
 				domain: "string",
 				url: "string",
 				position: "number",
+				type: "string",
 			});
-			for (const { keyword, domain, url, position } of parsedRows) {
-				const dataForKeyword = (dataByKeyword[keyword] ??= []);
-				dataForKeyword.push({ domain, url, position });
+			for (const { keyword, domain, url, position, type } of parsedRows) {
+				dataByKeyword.get(keyword)?.push({ domain, url, position, type });
 			}
 		}
 
-		const clusters: Array<KeywordCluster> = [];
-
-		// Strategy 1: Pre-compute deduplicated items with normalized URLs
-		const deduplicatedDataByKeyword = new Map<string, Array<KeywordClusterItem>>();
 		const normalizedUrlSetsByKeyword = new Map<string, Set<string>>();
-
-		for (const keyword in dataByKeyword) {
-			const items = dataByKeyword[keyword]!;
-			const deduplicatedItems: Array<KeywordClusterItem> = [];
+		for (const [keyword, items] of dataByKeyword) {
 			const normalizedUrls = new Set<string>();
-
 			for (const item of items) {
+				if (item.type.toLowerCase() !== "organic") continue;
 				const normalizedUrl = normalizeUrlForSimilarity(item.url);
-				if (!normalizedUrls.has(normalizedUrl)) {
-					deduplicatedItems.push({ ...item, url: normalizedUrl });
-					normalizedUrls.add(normalizedUrl);
-				}
+				if (normalizedUrl) normalizedUrls.add(normalizedUrl);
+				if (normalizedUrls.size >= SIMILARITY_URL_LIMIT) break;
 			}
-
-			deduplicatedDataByKeyword.set(keyword, deduplicatedItems);
 			normalizedUrlSetsByKeyword.set(keyword, normalizedUrls);
 		}
 
-		// Strategy 2: Use Set to track clustered keywords for O(1) lookup
-		const clusteredKeywords = new Set<string>();
+		const keywordNamesByCluster = getPivotClusters(
+			[...keywords].map(([keyword, volume]) => ({
+				keyword,
+				volume,
+				urls: normalizedUrlSetsByKeyword.get(keyword) ?? new Set<string>(),
+			})),
+			SIMILARITY_THRESHOLD,
+		);
 
-		for (const keyword in dataByKeyword) {
-			if (clusteredKeywords.has(keyword)) {
-				continue;
-			}
+		const clusters = keywordNamesByCluster.map((keywordNames): KeywordCluster => {
+			const sortedKeywordNames = keywordNames.sort(
+				(a, b) => (keywords.get(b) ?? 0) - (keywords.get(a) ?? 0) || a.localeCompare(b),
+			);
+			const mainKeyword = sortedKeywordNames[0]!;
+			const bestPositionByUrl = new Map<string, number>();
 
-			const items = deduplicatedDataByKeyword.get(keyword)!;
-			const normalizedUrlSet = normalizedUrlSetsByKeyword.get(keyword)!;
-
-			const cluster: KeywordCluster = [
-				{
-					keyword,
-					items,
-					volume: keywords.get(keyword) ?? 0,
-					clusters: keywordDetails.get(keyword)?.clusters ?? "",
-				},
-			];
-
-			clusteredKeywords.add(keyword);
-
-			for (const otherKeyword in dataByKeyword) {
-				if (keyword === otherKeyword || clusteredKeywords.has(otherKeyword)) {
+			for (const item of dataByKeyword.get(mainKeyword) ?? []) {
+				if (
+					!targetDomain ||
+					(!hostMatchesTarget(item.domain, targetDomain) &&
+						!hostMatchesTarget(item.url, targetDomain))
+				) {
 					continue;
 				}
-
-				const otherItems = deduplicatedDataByKeyword.get(otherKeyword)!;
-				const otherNormalizedUrlSet = normalizedUrlSetsByKeyword.get(otherKeyword)!;
-
-				// Strategy 3: Use pre-computed normalized URL sets for similarity
-				const similarity = getSimilarity(normalizedUrlSet, otherNormalizedUrlSet);
-
-				if (similarity >= SIMILARITY_THRESHOLD) {
-					// Build set of URLs already in cluster for efficient filtering
-					const urlsInCluster = new Set<string>();
-					for (const clusterItem of cluster) {
-						for (const item of clusterItem.items) {
-							urlsInCluster.add(item.url);
-						}
-					}
-
-					cluster.push({
-						keyword: otherKeyword,
-						items: otherItems.filter((item) => !urlsInCluster.has(item.url)),
-						volume: keywords.get(otherKeyword) ?? 0,
-						clusters: keywordDetails.get(otherKeyword)?.clusters ?? "",
-					});
-
-					clusteredKeywords.add(otherKeyword);
+				const previousPosition = bestPositionByUrl.get(item.url);
+				if (previousPosition === undefined || item.position < previousPosition) {
+					bestPositionByUrl.set(item.url, item.position);
 				}
 			}
 
-			cluster.sort((a, b) => b.volume - a.volume);
-			clusters.push(cluster);
-		}
+			const positionedItems: KeywordClusterItem[] = [...bestPositionByUrl]
+				.map(([url, position]) => ({ domain: targetDomain, url, position }))
+				.sort((a, b) => a.position - b.position || a.url.localeCompare(b.url));
 
-		clusters.sort((a, b) => getClusterVolume(b) - getClusterVolume(a));
+			return sortedKeywordNames.map((keyword, index) => ({
+				keyword,
+				items: index === 0 ? positionedItems : [],
+				volume: keywords.get(keyword) ?? 0,
+				clusters: keywordDetails.get(keyword)?.clusters ?? "",
+			}));
+		});
+
+		clusters.sort(
+			(a, b) =>
+				getClusterVolume(b) - getClusterVolume(a) ||
+				(a[0]?.keyword ?? "").localeCompare(b[0]?.keyword ?? ""),
+		);
 
 		return clusters;
 	}

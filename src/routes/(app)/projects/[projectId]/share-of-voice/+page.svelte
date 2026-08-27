@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Loader from "$lib/components/Loader.svelte";
 	import { defineContent } from "$lib/i18n/locale.svelte";
+	import { extractHost } from "$lib/keywords/serpAnalytics";
 	import type { AggregatedKeywordAnalysisData } from "$lib/server/clickhouse/services/keywords";
 	import { context } from "$lib/stores/context.svelte";
 	import { projectContext } from "$lib/stores/projectContext.svelte";
@@ -25,7 +26,8 @@
 		},
 	});
 
-	let visibleDomains = new SvelteSet<string>([context.project!.domain]);
+	const projectDomain = extractHost(context.project!.domain);
+	let visibleDomains = new SvelteSet<string>([projectDomain]);
 </script>
 
 {#await projectContext.analysisResultsWithTrendQuery}
@@ -37,9 +39,9 @@
 		</div>
 	{:else}
 		{@const client: AggregatedKeywordAnalysisData = analysisResultsWithTrend.data.find(
-			(item) => item.domain === context.project!.domain,
+			(item) => item.domain === projectDomain,
 		) ?? {
-			domain: context.project!.domain,
+			domain: projectDomain,
 			topThreeKeywordCount: 0,
 			topTenKeywordCount: 0,
 			positionnedKeywordCount: 0,

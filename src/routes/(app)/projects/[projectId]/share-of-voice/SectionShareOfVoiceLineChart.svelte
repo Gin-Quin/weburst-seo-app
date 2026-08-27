@@ -24,11 +24,11 @@
 
 	let {
 		visibleDomains,
-		totalVolume,
+		totalTraffic,
 		client,
 	}: {
 		visibleDomains: SvelteSet<string>;
-		totalVolume: number;
+		totalTraffic: number;
 		client: ClickhouseTable.AggregatedKeywordAnalysisData;
 	} = $props();
 
@@ -77,7 +77,7 @@
 				item = { date: new Date(analysis.createdAt) };
 				rowsByDate.set(key, item);
 			}
-			item[analysis.domain] = (analysis.volume / analysis.totalVolume) * 100;
+			item[analysis.domain] = (analysis.volume / (analysis.totalVolume || 1)) * 100;
 		}
 
 		for (const item of rowsByDate.values()) {
@@ -102,7 +102,7 @@
 <div class="row justify-between items-center">
 	<div class="row items-center gap-2">
 		<div class="text-4xl font-bold">
-			{formatPercent(client.volume / totalVolume, {
+			{formatPercent(client.volume / (totalTraffic || 1), {
 				maximumFractionDigits: 0,
 			})}
 		</div>

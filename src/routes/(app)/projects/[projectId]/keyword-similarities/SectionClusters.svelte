@@ -4,7 +4,6 @@
 	import { defineContent } from "$lib/i18n/locale.svelte";
 	import { groupSimilarityResultsByCluster } from "$lib/keywords/groupSimilarityResultsByCluster";
 	import type { KeywordCluster } from "$lib/server/clickhouse/services/keywords";
-	import { context } from "$lib/stores/context.svelte";
 
 	const content = defineContent({
 		en: {
@@ -154,9 +153,7 @@
 									? "whitespace-normal text-center text-[13px]"
 									: "text-center text-[13px]"}
 							>
-								{@const items = cluster
-									.flatMap((cluster) => cluster.items)
-									.filter((item) => item.domain == context.project!.domain)}
+								{@const items = cluster.flatMap((cluster) => cluster.items)}
 								<div class="col items-center gap-1">
 									{#if items.length == 0}
 										<div class="center text-[#777] w-full">-</div>

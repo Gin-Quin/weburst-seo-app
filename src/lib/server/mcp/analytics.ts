@@ -1,3 +1,5 @@
+import { extractHost } from "$lib/keywords/serpAnalytics";
+
 type ProjectReference = {
 	id: string;
 	name: string;
@@ -19,12 +21,14 @@ type ShareOfVoiceCluster = {
 	name: string;
 	keywordCount: number;
 	totalVolume: number;
+	totalTraffic: number;
 	domains: Array<{ domain: string; volume: number }>;
 };
 
 type ShareOfVoiceAnalysis = {
 	keywordCount: number;
 	totalVolume: number;
+	totalTraffic: number;
 	clusters: ShareOfVoiceCluster[];
 	data: ShareOfVoiceRow[];
 };
@@ -61,9 +65,10 @@ export function formatShareOfVoiceAnalysis({
 		};
 	}
 
-	const selectedLatestRows = selectDomains(latest.data, project.domain, domainLimit, () => ({
+	const projectDomain = extractHost(project.domain);
+	const selectedLatestRows = selectDomains(latest.data, projectDomain, domainLimit, () => ({
 		...latest.data[0]!,
-		domain: project.domain,
+		domain: projectDomain,
 		volume: 0,
 		topThreeKeywordCount: 0,
 		topTenKeywordCount: 0,
@@ -80,13 +85,19 @@ export function formatShareOfVoiceAnalysis({
 	const historyDateSet = new Set(historyDates);
 	const historyByDate = new Map<
 		string,
-		Array<{ domain: string; weightedVisibilityVolume: number; shareOfVoicePercent: number }>
+		Array<{
+			domain: string;
+			estimatedTraffic: number;
+			weightedVisibilityVolume: number;
+			shareOfVoicePercent: number;
+		}>
 	>();
 	for (const row of history) {
 		if (!selectedDomains.has(row.domain) || !historyDateSet.has(row.createdAt)) continue;
 		const entries = historyByDate.get(row.createdAt) ?? [];
 		entries.push({
 			domain: row.domain,
+			estimatedTraffic: row.volume,
 			weightedVisibilityVolume: row.volume,
 			shareOfVoicePercent: toPercent(row.volume, row.totalVolume),
 		});
@@ -98,7 +109,7 @@ export function formatShareOfVoiceAnalysis({
 		status: "ready" as const,
 		methodology: {
 			shareOfVoice:
-				"Weighted visibility volume divided by the total search volume of targeted keywords.",
+				"Estimated organic traffic divided by the estimated traffic of all top-10 domains.",
 			trend: "Percentage-point change versus the reference analysis from about one month earlier.",
 		},
 		analysis: {
@@ -110,9 +121,10 @@ export function formatShareOfVoiceAnalysis({
 		domains: selectedLatestRows.map((row) => ({
 			rank: latest.data.findIndex(({ domain }) => domain === row.domain) + 1 || null,
 			domain: row.domain,
-			isProjectDomain: row.domain === project.domain,
+			isProjectDomain: row.domain === projectDomain,
+			estimatedTraffic: row.volume,
 			weightedVisibilityVolume: row.volume,
-			shareOfVoicePercent: toPercent(row.volume, latest.totalVolume),
+			shareOfVoicePercent: toPercent(row.volume, latest.totalTraffic),
 			trendPercentagePoints: row.trend === undefined ? null : round(row.trend * 100),
 			positionedKeywordCount: row.positionnedKeywordCount,
 			topTenKeywordCount: row.topTenKeywordCount,
@@ -122,14 +134,15 @@ export function formatShareOfVoiceAnalysis({
 			name: cluster.name,
 			keywordCount: cluster.keywordCount,
 			totalSearchVolume: cluster.totalVolume,
-			domains: selectDomains(cluster.domains, project.domain, domainLimit, () => ({
-				domain: project.domain,
+			domains: selectDomains(cluster.domains, projectDomain, domainLimit, () => ({
+				domain: projectDomain,
 				volume: 0,
 			})).map((row) => ({
 				domain: row.domain,
-				isProjectDomain: row.domain === project.domain,
+				isProjectDomain: row.domain === projectDomain,
+				estimatedTraffic: row.volume,
 				weightedVisibilityVolume: row.volume,
-				shareOfVoicePercent: toPercent(row.volume, cluster.totalVolume),
+				shareOfVoicePercent: toPercent(row.volume, cluster.totalTraffic),
 			})),
 		})),
 		history: historyDates.map((analyzedAt) => ({
@@ -169,11 +182,11 @@ export function formatKeywordSimilarityAnalysis({
 		project,
 		status: "ready" as const,
 		methodology: {
-			serpDepth: 10,
-			similarityThresholdPercent: 60,
-			formula: "Shared normalized top-10 SERP URLs divided by the size of the smaller URL set.",
+			serpDepth: 12,
+			similarityThresholdPercent: 50,
+			formula: "Sørensen–Dice coefficient over normalized top-12 organic SERP URLs.",
 			grouping:
-				"Keywords meeting the threshold are grouped once, then each group is ordered by search volume.",
+				"Volume-ordered pivots define clusters, then each keyword is attached to its most similar eligible pivot.",
 		},
 		analysis: analysis ? { id: analysis.id, analyzedAt: analysis.createdAt } : null,
 		clusterCount: clusters.length,

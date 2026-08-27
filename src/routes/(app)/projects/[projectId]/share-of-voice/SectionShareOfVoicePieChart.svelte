@@ -26,30 +26,30 @@
 	let {
 		data,
 		visibleDomains,
-		totalVolume,
+		totalTraffic,
 		client,
 	}: {
 		data: Array<ClickhouseTable.AggregatedKeywordAnalysisData>;
 		visibleDomains: SvelteSet<string>;
-		totalVolume: number;
+		totalTraffic: number;
 		client: ClickhouseTable.AggregatedKeywordAnalysisData;
 	} = $props();
 
 	const { pieChartData, pieChartConfig } = $derived(
 		getPieChartData({
 			data,
-			totalVolume,
+			totalTraffic,
 			visibleDomains,
 		}),
 	);
 
 	function getPieChartData({
 		data,
-		totalVolume,
+		totalTraffic,
 		visibleDomains,
 	}: {
 		data: Array<ClickhouseTable.AggregatedKeywordAnalysisData>;
-		totalVolume: number;
+		totalTraffic: number;
 		visibleDomains: SvelteSet<string>;
 	}): { pieChartData: Array<PieChartData>; pieChartConfig: Chart.ChartConfig } {
 		let visibleDomainsVolumePercent = 0;
@@ -61,7 +61,7 @@
 		for (const domain of visibleDomains) {
 			const domainData = data.find((item) => item.domain === domain);
 			const volumePercent = domainData
-				? (domainData.volume / totalVolume) * 100
+				? (domainData.volume / (totalTraffic || 1)) * 100
 				: 0;
 			visibleDomainsVolumePercent += volumePercent;
 
@@ -104,7 +104,7 @@
 		<div class="absolute col center">
 			<Trend trend={client.trend} />
 			<div class="text-5xl font-bold">
-				{formatPercent(client.volume / totalVolume, {
+				{formatPercent(client.volume / (totalTraffic || 1), {
 					maximumFractionDigits: 0,
 				})}
 			</div>

@@ -35,7 +35,7 @@ export function getClusterBarChartData({
 						(total, domain) => (domain.domain === clientDomain ? total : total + domain.volume),
 						0,
 					);
-			const shareDivisor = cluster.totalVolume || 1;
+			const shareDivisor = cluster.totalTraffic || 1;
 
 			return {
 				name: cluster.name,

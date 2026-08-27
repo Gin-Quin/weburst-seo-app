@@ -3,5 +3,10 @@ export function getSimilarity<T>(list1: Set<T>, list2: Set<T>): number {
 		return 0;
 	}
 
-	return list1.intersection(list2).size / Math.min(list1.size, list2.size);
+	let intersectionSize = 0;
+	for (const item of list1) {
+		if (list2.has(item)) intersectionSize += 1;
+	}
+
+	return (2 * intersectionSize) / (list1.size + list2.size);
 }

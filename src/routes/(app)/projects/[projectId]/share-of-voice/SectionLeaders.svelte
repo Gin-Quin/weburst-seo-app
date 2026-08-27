@@ -36,7 +36,7 @@
 		client: AggregatedKeywordAnalysisData;
 	} = $props();
 
-	const { data, totalVolume } = $derived(analysisResultsWithTrend);
+	const { data, totalTraffic } = $derived(analysisResultsWithTrend);
 
 	function toggleTop10Domains() {
 		const allTop10DomainsSelected = data
@@ -108,7 +108,7 @@
 							{row.domain}
 						</Table.Cell>
 						<Table.Cell class="h-full center gap-1 text-center">
-							{formatPercent(row.volume / totalVolume, {
+							{formatPercent(row.volume / (totalTraffic || 1), {
 								maximumFractionDigits: 0,
 							})}
 							<Trend trend={row.trend} size="xs" />

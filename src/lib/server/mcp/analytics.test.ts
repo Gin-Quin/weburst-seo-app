@@ -12,11 +12,13 @@ describe("MCP share-of-voice formatting", () => {
 			latest: {
 				keywordCount: 12,
 				totalVolume: 1_000,
+				totalTraffic: 1_000,
 				clusters: [
 					{
 						name: "CRM",
 						keywordCount: 4,
 						totalVolume: 400,
+						totalTraffic: 300,
 						domains: [
 							{ domain: "competitor.test", volume: 200 },
 							{ domain: "example.com", volume: 100 },
@@ -76,6 +78,7 @@ describe("MCP share-of-voice formatting", () => {
 				domains: [
 					{
 						domain: "example.com",
+						estimatedTraffic: 250,
 						weightedVisibilityVolume: 250,
 						shareOfVoicePercent: 25,
 					},
@@ -92,6 +95,7 @@ describe("MCP share-of-voice formatting", () => {
 			latest: {
 				keywordCount: 1,
 				totalVolume: 100,
+				totalTraffic: 100,
 				clusters: [],
 				data: [
 					{

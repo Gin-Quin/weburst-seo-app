@@ -1,4 +1,5 @@
 import { canViewProjectContents } from "$lib/contents/access";
+import { extractHost } from "$lib/keywords/serpAnalytics";
 import { canAccessProject } from "$lib/server/auth/authorization";
 import { db } from "$lib/server/db";
 import {
@@ -105,12 +106,12 @@ export async function getMcpProjectShareOfVoice(
 			domainLimit: options.domainLimit,
 		});
 		const projectDomainRank =
-			latest?.data.findIndex(({ domain }) => domain === project.domain) ?? -1;
+			latest?.data.findIndex(({ domain }) => domain === extractHost(project.domain)) ?? -1;
 		const projectDomainHistory =
 			projectDomainRank === -1 || projectDomainRank >= options.domainLimit
 				? await KeywordsService.getAllAggregatedAnalysisResults({
 						projectId,
-						domain: project.domain,
+						domain: extractHost(project.domain),
 					})
 				: [];
 		history = [

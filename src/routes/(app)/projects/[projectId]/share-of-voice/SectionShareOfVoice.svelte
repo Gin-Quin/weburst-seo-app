@@ -41,7 +41,7 @@
 		client: ClickhouseTable.AggregatedKeywordAnalysisData;
 	} = $props();
 
-	const { data, totalVolume, clusters } = $derived(analysisResultsWithTrend);
+	const { data, totalTraffic, clusters } = $derived(analysisResultsWithTrend);
 
 	let chartType = $state<"line" | "pie" | "bar">("pie");
 
@@ -99,11 +99,11 @@
 
 	<main class="col justify-stretch w-full grow gap-1">
 		{#if chartType == "line"}
-			<SectionShareOfVoiceLineChart {totalVolume} {visibleDomains} {client} />
+			<SectionShareOfVoiceLineChart {totalTraffic} {visibleDomains} {client} />
 		{:else if chartType == "pie"}
 			<SectionShareOfVoicePieChart
 				{data}
-				{totalVolume}
+				{totalTraffic}
 				{visibleDomains}
 				{client}
 			/>

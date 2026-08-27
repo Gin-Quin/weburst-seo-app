@@ -6,6 +6,7 @@ const clusters = [
 		name: "SEO",
 		keywordCount: 2,
 		totalVolume: 1_000,
+		totalTraffic: 750,
 		domains: [
 			{ domain: "client.test", volume: 400 },
 			{ domain: "first.test", volume: 250 },
@@ -23,10 +24,8 @@ describe("getClusterBarChartData", () => {
 		});
 
 		expect(result.comparisonDomain).toBe("first.test");
-		expect(result.data[0]).toMatchObject({
-			clientShare: 40,
-			comparisonShare: 25,
-		});
+		expect(result.data[0]?.clientShare).toBeCloseTo(400 / 7.5);
+		expect(result.data[0]?.comparisonShare).toBeCloseTo(250 / 7.5);
 	});
 
 	test("compares the client with the sum of all competitors otherwise", () => {
@@ -37,10 +36,8 @@ describe("getClusterBarChartData", () => {
 		});
 
 		expect(result.comparisonDomain).toBeUndefined();
-		expect(result.data[0]).toMatchObject({
-			clientShare: 40,
-			comparisonShare: 35,
-		});
+		expect(result.data[0]?.clientShare).toBeCloseTo(400 / 7.5);
+		expect(result.data[0]?.comparisonShare).toBeCloseTo(350 / 7.5);
 	});
 
 	test("uses all competitors when none is selected", () => {
