@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Trend from "$lib/components/Trend.svelte";
 	import * as Chart from "$lib/components/ui/chart/index.js";
+	import { chartColors } from "$lib/charts/chartColors";
 	import { defineContent } from "$lib/i18n/locale.svelte";
 	import { formatPercent } from "$lib/numbers/formatPercent";
 	import type { ClickhouseTable } from "$lib/server/clickhouse/migrations";
@@ -21,19 +22,6 @@
 		volume: number;
 		color: string;
 	};
-
-	const chartColors: Array<string> = [
-		"var(--color-chart-red)",
-		"var(--color-chart-orange)",
-		"var(--color-chart-amber)",
-		"var(--color-chart-yellow)",
-		"var(--color-chart-lime)",
-		"var(--color-chart-green)",
-		"var(--color-chart-cyan)",
-		"var(--color-chart-blue)",
-		"var(--color-chart-indigo)",
-		"var(--color-chart-magenta)",
-	];
 
 	let {
 		data,

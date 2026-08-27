@@ -3,6 +3,7 @@
 	import { defineContent } from "$lib/i18n/locale.svelte";
 	import { context, setContextUser } from "$lib/stores/context.svelte";
 	import IconEnvelopeRegular from "phosphor-icons-svelte/IconEnvelopeRegular.svelte";
+	import IconBuildingsRegular from "phosphor-icons-svelte/IconBuildingsRegular.svelte";
 	import IconUserCheckRegular from "phosphor-icons-svelte/IconUserCheckRegular.svelte";
 	import IconUserRegular from "phosphor-icons-svelte/IconUserRegular.svelte";
 	import { createUserByAdmin, updateCurrentUser } from "../api/users.remote";
@@ -18,13 +19,15 @@
 	} = $props();
 
 	const content = defineContent({
-		en: {
+			en: {
 			title: "Account Settings",
 			createTitle: "Create a new user",
 			firstName: "First Name",
 			lastName: "Last Name",
 			email: "Email Address",
 			role: "Profile Type",
+			client: "Client",
+			selectClient: "Select a client",
 			save: "Save",
 			create: "Create user",
 			cancel: "Cancel",
@@ -40,6 +43,8 @@
 			lastName: "Nom",
 			email: "Adresse email",
 			role: "Type de profil",
+			client: "Client",
+			selectClient: "Choisir un client",
 			save: "Enregistrer",
 			create: "Créer l'utilisateur",
 			cancel: "Annuler",
@@ -49,7 +54,7 @@
 			userUpdateFailed: "Impossible de mettre à jour l'utilisateur",
 		},
 	});
-	const creatableRoles = ["admin", "project_manager"] as const;
+	const creatableRoles = ["admin", "project_manager", "client"] as const;
 
 	let createMode = $state(false);
 	let updating = $state(false);
@@ -63,10 +68,15 @@
 		email: "",
 		role: "project_manager",
 	});
+	let selectedClientId = $state("");
 
 	const hasValidChanges = $derived(
 		createMode
-			? newUser.firstName && newUser.lastName && newUser.email && newUser.role
+			? newUser.firstName &&
+				newUser.lastName &&
+				newUser.email &&
+				newUser.role &&
+				(newUser.role !== "client" || selectedClientId)
 			: updates.firstName &&
 					updates.lastName &&
 					(updates.firstName !== context.user!.firstName ||
@@ -76,6 +86,7 @@
 	openUserDialog = (mode = "account") => {
 		createMode = mode === "create";
 		if (createMode) {
+			selectedClientId = "";
 			newUser = {
 				firstName: "",
 				lastName: "",
@@ -93,7 +104,10 @@
 		updating = true;
 		if (createMode) {
 			try {
-				await createUserByAdmin(newUser);
+				await createUserByAdmin({
+					...newUser,
+					clientIds: newUser.role === "client" ? [selectedClientId] : [],
+				});
 				toast.success($content.userCreated, { richColors: true });
 			} catch (error) {
 				toast.error($content.userCreationFailed, { richColors: true });
@@ -227,9 +241,9 @@
 
 					<div class="field grow">
 						<div class="field-title">{$content.role}</div>
-						<label class="select">
+						<label class="select control-size-3 w-full">
 							<IconUserCheckRegular class="icon" />
-							<select class="select" bind:value={newUser.role}>
+							<select class="select control-size-3" bind:value={newUser.role}>
 								{#each creatableRoles as role}
 									<option value={role}>{$userRoles[role]}</option>
 								{/each}
@@ -237,6 +251,25 @@
 						</label>
 					</div>
 				</div>
+
+				{#if newUser.role === "client"}
+					<div class="field w-full">
+						<div class="field-title">{$content.client}</div>
+						<label class="select control-size-3 w-full">
+							<IconBuildingsRegular class="icon" />
+							<select
+								class="select control-size-3"
+								bind:value={selectedClientId}
+								required
+							>
+								<option value="" disabled>{$content.selectClient}</option>
+								{#each context.clients ?? [] as client (client.id)}
+									<option value={client.id}>{client.name}</option>
+								{/each}
+							</select>
+						</label>
+					</div>
+				{/if}
 			{/if}
 
 			<div class="grid grid-cols-2 gap-3 pt-2">

@@ -2,6 +2,7 @@
 	import Loader from "$lib/components/Loader.svelte";
 	import Trend from "$lib/components/Trend.svelte";
 	import * as Chart from "$lib/components/ui/chart/index.js";
+	import { chartColors } from "$lib/charts/chartColors";
 	import { locale } from "$lib/i18n/locale.svelte";
 	import { formatPercent } from "$lib/numbers/formatPercent";
 	import type { ClickhouseTable } from "$lib/server/clickhouse/migrations";
@@ -20,19 +21,6 @@
 	import { getAllAggregatedAnalysisResults } from "../../../../api/keywords/index.remote";
 
 	type ChartData = Record<string, Date | number>;
-
-	const chartColors: Array<string> = [
-		"var(--color-chart-red)",
-		"var(--color-chart-orange)",
-		"var(--color-chart-amber)",
-		"var(--color-chart-yellow)",
-		"var(--color-chart-lime)",
-		"var(--color-chart-green)",
-		"var(--color-chart-cyan)",
-		"var(--color-chart-blue)",
-		"var(--color-chart-indigo)",
-		"var(--color-chart-magenta)",
-	];
 
 	let {
 		visibleDomains,

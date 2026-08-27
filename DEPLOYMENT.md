@@ -24,14 +24,25 @@ bun test
 bun run check
 
 # 3. Apply committed Drizzle migrations to the production Turso database.
-bun --env-file=.env.prod run db:migrate
+bun run turso:migrate:prod
 
 # 4. Apply committed ClickHouse migrations when the release contains any.
-bun --env-file=.env.prod run clickhouse:migrate
+bun run clickhouse:migrate:prod
 
-# 5. Build, upload, and restart the production application.
-bun run deploy
+# 5. Build, upload, and restart the production application and its API routes.
+bun run deploy:app:prod
 ```
+
+Once the tests and type checks have passed, steps 3 through 5 can be run in
+order with a single command:
+
+```bash
+bun run deploy:prod
+```
+
+The production ClickHouse command loads its connection credentials from
+`.env.prod` and explicitly targets the `default` database used by the deployed
+application, regardless of the current Git branch.
 
 Do not run `bun migrate` against production. That command generates migrations and uses `db:push`; production deployments must apply reviewed, committed files with `db:migrate`.
 
@@ -51,5 +62,7 @@ After deployment:
 
 ## Current deployment implementation
 
-`scripts/deploy.ts` builds locally, uploads `build/` and `.env.prod`, and
-restarts `my-bun-app`. It does not apply database migrations, so step 3 remains mandatory until migration execution is added to the deployment script or CI.
+`deploy:app:prod` builds locally, then `scripts/deploy.ts` uploads `build/` and
+`.env.prod` and restarts `my-bun-app`. The SvelteKit API routes are part of the
+same build. This command does not apply database migrations; use `deploy:prod`
+for the complete ordered deployment.

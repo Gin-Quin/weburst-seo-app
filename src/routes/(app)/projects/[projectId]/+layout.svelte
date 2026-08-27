@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { goto } from "$app/navigation";
 	import { page } from "$app/state";
+	import { canViewProjectContents } from "$lib/contents/access";
 	import { defineContent } from "$lib/i18n/locale.svelte";
 	import type { KeywordAnalysisStatus } from "$lib/server/clickhouse/services/keywords";
 	import { context } from "$lib/stores/context.svelte";
@@ -45,7 +47,16 @@
 	let analysisRunning = $state(false);
 	let lastAnalysisStatus = $state<KeywordAnalysisStatus | undefined>();
 	let fetchLastAnalysisStatusTimeout: ReturnType<typeof setTimeout>;
-	const isContentsPage = $derived(page.url.pathname.endsWith("/contents"));
+	const isContentsPage = $derived(page.url.pathname.includes("/contents"));
+	const canViewContents = $derived(
+		canViewProjectContents(context.user?.role, context.project?.type),
+	);
+
+	$effect(() => {
+		if (context.project && isContentsPage && !canViewContents) {
+			void goto(`/projects/${context.project.id}/share-of-voice`, { replaceState: true });
+		}
+	});
 
 	$inspect({ lastAnalysisStatus });
 
@@ -119,7 +130,7 @@
 	}
 </script>
 
-{#if context.project && isContentsPage}
+{#if context.project && isContentsPage && canViewContents}
 	<div class="EmptyPage" in:fade={{ duration: 300 }}>
 		{@render children()}
 	</div>

@@ -2,6 +2,7 @@
 	import { goto } from "$app/navigation";
 	import { page } from "$app/state";
 	import Avatar from "$lib/components/Avatar.svelte";
+	import { canViewProjectContents } from "$lib/contents/access";
 	import { context } from "$lib/stores/context.svelte";
 	import IconArrowLeftRegular from "phosphor-icons-svelte/IconArrowLeftRegular.svelte";
 	import IconBuildingsRegular from "phosphor-icons-svelte/IconBuildingsRegular.svelte";
@@ -9,6 +10,7 @@
 	import IconFileTextRegular from "phosphor-icons-svelte/IconFileTextRegular.svelte";
 	import IconFolderOpenRegular from "phosphor-icons-svelte/IconFolderOpenRegular.svelte";
 	import IconGearRegular from "phosphor-icons-svelte/IconGearRegular.svelte";
+	import IconPlugsConnectedRegular from "phosphor-icons-svelte/IconPlugsConnectedRegular.svelte";
 	import IconSignOutRegular from "phosphor-icons-svelte/IconSignOutRegular.svelte";
 	import IconWaveSineRegular from "phosphor-icons-svelte/IconWaveSineRegular.svelte";
 	import { clearServerSession } from "../api/login.remote";
@@ -16,6 +18,9 @@
 	const projectId = $derived(page.params.projectId);
 	const isProjectDetail = $derived(
 		/^\/projects\/[^/]+/.test(page.url.pathname),
+	);
+	const canViewContents = $derived(
+		canViewProjectContents(context.user?.role, context.project?.type),
 	);
 
 	async function logout() {
@@ -28,7 +33,7 @@
 </script>
 
 <aside class="Sidebar">
-	<nav aria-label="Navigation principale">
+	<nav class="PrimaryNavigation" aria-label="Navigation principale">
 		{#if isProjectDetail && projectId}
 			<a
 				href="/projects"
@@ -59,14 +64,18 @@
 				<span>Similarité</span>
 			</a>
 
-			<a
-				href={`/projects/${projectId}/contents`}
-				class:active={page.url.pathname.endsWith("/contents")}
-				aria-label="Contenu"
-			>
-				<IconFileTextRegular />
-				<span>Contenu</span>
-			</a>
+			{#if canViewContents}
+				<a
+					href={`/projects/${projectId}/contents`}
+					class:active={page.url.pathname ===
+						`/projects/${projectId}/contents` ||
+						page.url.pathname.startsWith(`/projects/${projectId}/contents/`)}
+					aria-label="Contenu"
+				>
+					<IconFileTextRegular />
+					<span>Contenu</span>
+				</a>
+			{/if}
 		{:else}
 			{#if context.user?.role === "admin"}
 				<a
@@ -90,32 +99,39 @@
 		{/if}
 	</nav>
 
-	<div class="dropdown dropdown-top dropdown-center card-hover-group SidebarUser">
-		<button tabindex="0" class="UserCard card-hover" aria-label="Menu du compte">
+	<div class="SidebarFooter">
+		<nav class="AccountNavigation" aria-label="Navigation du compte">
+			<button
+				type="button"
+				onclick={() => context.openUserDialog?.("account")}
+				aria-label="Paramètres"
+			>
+				<IconGearRegular />
+				<span>Paramètres</span>
+			</button>
+
+			<a
+				href="/settings/mcp"
+				class:active={page.url.pathname.startsWith("/settings/mcp")}
+				aria-label="Connexion MCP"
+			>
+				<IconPlugsConnectedRegular />
+				<span>Connexion MCP</span>
+			</a>
+
+			<button type="button" onclick={logout} aria-label="Se déconnecter">
+				<IconSignOutRegular />
+				<span>Se déconnecter</span>
+			</button>
+		</nav>
+
+		<div class="UserCard" aria-label="Profil de l’utilisateur">
 			<Avatar />
 			<span class="UserDetails">
 				<strong>{context.user!.firstName} {context.user!.lastName}</strong>
 				<small>{context.user!.email}</small>
 			</span>
-		</button>
-
-		<ul
-			tabindex="0"
-			class="dropdown-content menu bg-base-100 rounded-box z-20 w-64 shadow-md"
-		>
-			<li>
-				<button onclick={() => context.openUserDialog?.("account")}>
-					<IconGearRegular />
-					Paramètres
-				</button>
-			</li>
-			<li>
-				<button onclick={logout}>
-					<IconSignOutRegular />
-					Se déconnecter
-				</button>
-			</li>
-		</ul>
+		</div>
 	</div>
 </aside>
 
@@ -135,41 +151,52 @@
 		z-index: 20;
 	}
 
-	nav {
+	.PrimaryNavigation,
+	.AccountNavigation {
 		display: flex;
 		flex-direction: column;
 		gap: 4px;
 	}
 
-	nav a {
+	.PrimaryNavigation a,
+	.AccountNavigation a,
+	.AccountNavigation button {
 		display: flex;
 		align-items: center;
 		gap: 1rem;
 		height: 48px;
+		width: 100%;
 		padding: 0 1.35rem;
 		border: 1px solid transparent;
 		border-radius: 1rem;
+		background: transparent;
 		color: #11182d;
+		font-family: inherit;
 		font-size: 1rem;
 		font-weight: 500;
+		text-align: left;
 		white-space: nowrap;
+		cursor: pointer;
 		transition:
 			background 150ms ease,
 			border-color 150ms ease,
 			color 150ms ease;
 	}
 
-	nav a:hover:not(.disabled) {
+	.PrimaryNavigation a:hover:not(.disabled),
+	.AccountNavigation a:hover,
+	.AccountNavigation button:hover {
 		background: var(--color-gray-1);
 	}
 
-	nav a.active {
+	.PrimaryNavigation a.active,
+	.AccountNavigation a.active {
 		border-color: #b4cbff;
 		background: #f5f8ff;
 		color: #153a9d;
 	}
 
-	nav hr {
+	.PrimaryNavigation hr {
 		width: 100%;
 		margin: 0.75rem 0;
 		border: 0;
@@ -180,14 +207,28 @@
 		color: var(--color-text-light);
 	}
 
-	nav :global(svg) {
+	.PrimaryNavigation :global(svg),
+	.AccountNavigation :global(svg) {
 		flex: 0 0 auto;
 		width: 24px;
 		height: 24px;
 		stroke-width: 1.7;
 	}
 
-	.SidebarUser {
+	.AccountNavigation a,
+	.AccountNavigation button {
+		font-size: calc(1rem - 2px);
+	}
+
+	.AccountNavigation :global(svg) {
+		width: 22px;
+		height: 22px;
+	}
+
+	.SidebarFooter {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
 		width: 100%;
 	}
 
@@ -201,7 +242,6 @@
 		border: 1px solid var(--color-border);
 		border-radius: 1.25rem;
 		background: var(--color-base-100);
-		cursor: pointer;
 	}
 
 	.UserDetails {
@@ -224,35 +264,26 @@
 		color: var(--color-text-light);
 	}
 
-	.SidebarUser .dropdown-content {
-		margin-bottom: 0.75rem;
-	}
-
 	@media (max-width: 1100px) {
 		.Sidebar {
 			padding-inline: 0.65rem;
 		}
 
-		.SidebarUser {
-			--anchor-h: span-right;
-		}
-
-		.SidebarUser .dropdown-content {
-			inset-inline-end: auto;
-			translate: 0;
-		}
-
-		nav {
+		.PrimaryNavigation,
+		.AccountNavigation {
 			align-items: center;
 		}
 
-		nav a {
+		.PrimaryNavigation a,
+		.AccountNavigation a,
+		.AccountNavigation button {
 			justify-content: center;
 			width: 48px;
 			padding: 0;
 		}
 
-		nav a span,
+		.PrimaryNavigation a span,
+		.AccountNavigation span,
 		.UserDetails {
 			display: none;
 		}

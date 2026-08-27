@@ -138,6 +138,10 @@ body {
 	min-height: 100dvh;
 }
 
+textarea {
+	resize: none;
+}
+
 *:focus,
 *:focus-within {
 	outline: none;

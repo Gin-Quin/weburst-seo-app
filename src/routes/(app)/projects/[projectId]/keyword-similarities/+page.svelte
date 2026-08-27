@@ -21,12 +21,19 @@
 {#await projectContext.keywordClustersQuery}
 	<Loader />
 {:then clusters}
-	{#if clusters == null}
-		<div class="center text-xl text-light bold">
-			{$content.noAnalysisResults}
-		</div>
-	{:else}
-		<SectionClusters {clusters} />
-		<!-- <SectionUrlAnalysis /> -->
-	{/if}
+	{#await projectContext.analysisResultsWithTrendQuery}
+		<Loader />
+	{:then analysisResultsWithTrend}
+		{#if clusters == null}
+			<div class="center text-xl text-light bold">
+				{$content.noAnalysisResults}
+			</div>
+		{:else}
+			<SectionClusters
+				{clusters}
+				clusterNames={analysisResultsWithTrend?.clusters.map(({ name }) => name) ?? []}
+			/>
+			<!-- <SectionUrlAnalysis /> -->
+		{/if}
+	{/await}
 {/await}
