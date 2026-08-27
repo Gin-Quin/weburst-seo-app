@@ -8,11 +8,13 @@ import {
 } from "$lib/server/contents";
 import {
 	convertToModelMessages,
+	simulateStreamingMiddleware,
 	stepCountIs,
 	streamText,
 	tool,
 	type UIMessage,
 	validateUIMessages,
+	wrapLanguageModel,
 } from "ai";
 import { z } from "zod";
 import type { RequestHandler } from "./$types";
@@ -85,7 +87,12 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		const messages = await validateUIMessages({ messages: body.messages });
 		const result = streamText({
-			model: google(GOOGLE_CHAT_MODEL),
+			// Article drafts are long JSON tool arguments. Wait for Gemini's complete
+			// response so an interrupted provider stream cannot expose partial JSON.
+			model: wrapLanguageModel({
+				model: google(GOOGLE_CHAT_MODEL),
+				middleware: simulateStreamingMiddleware(),
+			}),
 			instructions: buildSystemPrompt(content),
 			messages: await convertToModelMessages(messages, { tools }),
 			tools,
