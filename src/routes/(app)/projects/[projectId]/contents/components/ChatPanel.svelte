@@ -6,6 +6,7 @@
 	import { marked } from "marked";
 	import IconArrowUpRegular from "phosphor-icons-svelte/IconArrowUpRegular.svelte";
 	import IconChatCircleDotsRegular from "phosphor-icons-svelte/IconChatCircleDotsRegular.svelte";
+	import { onMount } from "svelte";
 	import { toast } from "svelte-sonner";
 	import { clearContentChat } from "../../../../../api/contents/contents.remote";
 	import ArticleChangesDialog from "./ArticleChangesDialog.svelte";
@@ -38,6 +39,8 @@
 	let acceptingProposal = $state(false);
 	let articleProposal = $state<ArticleProposal | undefined>();
 	let messagesElement: HTMLDivElement;
+	let scrollTimeout: ReturnType<typeof setTimeout>;
+	const scrollAfterSendDelay = 100;
 	const chat = new Chat<ChatMessage>({
 		id: `content-${content.id}`,
 		messages: content.chatMessages as ChatMessage[],
@@ -108,15 +111,24 @@
 		preparing = true;
 		try {
 			await onBeforeSend();
-			await chat.sendMessage({ text: prompt.trim(), metadata: { createdAt: Date.now() } });
+			const response = chat.sendMessage({ text: prompt.trim(), metadata: { createdAt: Date.now() } });
+			scheduleScrollToBottom(scrollAfterSendDelay);
+			await response;
 		} finally {
 			preparing = false;
 		}
 	}
 
-	$effect(() => {
-		chat.messages;
-		setTimeout(() => messagesElement?.scrollTo({ top: messagesElement.scrollHeight, behavior: "smooth" }), 0);
+	function scheduleScrollToBottom(delay: number) {
+		clearTimeout(scrollTimeout);
+		scrollTimeout = setTimeout(() => {
+			messagesElement?.scrollTo({ top: messagesElement.scrollHeight, behavior: "smooth" });
+		}, delay);
+	}
+
+	onMount(() => {
+		scheduleScrollToBottom(0);
+		return () => clearTimeout(scrollTimeout);
 	});
 
 	function submit(event: SubmitEvent) {
