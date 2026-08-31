@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { goto } from "$app/navigation";
-	import { projectTypes } from "$lib/i18n/contents/projects";
+	import { canViewProjectContents } from "$lib/contents/access";
+	import { getProjectTypeLabel, projectTypes } from "$lib/i18n/contents/projects";
 	import { defineContent } from "$lib/i18n/locale.svelte";
 	import { extractHost } from "$lib/keywords/serpAnalytics";
 	import { formatPercent } from "$lib/numbers/formatPercent";
+	import { getProjectPath } from "$lib/projects/getProjectPath";
 	import type { User } from "$lib/server/db/schema";
 	import { context } from "$lib/stores/context.svelte";
 	import IconDotsThreeVerticalBold from "phosphor-icons-svelte/IconDotsThreeVerticalBold.svelte";
@@ -56,14 +58,22 @@
 
 <button
 	class="ProjectCard card card-hover cursor-pointer px-6! py-5! col! justify-stretch items-start bg-gray-1"
-	onclick={() => goto(`/projects/${project.id}/share-of-voice`)}
+	onclick={() =>
+		goto(
+			getProjectPath(project.id, "/projects", {
+				shareOfVoiceEnabled: project.shareOfVoiceEnabled,
+				contentWritingEnabled:
+					project.contentWritingEnabled &&
+					canViewProjectContents(context.user?.role, project.type),
+			}),
+		)}
 >
 	<div class="row justify-between w-full">
 		<div
 			class="badge bg-base-300! px-2! py-1.5!"
 			style:border="1px solid var(--color-border)"
 		>
-			{$projectTypes[project.type]}
+			{getProjectTypeLabel($projectTypes, project.type)}
 		</div>
 
 		{#if context.user?.role === "admin" || context.user?.role === "project_manager"}
@@ -159,12 +169,12 @@
 <style>
 	.ProjectCard {
 		height: 20rem;
-		border-color: var(--input);
+		border-color: var(--color-border);
 		background: var(--color-base-200);
 	}
 
 	.ProjectCard hr {
-		border-color: var(--input);
+		border-color: var(--color-border);
 	}
 
 	.ProjectName,

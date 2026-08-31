@@ -11,7 +11,7 @@
 	import { toast } from "svelte-sonner";
 	import {
 		getContent,
-		refreshOptimization,
+		refreshOptimizationScore,
 		saveDraft,
 	} from "../../../../../api/contents/contents.remote";
 	import BriefPanel from "./BriefPanel.svelte";
@@ -159,7 +159,7 @@
 	async function refreshAcceptedArticleOptimization() {
 		if (!content.serpmanticsGuideId) return;
 		try {
-			const updated = await refreshOptimization({
+			const updated = await refreshOptimizationScore({
 				id: content.id,
 				projectId: content.projectId,
 			});
@@ -206,7 +206,15 @@
 			<div class="PreviewBar">Vous consultez la version {previewedVersion.version} en lecture seule.<button onclick={returnToCurrent}>Revenir à la version actuelle</button></div>
 		{/if}
 		<div class="EditorContainer">
-			<ProseMirrorEditor html={draftHtml} readOnly={Boolean(previewedVersion)} onChange={editorChanged} bind:setEditorContent />
+			<ProseMirrorEditor
+				html={draftHtml}
+				projectId={content.projectId}
+				contentId={content.id}
+				guide={content.serpmanticsGuide}
+				readOnly={Boolean(previewedVersion)}
+				onChange={editorChanged}
+				bind:setEditorContent
+			/>
 		</div>
 	</section>
 

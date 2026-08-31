@@ -37,10 +37,16 @@
 			selectClient: "Select a client",
 			domain: "Domain",
 			articleLimit: "Article limit",
+			articleLimitOtherValue: "Other value",
+			exactArticleLimit: "Exact value",
 			keywordAnalysisFrequency: "Keyword analysis",
 			type: "Type",
 			websiteUrl: "Website URL",
 			leaders: "Project leaders",
+			availableTools: "Available tools",
+			shareOfVoiceAndSimilarities: "Share of voice and similarities",
+			contentWriting: "Content writing",
+			availableToolsRequired: "Select at least one available tool.",
 			createNewUser: "+ New user",
 			projectUpdated: "Project updated",
 			projectCreationFailed: "Project creation failed",
@@ -59,10 +65,16 @@
 			selectClient: "Sélectionner un client",
 			domain: "Domaine",
 			articleLimit: "Limite d'articles",
+			articleLimitOtherValue: "Autre valeur",
+			exactArticleLimit: "Valeur exacte",
 			keywordAnalysisFrequency: "Analyse des mots-clés",
 			type: "Type",
 			websiteUrl: "URL du site web",
 			leaders: "Chefs de projet",
+			availableTools: "Outils disponibles",
+			shareOfVoiceAndSimilarities: "Part de voix et similarités",
+			contentWriting: "Rédaction de contenus",
+			availableToolsRequired: "Sélectionnez au moins un outil disponible.",
 			createNewUser: "+ Nouvel utilisateur",
 			projectUpdated: "Le projet a été mis à jour",
 			projectCreationFailed: "Échec de la création du projet",
@@ -85,12 +97,15 @@
 	let updating = $state(false);
 	let presetClient = $state<ClientInfo | undefined>();
 	let project = $state<CreateProject>(getDefaultValues());
+	let articleLimitSelection = $state<"10" | "30" | "custom">("10");
+	let customArticleLimit = $state(10);
+	let availableToolsError = $state(false);
 
 	const hasValidChanges = $derived(
 		project.name.trim() &&
 			project.clientId &&
 			project.domain &&
-			project.keywordAnalysisFrequency &&
+			(project.type !== "monthly_subscription" || project.keywordAnalysisFrequency) &&
 			project.type &&
 			project.websiteUrl &&
 			(project.type !== "monthly_subscription" ||
@@ -102,10 +117,44 @@
 		edit = existingProject;
 		presetClient = client;
 		project = getDefaultValues();
+		articleLimitSelection = getArticleLimitSelection(project.articleLimit);
+		customArticleLimit = project.articleLimit;
+		availableToolsError = false;
 		ref?.showModal();
 	};
 
-	async function save() {
+	function getArticleLimitSelection(
+		articleLimit: number,
+	): "10" | "30" | "custom" {
+		if (articleLimit === 10 || articleLimit === 30) {
+			return String(articleLimit) as "10" | "30";
+		}
+
+		return "custom";
+	}
+
+	function selectArticleLimit(event: Event) {
+		if (articleLimitSelection === "custom") {
+			customArticleLimit = project.articleLimit;
+		}
+
+		articleLimitSelection = (event.currentTarget as HTMLSelectElement).value as
+			| "10"
+			| "30"
+			| "custom";
+		project.articleLimit =
+			articleLimitSelection === "custom"
+				? customArticleLimit
+				: Number(articleLimitSelection);
+	}
+
+	async function save(event: SubmitEvent) {
+		event.preventDefault();
+		if (!project.shareOfVoiceEnabled && !project.contentWritingEnabled) {
+			availableToolsError = true;
+			return;
+		}
+
 		updating = true;
 		if (edit) {
 			try {
@@ -138,9 +187,11 @@
 			clientId: edit?.clientId ?? presetClient?.id,
 			domain: edit?.domain ?? "",
 			keywordAnalysisFrequency: edit?.keywordAnalysisFrequency ?? "1/month",
-			type: edit?.type ?? "audit",
+			type: edit?.type === "prospect" ? "audit" : (edit?.type ?? "audit"),
 			websiteUrl: edit?.websiteUrl ?? "",
 			articleLimit: edit?.articleLimit ?? 10,
+			shareOfVoiceEnabled: edit?.shareOfVoiceEnabled ?? true,
+			contentWritingEnabled: edit?.contentWritingEnabled ?? true,
 			leaderIds: edit?.leaders.map((leader) => leader.id) ?? [],
 		};
 	}
@@ -152,7 +203,7 @@
 			{edit ? $content.updateProject : $content.createProject}
 		</header>
 
-		<form method="dialog" class="col gap-6 items-stretch">
+		<form method="dialog" class="col gap-6 items-stretch" onsubmit={save}>
 			<div class="field grow">
 				<div class="field-title">{$content.projectName}</div>
 				<label class="input control-size-3 w-full">
@@ -219,9 +270,9 @@
 			</div>
 
 			<div
-				class="grid gap-3 {project.type === 'prospect'
-					? 'grid-cols-1'
-					: 'grid-cols-2'}"
+				class="grid gap-3 {project.type === 'monthly_subscription'
+					? 'grid-cols-2'
+					: 'grid-cols-1'}"
 			>
 				<div class="field">
 					<div class="field-title">{$content.type}</div>
@@ -235,7 +286,7 @@
 					</label>
 				</div>
 
-				{#if project.type === "audit" || project.type === "monthly_subscription"}
+				{#if project.type === "monthly_subscription"}
 					<div class="field">
 						<div class="field-title">{$content.keywordAnalysisFrequency}</div>
 						<label class="select control-size-3 w-full">
@@ -253,22 +304,40 @@
 				{/if}
 
 				{#if project.type === "monthly_subscription"}
-					<div class="field col-span-2">
+					<div
+						class="field {articleLimitSelection === 'custom'
+							? ''
+							: 'col-span-2'}"
+					>
 						<div class="field-title">{$content.articleLimit}</div>
-						<IntegerInput
-							class="control-size-3 w-full"
-							name="articleLimit"
-							min={0}
-							bind:value={project.articleLimit}
-							incrementLabel={$content.incrementArticleLimit}
-							decrementLabel={$content.decrementArticleLimit}
-							required
-						>
-							{#snippet leading()}
-								<IconFileRegular class="icon" />
-							{/snippet}
-						</IntegerInput>
+						<label class="select control-size-3 w-full">
+							<IconFileRegular class="icon" />
+							<select
+								class="select control-size-3"
+								value={articleLimitSelection}
+								onchange={selectArticleLimit}
+							>
+								<option value="10">10</option>
+								<option value="30">30</option>
+								<option value="custom">{$content.articleLimitOtherValue}</option>
+							</select>
+						</label>
 					</div>
+
+					{#if articleLimitSelection === "custom"}
+						<div class="field">
+							<div class="field-title">{$content.exactArticleLimit}</div>
+							<IntegerInput
+								class="control-size-3 w-full"
+								name="articleLimit"
+								min={0}
+								bind:value={project.articleLimit}
+								incrementLabel={$content.incrementArticleLimit}
+								decrementLabel={$content.decrementArticleLimit}
+								required
+							/>
+						</div>
+					{/if}
 				{/if}
 			</div>
 
@@ -306,6 +375,35 @@
 				/>
 			</div>
 
+			<div class="field">
+				<div class="field-title">{$content.availableTools}</div>
+				<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+					<label class="label cursor-pointer justify-start gap-3">
+						<input
+							type="checkbox"
+							class="checkbox"
+							bind:checked={project.shareOfVoiceEnabled}
+							onchange={() => (availableToolsError = false)}
+						/>
+						<span>{$content.shareOfVoiceAndSimilarities}</span>
+					</label>
+					<label class="label cursor-pointer justify-start gap-3">
+						<input
+							type="checkbox"
+							class="checkbox"
+							bind:checked={project.contentWritingEnabled}
+							onchange={() => (availableToolsError = false)}
+						/>
+						<span>{$content.contentWriting}</span>
+					</label>
+				</div>
+				{#if availableToolsError}
+					<p class="mt-2 text-sm text-error" role="alert">
+						{$content.availableToolsRequired}
+					</p>
+				{/if}
+			</div>
+
 			<div class="grid grid-cols-2 gap-3 pt-2">
 				<button
 					class="btn control-size-2"
@@ -319,7 +417,6 @@
 					type="submit"
 					class="btn btn-primary"
 					disabled={!hasValidChanges || updating}
-					onclick={save}
 				>
 					{edit ? $content.save : $content.create}
 				</button>

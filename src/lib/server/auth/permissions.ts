@@ -12,3 +12,7 @@ export function roleCanAccessClient(
 	if (action === "view") return true;
 	return role === "project_manager";
 }
+
+export function roleCanCreateUser(creatorRole: Role, createdRole: Role): boolean {
+	return creatorRole === "admin" || (creatorRole === "project_manager" && createdRole === "client");
+}

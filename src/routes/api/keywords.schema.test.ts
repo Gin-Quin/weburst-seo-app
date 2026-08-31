@@ -6,6 +6,7 @@ describe("keyword schema", () => {
 	test("preserves optional cluster labels", () => {
 		const input: InferInput<typeof AddKeywords> = {
 			projectId: "project-a",
+			mode: "replace",
 			keywords: [
 				["technical seo", 1200, "SEO"],
 				["content brief", 350],
@@ -13,5 +14,17 @@ describe("keyword schema", () => {
 		};
 
 		expect(parse(AddKeywords, input)).toEqual(input);
+	});
+
+	test("accepts both keyword import modes", () => {
+		for (const mode of ["replace", "append"] as const) {
+			expect(
+				parse(AddKeywords, {
+					projectId: "project-a",
+					mode,
+					keywords: [["technical seo", 1200]],
+				}),
+			).toMatchObject({ mode });
+		}
 	});
 });

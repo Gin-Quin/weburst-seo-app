@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { hashMcpSecret, verifyPkceChallenge } from "./crypto";
+import { renderOauthAuthorizationPage } from "./oauthPage";
 import { canReadMcpClients } from "./permissions";
 import { isSafeRedirectUri } from "./redirect";
 
@@ -33,5 +34,23 @@ describe("MCP authorization", () => {
 		expect(canReadMcpClients("project_manager")).toBe(true);
 		expect(canReadMcpClients("client")).toBe(false);
 		expect(canReadMcpClients("user")).toBe(false);
+	});
+});
+
+describe("MCP OAuth authorization page", () => {
+	test("posts to the declared form endpoint when controls shadow form.action", () => {
+		const page = renderOauthAuthorizationPage({
+			clientId: "client-id",
+			clientName: "Claude",
+			redirectUri: "https://claude.ai/api/mcp/auth_callback",
+			codeChallenge: "A".repeat(43),
+			scope: "weburst.read",
+			resource: "https://app.weburst.fr/mcp",
+			state: "state",
+		});
+
+		expect(page).toContain('form.getAttribute("action")');
+		expect(page).not.toContain("fetch(form.action");
+		expect(page).toContain('includes("application/json")');
 	});
 });

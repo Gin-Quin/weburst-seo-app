@@ -1,8 +1,11 @@
 import { command, query } from "$app/server";
-import { requireAdmin } from "$lib/server/auth/authorization";
+import { requireAdmin, requireClientAccess } from "$lib/server/auth/authorization";
+import { roleCanCreateUser } from "$lib/server/auth/permissions";
 import { setUserClientMemberships } from "$lib/server/clients";
 import { db } from "$lib/server/db";
 import { users, usersToClients, type User } from "$lib/server/db/schema";
+import { sendClientInvitationNotificationToAdmins } from "$lib/server/email/clientInvitationNotification";
+import { sendInvitationEmail } from "$lib/server/email/invitation";
 import {
 	createUser,
 	deleteUser,
@@ -17,7 +20,9 @@ import { getRequestUser } from "./utilities";
 
 export const updateCurrentUser = query(UpdateCurrentUser, async (input): Promise<User | null> => {
 	const currentUser = await getRequestUser();
-	return currentUser && updateUser(currentUser.id, input);
+	if (!currentUser) return null;
+	const { clientInvitationEmailsEnabled: _clientInvitationEmailsEnabled, ...profile } = input;
+	return updateUser(currentUser.id, currentUser.role === "admin" ? input : profile);
 });
 
 export const deleteCurrentUser = query(async (): Promise<User | null> => {
@@ -27,14 +32,23 @@ export const deleteCurrentUser = query(async (): Promise<User | null> => {
 
 export const createUserByAdmin = command(CreateUser, async (input): Promise<void> => {
 	const currentUser = await getRequestUser();
-	requireAdmin(currentUser);
+	if (!currentUser || !roleCanCreateUser(currentUser.role, input.role)) {
+		throw new Error("Unauthorized");
+	}
 	const { clientIds = [], ...userInput } = input;
+	if (currentUser.role === "project_manager") {
+		await requireClientAccess(currentUser, clientIds[0]!, "manage");
+	}
 	const created = await createUser({ ...userInput, id: createId() });
 	try {
 		await setUserClientMemberships(created, clientIds);
 	} catch (error) {
 		await db.delete(users).where(eq(users.id, created.id));
 		throw error;
+	}
+	await sendInvitationEmail(created, currentUser);
+	if (created.role === "client" && currentUser.role === "project_manager") {
+		await sendClientInvitationNotificationToAdmins(created, currentUser);
 	}
 	await listUsers().refresh();
 });

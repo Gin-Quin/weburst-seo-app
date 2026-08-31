@@ -1,8 +1,9 @@
 import { DAY, HOUR } from "$lib/timeUnits";
-import type { KeywordAnalysisFrequency } from "../../../../routes/api/projects.schema";
+import type { KeywordAnalysisFrequency, ProjectType } from "../../../../routes/api/projects.schema";
 import type { ClickhouseTable } from "../migrations";
 
 export const FAILED_ANALYSIS_RETRY_DELAY = 6 * HOUR;
+export const RECURRING_ANALYSIS_PROJECT_TYPES: ProjectType[] = ["monthly_subscription"];
 
 export const ANALYSIS_INTERVALS: Record<KeywordAnalysisFrequency, number> = {
 	"1/day": DAY,

@@ -3,6 +3,7 @@
 	import { page } from "$app/state";
 	import WeBurstLogo from "$lib/assets/images/WeBurst.png";
 	import WeBurstMark from "$lib/assets/images/WeBurstMark.png";
+	import { canViewProjectContents } from "$lib/contents/access";
 	import { context } from "$lib/stores/context.svelte";
 	import { getProjectPath } from "$lib/projects/getProjectPath";
 	import IconCaretDownRegular from "phosphor-icons-svelte/IconCaretDownRegular.svelte";
@@ -39,14 +40,19 @@
 					.slice(0, 6),
 	);
 
-	function projectPath(projectId: string) {
-		return getProjectPath(projectId, page.url.pathname);
+	function projectPath(project: NonNullable<typeof context.projects>[number]) {
+		return getProjectPath(project.id, page.url.pathname, {
+			shareOfVoiceEnabled: project.shareOfVoiceEnabled,
+			contentWritingEnabled:
+				project.contentWritingEnabled &&
+				canViewProjectContents(context.user?.role, project.type),
+		});
 	}
 
-	async function openProject(projectId: string) {
+	async function openProject(project: NonNullable<typeof context.projects>[number]) {
 		search = "";
 		searchFocused = false;
-		await goto(`/projects/${projectId}/share-of-voice`);
+		await goto(projectPath(project));
 	}
 </script>
 
@@ -74,7 +80,7 @@
 						<p>Aucun projet trouvé.</p>
 					{:else}
 						{#each searchResults as project (project.id)}
-							<button onclick={() => openProject(project.id)}>
+							<button onclick={() => openProject(project)}>
 								<span>{project.name}</span>
 								<small>{project.domain}</small>
 							</button>
@@ -107,7 +113,7 @@
 						{#each clientProjects as project (project.id)}
 							<li>
 								<a
-									href={projectPath(project.id)}
+									href={projectPath(project)}
 									class:menu-active={project.id === context.project?.id}
 								>
 									{project.domain}
@@ -117,13 +123,13 @@
 					</ul>
 				</div>
 			</div>
-		{:else if context.user?.role === "admin"}
+		{:else if context.user?.role === "admin" || context.user?.role === "project_manager"}
 			<button
 				class="btn control-size-2"
 				onclick={() => context.openUserDialog?.("create")}
 			>
 				<IconPlusRegular class="icon" />
-				Nouvel utilisateur
+				{context.user.role === "admin" ? "Nouvel utilisateur" : "Inviter un client"}
 			</button>
 		{/if}
 	</div>
@@ -146,17 +152,18 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		padding: 1.5rem 2rem;
+		padding: 1rem;
 		border-right: 1px solid var(--color-border);
 	}
 
 	.FullLogo {
-		width: min(12.75rem, 100%);
-		height: auto;
+		display: none;
 	}
 
 	.LogoMark {
-		display: none;
+		display: block;
+		width: 3rem;
+		height: 3rem;
 	}
 
 	.HeaderContent {
@@ -284,21 +291,6 @@
 	}
 
 	@media (max-width: 1100px) {
-		.Logo {
-			justify-content: center;
-			padding: 1rem;
-		}
-
-		.FullLogo {
-			display: none;
-		}
-
-		.LogoMark {
-			display: block;
-			width: 3rem;
-			height: 3rem;
-		}
-
 		.HeaderContent {
 			padding-inline: 1rem;
 		}

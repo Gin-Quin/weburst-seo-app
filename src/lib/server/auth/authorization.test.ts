@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { roleCanAccessClient, type ClientAction } from "./permissions";
+import { roleCanAccessClient, roleCanCreateUser, type ClientAction } from "./permissions";
 import type { Role } from "../db/schema";
 
 describe("roleCanAccessClient", () => {
@@ -28,4 +28,13 @@ describe("roleCanAccessClient", () => {
 			expect(roleCanAccessClient(role, member, action)).toBe(allowed);
 		});
 	}
+});
+
+test("admins can create every profile while project managers can only create clients", () => {
+	expect(roleCanCreateUser("admin", "admin")).toBe(true);
+	expect(roleCanCreateUser("admin", "project_manager")).toBe(true);
+	expect(roleCanCreateUser("admin", "client")).toBe(true);
+	expect(roleCanCreateUser("project_manager", "client")).toBe(true);
+	expect(roleCanCreateUser("project_manager", "project_manager")).toBe(false);
+	expect(roleCanCreateUser("client", "client")).toBe(false);
 });

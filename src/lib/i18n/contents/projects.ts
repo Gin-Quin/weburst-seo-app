@@ -4,15 +4,20 @@ import { defineContent } from "../locale.svelte";
 export const projectTypes = defineContent<Record<ProjectType, string>>({
 	en: {
 		audit: "Audit",
-		prospect: "Prospect",
 		monthly_subscription: "Monthly subscription",
 	},
 	fr: {
 		audit: "Audit",
-		prospect: "Prospect",
 		monthly_subscription: "Abonnement mensuel",
 	},
 });
+
+export function getProjectTypeLabel(
+	labels: Record<ProjectType, string>,
+	projectType: ProjectType | "prospect",
+): string {
+	return labels[projectType === "prospect" ? "audit" : projectType];
+}
 
 export const projectRoles = defineContent({
 	en: {

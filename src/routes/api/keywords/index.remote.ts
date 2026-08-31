@@ -8,10 +8,18 @@ import * as v from "valibot";
 import { getRequestUser } from "../utilities";
 import { AddKeywords } from "../keywords.schema";
 
-export const addKeywords = command(AddKeywords, async ({ projectId, keywords }) => {
+export const addKeywords = command(AddKeywords, async ({ projectId, keywords, mode }) => {
 	await requireProjectAccess(await getRequestUser(), projectId, "manage_keywords");
-	await KeywordsService.addKeywords(projectId, keywords);
+	await KeywordsService.addKeywords(projectId, keywords, mode);
 });
+
+export const hasKeywords = query(
+	v.object({ projectId: v.string() }),
+	async ({ projectId }): Promise<boolean> => {
+		await requireProjectAccess(await getRequestUser(), projectId, "view");
+		return KeywordsService.hasKeywords(projectId);
+	},
+);
 
 export const startKeywordAnalysis = command(
 	v.object({

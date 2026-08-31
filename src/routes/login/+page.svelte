@@ -82,7 +82,7 @@
 
 <div class="col items-center w-full bg-base-200 min-h-[100dvh]!">
 	<header class="w-full px-10 py-2">
-		<img src={WeBurstLogo} alt="WeBurst Logo" width="280" />
+		<img src={WeBurstLogo} alt="WeBurst Logo" width="220" />
 	</header>
 
 	<div class="center grow pb-20">

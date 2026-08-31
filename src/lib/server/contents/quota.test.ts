@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import {
 	CONTENT_QUOTA_EXCEEDED_MESSAGE,
+	getRemainingContentQuota,
 	getContentCreationPolicy,
 	isContentQuotaReached,
+	shouldSendContentQuotaWarning,
 } from "./quota";
 
 describe("content creation quota", () => {
@@ -29,5 +31,20 @@ describe("content creation quota", () => {
 		expect(CONTENT_QUOTA_EXCEEDED_MESSAGE).toBe(
 			"Vous avez utilisé votre quota de contenus, veuillez passer à l'abonnement supérieur",
 		);
+	});
+
+	test("calculates the non-negative remaining quota", () => {
+		expect(getRemainingContentQuota(4, 10)).toBe(6);
+		expect(getRemainingContentQuota(10, 10)).toBe(0);
+		expect(getRemainingContentQuota(11, 10)).toBe(0);
+	});
+
+	test("warns only when 5, 2, 1 or 0 contents remain", () => {
+		for (const remaining of [5, 2, 1, 0]) {
+			expect(shouldSendContentQuotaWarning(remaining)).toBe(true);
+		}
+		for (const remaining of [6, 4, 3]) {
+			expect(shouldSendContentQuotaWarning(remaining)).toBe(false);
+		}
 	});
 });

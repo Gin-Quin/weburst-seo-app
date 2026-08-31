@@ -28,5 +28,9 @@ export const context = $state<Context>({
 
 export const setContextUser = (user: User | null) => {
 	context.user = user;
-	localStorage.setItem("user", JSON.stringify(user));
+	if (user) {
+		localStorage.setItem("user", JSON.stringify(user));
+	} else {
+		localStorage.removeItem("user");
+	}
 };

@@ -28,7 +28,7 @@ describe("getClusterBarChartData", () => {
 		expect(result.data[0]?.comparisonShare).toBeCloseTo(250 / 7.5);
 	});
 
-	test("compares the client with the sum of all competitors otherwise", () => {
+	test("compares the client with the sum of the selected competitors", () => {
 		const result = getClusterBarChartData({
 			clusters,
 			clientDomain: "client.test",
@@ -38,6 +38,24 @@ describe("getClusterBarChartData", () => {
 		expect(result.comparisonDomain).toBeUndefined();
 		expect(result.data[0]?.clientShare).toBeCloseTo(400 / 7.5);
 		expect(result.data[0]?.comparisonShare).toBeCloseTo(350 / 7.5);
+	});
+
+	test("excludes competitors that are not selected", () => {
+		const result = getClusterBarChartData({
+			clusters: [
+				{
+					...clusters[0]!,
+					domains: [
+						...clusters[0]!.domains,
+						{ domain: "unselected.test", volume: 200 },
+					],
+				},
+			],
+			clientDomain: "client.test",
+			selectedDomains: ["client.test", "first.test", "second.test"],
+		});
+
+		expect(result.data[0]?.comparisonVolume).toBe(350);
 	});
 
 	test("uses all competitors when none is selected", () => {

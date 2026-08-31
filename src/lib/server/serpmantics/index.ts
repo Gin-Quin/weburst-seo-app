@@ -88,7 +88,9 @@ export async function createSerpmanticsGuide(query: string): Promise<string> {
 	});
 	const guideId = response.guides?.[0]?.id;
 	if (!response.success || !guideId) {
-		throw new Error(response.error ?? "SERPmantics n’a pas renvoyé de guide.");
+		throw new Error(
+			publicServiceError(response.error, "Le service d’analyse SEO n’a pas renvoyé de guide."),
+		);
 	}
 	return guideId;
 }
@@ -105,12 +107,18 @@ export async function getSerpmanticsGuide(guideId: string): Promise<SerpmanticsG
 	if (!response.ok || payload.creationFailed || payload.status === "failed") {
 		return {
 			state: "failed",
-			error: payload.error ?? `SERPmantics a répondu avec le statut ${response.status}.`,
+			error: publicServiceError(
+				payload.error,
+				`Le service d’analyse SEO a répondu avec le statut ${response.status}.`,
+			),
 			guide: payload.guide,
 		};
 	}
 	if (!payload.success || !payload.guide) {
-		return { state: "failed", error: payload.error ?? "Guide SERPmantics indisponible." };
+		return {
+			state: "failed",
+			error: publicServiceError(payload.error, "Guide d’analyse SEO indisponible."),
+		};
 	}
 	return { state: "ready", guide: payload.guide };
 }
@@ -124,7 +132,7 @@ export async function analyzeSerpmanticsContent(
 		body: JSON.stringify({ guideId, content, saveToGuide: true }),
 	});
 	if (!response.success || !response.contentAnalysis) {
-		throw new Error(response.error ?? "Analyse SERPmantics indisponible.");
+		throw new Error(publicServiceError(response.error, "Analyse SEO indisponible."));
 	}
 	return response.contentAnalysis;
 }
@@ -133,14 +141,19 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
 	const response = await rawRequest(path, init);
 	const payload = (await parseJson(response)) as T & { error?: string };
 	if (!response.ok) {
-		throw new Error(payload.error ?? `SERPmantics a répondu avec le statut ${response.status}.`);
+		throw new Error(
+			publicServiceError(
+				payload.error,
+				`Le service d’analyse SEO a répondu avec le statut ${response.status}.`,
+			),
+		);
 	}
 	return payload;
 }
 
 async function rawRequest(path: string, init: RequestInit): Promise<Response> {
 	if (!env.SERPMANTICS_API_KEY) {
-		throw new Error("SERPMANTICS_API_KEY n’est pas configurée.");
+		throw new Error("Le service d’analyse SEO n’est pas configuré.");
 	}
 	return fetch(`${SERPMANTICS_ORIGIN}${path}`, {
 		...init,
@@ -151,6 +164,10 @@ async function rawRequest(path: string, init: RequestInit): Promise<Response> {
 		},
 		signal: AbortSignal.timeout(45_000),
 	});
+}
+
+function publicServiceError(message: string | undefined, fallback: string): string {
+	return message?.replace(/serp\s*mantics/giu, "le service d’analyse SEO") ?? fallback;
 }
 
 async function parseJson(response: Response): Promise<unknown> {

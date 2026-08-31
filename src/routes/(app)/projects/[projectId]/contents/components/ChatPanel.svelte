@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { getFailedUserMessageId } from "$lib/contents/chatRetry";
 	import type { ContentDetail } from "$lib/server/contents";
 	import { Chat } from "@ai-sdk/svelte";
 	import { DefaultChatTransport, type UIMessage } from "ai";
@@ -108,10 +109,28 @@
 
 	async function sendPrompt(prompt: string) {
 		if (!prompt.trim() || preparing || chat.status === "streaming" || chat.status === "submitted") return;
+		const failedMessageId = getFailedUserMessageId(chat.messages, chat.status);
 		preparing = true;
 		try {
 			await onBeforeSend();
-			const response = chat.sendMessage({ text: prompt.trim(), metadata: { createdAt: Date.now() } });
+			const response = chat.sendMessage({
+				text: prompt.trim(),
+				metadata: { createdAt: Date.now() },
+				messageId: failedMessageId,
+			});
+			scheduleScrollToBottom(scrollAfterSendDelay);
+			await response;
+		} finally {
+			preparing = false;
+		}
+	}
+
+	async function retryLastMessage() {
+		if (preparing || chat.status !== "error") return;
+		preparing = true;
+		try {
+			await onBeforeSend();
+			const response = chat.regenerate();
 			scheduleScrollToBottom(scrollAfterSendDelay);
 			await response;
 		} finally {
@@ -216,7 +235,12 @@
 		{/if}
 	</div>
 
-	{#if chat.error}<div class="ChatError">{chat.error.message}</div>{/if}
+	{#if chat.error}
+		<div class="ChatError">
+			<span>{chat.error.message}</span>
+			<button type="button" disabled={preparing} onclick={() => void retryLastMessage()}>Réessayer</button>
+		</div>
+	{/if}
 	{#if chat.messages.length > 0}
 		<button
 			class="ClearChatButton"
@@ -282,7 +306,9 @@
 	.Typing { align-self: flex-start; background: white; border: 1px solid var(--color-border); border-radius: 1rem; padding: 0.7rem 1rem; display: flex; gap: 0.25rem; }
 	.Typing span { width: 0.45rem; height: 0.45rem; border-radius: 50%; background: #999; animation: pulse 1s infinite alternate; }
 	.Typing span:nth-child(2) { animation-delay: 0.2s; } .Typing span:nth-child(3) { animation-delay: 0.4s; }
-	.ChatError { color: var(--color-error); padding: 0.5rem 1rem; font-size: 0.85rem; }
+	.ChatError { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; color: var(--color-error); padding: 0.5rem 1rem; font-size: 0.85rem; }
+	.ChatError button { flex: 0 0 auto; border: 0; padding: 0; background: transparent; color: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+	.ChatError button:disabled { opacity: 0.45; cursor: default; }
 	.ClearChatButton { justify-self: end; margin: 0 1rem 0.4rem; padding: 0; border: 0; background: transparent; color: var(--color-text-light); font-size: calc(0.7rem + 1px); line-height: 1; cursor: pointer; }
 	.ClearChatButton:hover { color: var(--color-base-content); }
 	.ClearChatButton:disabled { opacity: 0.45; cursor: default; }

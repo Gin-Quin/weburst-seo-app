@@ -3,6 +3,7 @@ import {
 	getKeywordClusterSummaries,
 	type KeywordClusterSummary,
 } from "$lib/keywords/getKeywordClusterSummaries";
+import { mergeKeywordTuples } from "$lib/keywords/mergeKeywordTuples";
 import { getPivotClusters } from "$lib/keywords/pivotClustering";
 import { extractHost, getDomainMetrics, hostMatchesTarget } from "$lib/keywords/serpAnalytics";
 import { db } from "$lib/server/db";
@@ -16,12 +17,14 @@ import { parseClickhouseCsvRows } from "../parseClickhouseCsvRow";
 import type { DataForSeo } from "./DataForSeo";
 import { getAnalysisCompletionOutcome } from "./analysisCompletion";
 import {
+	RECURRING_ANALYSIS_PROJECT_TYPES,
 	runDueProjectAnalyses,
 	selectProjectsDueForAnalysis,
 	type LatestAnalysisState,
 } from "./analysisScheduler";
 import { getReadySerpTasks } from "./getReadySerpTasks";
 import { selectLatestAnalysisPerDay } from "./selectLatestAnalysisPerDay";
+import { applyShareOfVoiceTrends, selectTrendReferenceAnalysis } from "./shareOfVoiceTrend";
 
 const CONFIGURED_ANALYSIS_DEPTH = Number(env.SEARCH_DEPTH || 50);
 const ANALYSIS_DEPTH = Number.isFinite(CONFIGURED_ANALYSIS_DEPTH)
@@ -81,7 +84,7 @@ export type KeywordAnalysisMinimalResponse = Pick<
 	"keyword" | "domain" | "position" | "type"
 >;
 
-type AnalysisMetadata = Pick<ClickhouseTable.KeywordAnalysis, "projectId" | "setId">;
+type AnalysisMetadata = Pick<ClickhouseTable.KeywordAnalysis, "projectId" | "setId" | "createdAt">;
 
 type AnalysisTaskStats = Pick<
 	KeywordAnalysisStatus,
@@ -224,11 +227,21 @@ export namespace KeywordsService {
 	export async function addKeywords(
 		projectId: string,
 		keywords: Array<KeywordTuple>,
+		mode: "replace" | "append" = "replace",
 	): Promise<void> {
 		const clickhouse = getClickhouseClient();
 		const setId = crypto.randomUUID();
+		let keywordsToAdd = keywords;
 
-		const uniqueKeywords = keywords.filter(
+		if (mode === "append") {
+			const currentSetId = await getCurrentKeywordSet(projectId);
+			if (currentSetId) {
+				const existingKeywords = await getKeywordDetails(currentSetId);
+				keywordsToAdd = mergeKeywordTuples(existingKeywords.values(), keywords);
+			}
+		}
+
+		const uniqueKeywords = keywordsToAdd.filter(
 			([name], index, self) => !self.slice(0, index).some(([otherName]) => otherName === name),
 		);
 
@@ -318,6 +331,12 @@ export namespace KeywordsService {
 		return currentSet?.id;
 	}
 
+	/** Return whether the project's current keyword set contains any keywords. */
+	export async function hasKeywords(projectId: string): Promise<boolean> {
+		const keywords = await getKeywords({ projectId });
+		return Boolean(keywords?.size);
+	}
+
 	/**
 	 * Get keywords for a given project and keyword set.
 	 * If no keyword set is provided, the most recent one is used.
@@ -404,7 +423,7 @@ export namespace KeywordsService {
 
 		const response = await clickhouse.query({
 			query: `
-				SELECT projectId, setId
+				SELECT projectId, setId, createdAt
 				FROM keywordAnalysis
 				WHERE id = {analysisId: UUID}
 				LIMIT 1
@@ -413,7 +432,7 @@ export namespace KeywordsService {
 			format: "JSON",
 		});
 
-		const result = await response.json<{ projectId: string; setId: string }>();
+		const result = await response.json<AnalysisMetadata>();
 		const data = result.data[0] ?? null;
 
 		if (data) {
@@ -1100,13 +1119,13 @@ export namespace KeywordsService {
 		const analysis = await getAnalysisMetadata({ analysisId });
 		if (!analysis) return;
 
-		const { setId, projectId } = analysis;
+		const { setId, projectId, createdAt } = analysis;
 
 		const keywords = await getKeywords({ setId });
 		if (!keywords?.size) return;
 
 		const [lastMonth, data] = await Promise.all([
-			getLastMonthAggregatedAnalysis({ projectId }),
+			getLastMonthAggregatedAnalysis({ projectId, currentAnalysisAt: createdAt }),
 			getKeywordAnalysisResponses({
 				analysisId,
 				positionLimit: Math.min(positionLimit ?? 10, 10),
@@ -1128,24 +1147,19 @@ export namespace KeywordsService {
 			}),
 		);
 
-		if (lastMonth) {
-			for (const valueToInsert of valuesToInsert) {
-				const domain = valueToInsert.domain;
-				const domainLastMonth = lastMonth.data.find((item) => extractHost(item.domain) === domain);
-				if (domainLastMonth) {
-					const currentVolumeShare = totalTraffic ? valueToInsert.volume / totalTraffic : 0;
-					const lastMonthVolumeShare = domainLastMonth.volume / lastMonth.totalVolume;
-					valueToInsert.trend = currentVolumeShare - lastMonthVolumeShare;
-				}
-			}
-		}
+		const valuesWithTrend = applyShareOfVoiceTrends(
+			valuesToInsert,
+			totalTraffic,
+			lastMonth?.data,
+			lastMonth?.totalVolume ?? 0,
+		);
 
 		const clickhouse = getClickhouseClient();
 
-		if (valuesToInsert.length > 0) {
+		if (valuesWithTrend.length > 0) {
 			await clickhouse.insert({
 				table: "aggregatedKeywordAnalysisData",
-				values: valuesToInsert,
+				values: valuesWithTrend,
 				format: "JSONEachRow",
 			});
 		}
@@ -1172,24 +1186,21 @@ export namespace KeywordsService {
 	}
 
 	/**
-	 * Returns the last month analysis, i.e the most recent analysis that is at least 28 days before the most recent analysis.
-	 * If only one analysis found, return undefined.
-	 * If two or more analysis but less than one month ago, return the oldest analysis.
+	 * Returns the most recent analysis that is at least 30 days older than the
+	 * current analysis. More recent analyses are never used as a fallback.
 	 */
 	export async function getLastMonthAnalysisId({
 		projectId,
+		currentAnalysisAt,
 	}: {
 		projectId: string;
+		currentAnalysisAt?: string;
 	}): Promise<string | undefined> {
 		const allAnalysis = await getAllProjectAnalysis(projectId);
-		const mostRecentAnalysisAt = allAnalysis[0]?.createdAt;
-		if (!mostRecentAnalysisAt) return undefined;
-		const analysisOnemonthAgo = allAnalysis.find(
-			(analysis) =>
-				new Date(analysis.createdAt).getTime() <=
-				new Date(mostRecentAnalysisAt).getTime() - 28 * DAY,
-		);
-		return (analysisOnemonthAgo ?? allAnalysis.at(-1))?.id;
+		const currentDate = currentAnalysisAt ?? allAnalysis[0]?.createdAt;
+		if (!currentDate) return undefined;
+
+		return selectTrendReferenceAnalysis(allAnalysis, currentDate)?.id;
 	}
 
 	/**
@@ -1197,17 +1208,19 @@ export namespace KeywordsService {
 	 */
 	async function getLastMonthAggregatedAnalysis({
 		projectId,
+		currentAnalysisAt,
 		domain,
 		limit,
 	}: {
 		projectId: string;
+		currentAnalysisAt?: string;
 		domain?: string;
 		limit?: number;
 	}): Promise<null | {
 		totalVolume: number;
 		data: Array<ClickhouseTable.AggregatedKeywordAnalysisData>;
 	}> {
-		const analysisId = await getLastMonthAnalysisId({ projectId });
+		const analysisId = await getLastMonthAnalysisId({ projectId, currentAnalysisAt });
 		if (!analysisId) return null;
 
 		const analysis = await getAnalysisMetadata({ analysisId });
@@ -1243,7 +1256,7 @@ export namespace KeywordsService {
 		const totalVolume = getTotalVolume(keywords);
 		const clusterSummaries = getKeywordClusterSummaries(keywordDetails.values());
 
-		const [data, clusters] = await Promise.all([
+		const [storedData, clusters, lastMonth] = await Promise.all([
 			getAggregatedAnalysisResults({
 				analysisId,
 			}),
@@ -1256,9 +1269,19 @@ export namespace KeywordsService {
 				: Promise.resolve(
 						clusterSummaries.map((cluster) => ({ ...cluster, totalTraffic: 0, domains: [] })),
 					),
+			getLastMonthAggregatedAnalysis({
+				projectId,
+				currentAnalysisAt: analysis.createdAt,
+			}),
 		]);
-		if (!data) return null;
-		const totalTraffic = data.reduce((total, item) => total + item.volume, 0);
+		if (!storedData) return null;
+		const totalTraffic = storedData.reduce((total, item) => total + item.volume, 0);
+		const data = applyShareOfVoiceTrends(
+			storedData,
+			totalTraffic,
+			lastMonth?.data,
+			lastMonth?.totalVolume ?? 0,
+		);
 
 		return {
 			keywordCount: keywords.size,
@@ -1678,7 +1701,7 @@ export namespace KeywordsService {
 
 		const recurringAnalysisProjects = await db.query.projects.findMany({
 			where: and(
-				inArray(projects.type, ["audit", "monthly_subscription"]),
+				inArray(projects.type, RECURRING_ANALYSIS_PROJECT_TYPES),
 				isNull(projects.deletedAt),
 			),
 			columns: { id: true, keywordAnalysisFrequency: true },

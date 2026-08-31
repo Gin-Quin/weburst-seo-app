@@ -1,5 +1,10 @@
 <script lang="ts">
-	import { diffSequence, type DiffState } from "$lib/contents/articleDiff";
+	import {
+		diffSequence,
+		diffText,
+		type DiffState,
+		type TextDiffSegment,
+	} from "$lib/contents/articleDiff";
 	import { convertAsciiTablesInHtml } from "$lib/contents/articleHtml";
 	import { analyzeOptimizationContent } from "$lib/contents/optimization";
 	import OptimizationScore from "$lib/components/OptimizationScore.svelte";
@@ -10,29 +15,43 @@
 
 	let {
 		currentHtml,
-		proposedMarkdown,
+		proposedMarkdown = "",
+		proposedHtml,
 		guide,
 		accepting = false,
+		showScores = true,
+		cancelLabel = "Annuler les propositions",
+		acceptLabel = "Accepter l’article",
 		onAccept,
 		onCancel,
 	}: {
 		currentHtml: string;
-		proposedMarkdown: string;
+		proposedMarkdown?: string;
+		proposedHtml?: string;
 		guide: SerpmanticsGuide | null;
 		accepting?: boolean;
+		showScores?: boolean;
+		cancelLabel?: string;
+		acceptLabel?: string;
 		onAccept: (html: string) => void | Promise<void>;
 		onCancel: () => void;
 	} = $props();
 
-	const comparison = $derived.by(() => buildComparison(currentHtml, proposedMarkdown, guide));
+	const comparison = $derived.by(() =>
+		buildComparison(currentHtml, proposedHtml, proposedMarkdown, guide),
+	);
+
+	type ArticleBlock = { html: string; text: string };
 
 	function buildComparison(
 		beforeHtml: string,
+		afterHtmlValue: string | undefined,
 		markdown: string,
 		serpmanticsGuide: SerpmanticsGuide | null,
 	) {
 		const afterHtml = DOMPurify.sanitize(
-			convertAsciiTablesInHtml(marked.parse(markdown, { async: false }) as string),
+			afterHtmlValue ??
+				convertAsciiTablesInHtml(marked.parse(markdown, { async: false }) as string),
 		);
 		const beforeBlocks = getArticleBlocks(beforeHtml);
 		const afterBlocks = getArticleBlocks(afterHtml);
@@ -40,11 +59,12 @@
 			beforeBlocks.map((block) => block.html),
 			afterBlocks.map((block) => block.html),
 		);
+		const pairs = pairChangedBlocks(states.before, states.after);
 
 		return {
 			afterHtml,
-			beforeDiffHtml: renderBlocks(beforeBlocks, states.before),
-			afterDiffHtml: renderBlocks(afterBlocks, states.after),
+			beforeDiffHtml: renderBlocks(beforeBlocks, afterBlocks, states.before, pairs.before, "removed"),
+			afterDiffHtml: renderBlocks(afterBlocks, beforeBlocks, states.after, pairs.after, "added"),
 			beforeScore: analyzeOptimizationContent(
 				{ html: beforeHtml, text: htmlToText(beforeHtml) },
 				serpmanticsGuide,
@@ -61,23 +81,120 @@
 		return Array.from(document.body.childNodes)
 			.filter((node) => node.nodeType !== Node.TEXT_NODE || node.textContent?.trim())
 			.map((node) => {
-				if (node instanceof HTMLElement) return { html: node.outerHTML };
+				if (node instanceof HTMLElement) return { html: node.outerHTML, text: node.textContent ?? "" };
 				const paragraph = document.createElement("p");
 				paragraph.textContent = node.textContent ?? "";
-				return { html: paragraph.outerHTML };
+				return { html: paragraph.outerHTML, text: paragraph.textContent ?? "" };
 			});
 	}
 
-	function renderBlocks(blocks: { html: string }[], states: DiffState[]) {
+	function pairChangedBlocks(beforeStates: DiffState[], afterStates: DiffState[]) {
+		const before = new Map<number, number>();
+		const after = new Map<number, number>();
+		let beforeIndex = 0;
+		let afterIndex = 0;
+
+		while (beforeIndex < beforeStates.length || afterIndex < afterStates.length) {
+			if (beforeStates[beforeIndex] === "unchanged" && afterStates[afterIndex] === "unchanged") {
+				beforeIndex += 1;
+				afterIndex += 1;
+				continue;
+			}
+
+			const beforeStart = beforeIndex;
+			const afterStart = afterIndex;
+			while (beforeIndex < beforeStates.length && beforeStates[beforeIndex] !== "unchanged") beforeIndex += 1;
+			while (afterIndex < afterStates.length && afterStates[afterIndex] !== "unchanged") afterIndex += 1;
+
+			const pairCount = Math.min(beforeIndex - beforeStart, afterIndex - afterStart);
+			for (let offset = 0; offset < pairCount; offset += 1) {
+				before.set(beforeStart + offset, afterStart + offset);
+				after.set(afterStart + offset, beforeStart + offset);
+			}
+		}
+
+		return { before, after };
+	}
+
+	function renderBlocks(
+		blocks: ArticleBlock[],
+		counterpartBlocks: ArticleBlock[],
+		states: DiffState[],
+		pairs: Map<number, number>,
+		changedState: "added" | "removed",
+	) {
 		return DOMPurify.sanitize(
 			blocks
 				.map((block, index) => {
 					const state = states[index];
 					if (state === "unchanged") return block.html;
+
+					const counterpartIndex = pairs.get(index);
+					if (counterpartIndex !== undefined) {
+						const counterpart = counterpartBlocks[counterpartIndex]!;
+						const textDiff = changedState === "removed"
+							? diffText(block.text, counterpart.text).before
+							: diffText(counterpart.text, block.text).after;
+						if (textDiff.some((segment) => segment.state === changedState)) {
+							return renderInlineDiff(block.html, textDiff, changedState);
+						}
+					}
+
 					return `<div class="DiffHighlight ${state === "added" ? "DiffAdded" : "DiffRemoved"}">${block.html}</div>`;
 				})
 				.join(""),
 		);
+	}
+
+	function renderInlineDiff(
+		html: string,
+		segments: TextDiffSegment[],
+		changedState: "added" | "removed",
+	) {
+		const document = new DOMParser().parseFromString(`<body>${html}</body>`, "text/html");
+		const textNodes: Text[] = [];
+
+		function collectTextNodes(node: Node) {
+			for (const child of Array.from(node.childNodes)) {
+				if (child.nodeType === Node.TEXT_NODE) textNodes.push(child as Text);
+				else collectTextNodes(child);
+			}
+		}
+
+		collectTextNodes(document.body);
+		let segmentIndex = 0;
+		let segmentOffset = 0;
+
+		for (const textNode of textNodes) {
+			let nodeOffset = 0;
+			const fragment = document.createDocumentFragment();
+
+			while (nodeOffset < textNode.data.length && segmentIndex < segments.length) {
+				const segment = segments[segmentIndex]!;
+				const length = Math.min(textNode.data.length - nodeOffset, segment.value.length - segmentOffset);
+				const value = textNode.data.slice(nodeOffset, nodeOffset + length);
+
+				if (segment.state === changedState) {
+					const highlight = document.createElement("span");
+					highlight.className = changedState === "added" ? "DiffInlineAdded" : "DiffInlineRemoved";
+					highlight.textContent = value;
+					fragment.append(highlight);
+				} else {
+					fragment.append(document.createTextNode(value));
+				}
+
+				nodeOffset += length;
+				segmentOffset += length;
+				if (segmentOffset === segment.value.length) {
+					segmentIndex += 1;
+					segmentOffset = 0;
+				}
+			}
+
+			textNode.replaceWith(fragment);
+		}
+
+		return document.body.innerHTML;
 	}
 
 	function htmlToText(html: string) {
@@ -102,8 +219,14 @@
 		</header>
 
 		<div class="ComparisonHeadings">
-			<div><strong>Version actuelle</strong><OptimizationScore score={comparison.beforeScore} size="regular" /></div>
-			<div><strong>Nouvelle version</strong><OptimizationScore score={comparison.afterScore} size="regular" /></div>
+			<div>
+				<strong>Version actuelle</strong>
+				{#if showScores}<OptimizationScore score={comparison.beforeScore} size="regular" />{/if}
+			</div>
+			<div>
+				<strong>Nouvelle version</strong>
+				{#if showScores}<OptimizationScore score={comparison.afterScore} size="regular" />{/if}
+			</div>
 		</div>
 
 		<div class="ComparisonColumns">
@@ -116,9 +239,9 @@
 		</div>
 
 		<footer class="DialogActions">
-			<button class="btn SecondaryAction" type="button" disabled={accepting} onclick={onCancel}>Annuler les propositions</button>
+			<button class="btn SecondaryAction" type="button" disabled={accepting} onclick={onCancel}>{cancelLabel}</button>
 			<button class="btn PrimaryAction" type="button" disabled={accepting} onclick={() => void onAccept(comparison.afterHtml)}>
-				{accepting ? "Application…" : "Accepter l’article"}
+				{accepting ? "Application…" : acceptLabel}
 			</button>
 		</footer>
 	</dialog>
@@ -126,7 +249,7 @@
 
 <style>
 	.DialogBackdrop { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 1.5rem; background: rgb(38 32 48 / 24%); backdrop-filter: blur(1px); }
-	.ChangesDialog { width: min(1080px, calc(100vw - 3rem)); max-height: calc(100dvh - 3rem); padding: 1.5rem 1.75rem 1.7rem; overflow: hidden; background: white; border: 1px solid rgb(229 226 234); border-radius: 1.75rem; box-shadow: 0 24px 70px rgb(28 17 49 / 18%); display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; }
+	.ChangesDialog { position: relative; inset: auto; width: min(1080px, calc(100vw - 3rem)); max-width: 100%; max-height: calc(100dvh - 3rem); margin: 0; padding: 1.5rem 1.75rem 1.7rem; overflow: hidden; background: white; border: 1px solid rgb(229 226 234); border-radius: 1.75rem; box-shadow: 0 24px 70px rgb(28 17 49 / 18%); box-sizing: border-box; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; }
 	.DialogHeader { position: relative; min-height: 3.2rem; display: flex; align-items: flex-start; justify-content: center; }
 	.DialogHeader h2 { margin: 0; color: #0e0c10; font-size: clamp(1.55rem, 2.5vw, 2rem); line-height: 1.2; font-weight: 750; letter-spacing: -0.03em; text-align: center; }
 	.CloseButton { position: absolute; top: -0.1rem; right: 0; width: 2.5rem; height: 2.5rem; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; color: #111; cursor: pointer; }
@@ -164,6 +287,9 @@
 	.ArticleBody :global(.DiffHighlight > :last-child) { margin-bottom: 0; }
 	.ArticleBody :global(.DiffAdded) { background: #d9ffdf; }
 	.ArticleBody :global(.DiffRemoved) { background: #ffe0e0; text-decoration-color: #d24848; }
+	.ArticleBody :global(.DiffInlineAdded), .ArticleBody :global(.DiffInlineRemoved) { padding: 0.08em 0.12em; border-radius: 0.25em; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+	.ArticleBody :global(.DiffInlineAdded) { background: #c8f9d1; }
+	.ArticleBody :global(.DiffInlineRemoved) { background: #ffd1d1; text-decoration: line-through; text-decoration-color: #d24848; }
 	.DialogActions { display: flex; justify-content: center; gap: 0.75rem; padding-top: 1.55rem; }
 	.DialogActions .btn { min-width: 16.5rem; min-height: 3.5rem; padding-inline: 1.5rem; border-radius: 0.65rem; font-size: 1rem; font-weight: 700; }
 	.SecondaryAction { color: #17131c; background: white; border: 1px solid #908a96; }

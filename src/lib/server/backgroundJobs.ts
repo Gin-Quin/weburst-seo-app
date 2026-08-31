@@ -42,6 +42,7 @@ export function startRecurringTask({
 	scheduleNext(initialDelayMs);
 
 	return () => {
+		if (stopped) return;
 		stopped = true;
 		if (timer !== undefined) cancel(timer);
 	};

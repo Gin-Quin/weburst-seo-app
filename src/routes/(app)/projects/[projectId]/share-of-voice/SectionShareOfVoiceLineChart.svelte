@@ -1,8 +1,12 @@
 <script lang="ts">
 	import Loader from "$lib/components/Loader.svelte";
-	import Trend from "$lib/components/Trend.svelte";
 	import * as Chart from "$lib/components/ui/chart/index.js";
 	import { chartColors } from "$lib/charts/chartColors";
+	import {
+		countShareOfVoiceAnalyses,
+		getShareOfVoiceSnapshot,
+	} from "$lib/charts/getShareOfVoiceSnapshot";
+	import { getUniqueFormattedTicks } from "$lib/charts/getUniqueFormattedTicks";
 	import { locale } from "$lib/i18n/locale.svelte";
 	import { formatPercent } from "$lib/numbers/formatPercent";
 	import type { ClickhouseTable } from "$lib/server/clickhouse/migrations";
@@ -19,22 +23,28 @@
 	import { cubicInOut } from "svelte/easing";
 	import type { SvelteSet } from "svelte/reactivity";
 	import { getAllAggregatedAnalysisResults } from "../../../../api/keywords/index.remote";
+	import ShareOfVoiceSnapshotBarChart from "./ShareOfVoiceSnapshotBarChart.svelte";
 
 	type ChartData = Record<string, Date | number>;
 
 	let {
 		visibleDomains,
-		totalTraffic,
 		client,
 	}: {
 		visibleDomains: SvelteSet<string>;
-		totalTraffic: number;
 		client: ClickhouseTable.AggregatedKeywordAnalysisData;
 	} = $props();
 
 	const query = getAllAggregatedAnalysisResults({
 		projectId: context.project!.id,
 	});
+
+	function formatDate(date: Date): string {
+		return date.toLocaleDateString($locale, {
+			month: "short",
+			day: "numeric",
+		});
+	}
 
 	function getChartData({
 		data,
@@ -99,18 +109,7 @@
 	}
 </script>
 
-<div class="row justify-between items-center">
-	<div class="row items-center gap-2">
-		<div class="text-4xl font-bold">
-			{formatPercent(client.volume / (totalTraffic || 1), {
-				maximumFractionDigits: 0,
-			})}
-		</div>
-		<Trend trend={client.trend} />
-	</div>
-</div>
-
-<div class="Graph w-full grow">
+<div class="Graph w-full min-h-0 grow">
 	{#await query}
 		<Loader />
 	{:then data}
@@ -118,68 +117,70 @@
 			data,
 			visibleDomains,
 		})}
-		<Chart.Container config={chartConfig} class="h-full">
-			<AreaChart
-				data={chartData}
-				x="date"
-				xScale={scaleUtc()}
-				yPadding={[0, 0]}
-				seriesLayout="stack"
-				series={chartSeries}
-				points={{ r: 3 }}
-				props={{
-					area: {
-						curve: curveLinear,
-						"fill-opacity": 0.4,
-						line: { class: "stroke-1" },
-						motion: "tween",
-					},
-					xAxis: {
-						format: (v: Date) =>
-							v.toLocaleDateString($locale, {
-								month: "short",
-								day: "numeric",
-							}),
-					},
-					yAxis: { format: (percent) => formatPercent(percent / 100) },
-				}}
-			>
-				{#snippet tooltip()}
-					<Chart.Tooltip
-						indicator="dot"
-						labelFormatter={(v: Date) => {
-							return v.toLocaleDateString($locale, {
-								month: "short",
-								day: "numeric",
-							});
-						}}
-						valueFormatter={(v: number) => formatPercent(v / 100)}
-					/>
-				{/snippet}
+		{#if countShareOfVoiceAnalyses(data) === 1}
+			<ShareOfVoiceSnapshotBarChart
+				data={getShareOfVoiceSnapshot({
+					data,
+					selectedDomains: [client.domain, ...visibleDomains],
+				})}
+				clientDomain={client.domain}
+			/>
+		{:else}
+			<Chart.Container config={chartConfig} class="h-full">
+				<AreaChart
+					data={chartData}
+					x="date"
+					xScale={scaleUtc()}
+					yPadding={[0, 0]}
+					seriesLayout="stack"
+					series={chartSeries}
+					points={{ r: 3 }}
+					props={{
+						area: {
+							curve: curveLinear,
+							"fill-opacity": 0.4,
+							line: { class: "stroke-1" },
+							motion: "tween",
+						},
+						xAxis: {
+							ticks: (scale) => getUniqueFormattedTicks(scale, formatDate),
+							format: formatDate,
+						},
+						yAxis: { format: (percent) => formatPercent(percent / 100) },
+					}}
+				>
+					{#snippet tooltip()}
+						<Chart.Tooltip
+							indicator="dot"
+							labelFormatter={formatDate}
+							valueFormatter={(v: number) => formatPercent(v / 100)}
+						/>
+					{/snippet}
 
-				{#snippet marks({ series, getAreaProps })}
-					<ChartClipPath
-						initialWidth={0}
-						motion={{
-							width: { type: "tween", duration: 1000, easing: cubicInOut },
-						}}
-					>
-						{#each series as s, i (s.key)}
-							<LinearGradient
-								stops={[
-									s.color ?? "",
-									"color-mix(in lch, " + s.color + " 10%, transparent)",
-								]}
-								vertical
-							>
-								{#snippet children({ gradient })}
-									<Area {...getAreaProps(s, i)} fill={gradient} />
-								{/snippet}
-							</LinearGradient>
-						{/each}
-					</ChartClipPath>
-				{/snippet}
-			</AreaChart>
-		</Chart.Container>
+					{#snippet marks({ series, getAreaProps })}
+						<ChartClipPath
+							initialWidth={0}
+							motion={{
+								width: { type: "tween", duration: 1000, easing: cubicInOut },
+							}}
+						>
+							{#each series as s, i (s.key)}
+								<LinearGradient
+									stops={[
+										s.color ?? "",
+										"color-mix(in lch, " + s.color + " 10%, transparent)",
+									]}
+									vertical
+								>
+									{#snippet children({ gradient })}
+										<Area {...getAreaProps(s, i)} fill={gradient} />
+									{/snippet}
+								</LinearGradient>
+							{/each}
+						</ChartClipPath>
+					{/snippet}
+				</AreaChart>
+			</Chart.Container>
+		{/if}
 	{/await}
 </div>

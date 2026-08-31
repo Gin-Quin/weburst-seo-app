@@ -45,7 +45,21 @@ export const POST: RequestHandler = async ({ request }) => {
 				description:
 					"Relire le contenu, le brief et les recommandations SEO les plus récents avant de répondre ou de modifier l’article.",
 				inputSchema: z.object({}),
-				execute: async () => getContentById(body.contentId!, body.projectId!),
+				execute: async () => {
+					const latest = await getContentById(body.contentId!, body.projectId!);
+					return {
+						title: latest.title,
+						existingUrl: latest.existingUrl,
+						cluster: latest.cluster,
+						brief: latest.brief,
+						contentHtml: latest.contentHtml,
+						contentText: latest.contentText,
+						optimizationStatus: latest.serpmanticsStatus,
+						optimizationError: latest.serpmanticsError,
+						optimizationGuide: latest.serpmanticsGuide,
+						optimizationAnalysis: latest.serpmanticsAnalysis,
+					};
+				},
 			}),
 			write_article: tool({
 				description:
@@ -71,7 +85,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			}),
 			refreshSeoAnalysis: tool({
 				description:
-					"Relancer l’analyse SERPmantics du texte courant et obtenir le score et les occurrences actualisés.",
+					"Relancer l’analyse SEO du texte courant et obtenir le score et les occurrences actualisés.",
 				inputSchema: z.object({}),
 				execute: async () => {
 					const updated = await refreshContentOptimization(body.contentId!, body.projectId!);
@@ -94,7 +108,12 @@ export const POST: RequestHandler = async ({ request }) => {
 				middleware: simulateStreamingMiddleware(),
 			}),
 			instructions: buildSystemPrompt(content),
-			messages: await convertToModelMessages(messages, { tools }),
+			// A provider or network interruption can leave a partial tool call in the
+			// client history. Ignore it so the next user attempt can still be sent.
+			messages: await convertToModelMessages(messages, {
+				tools,
+				ignoreIncompleteToolCalls: true,
+			}),
 			tools,
 			stopWhen: stepCountIs(6),
 			temperature: 0.4,
@@ -123,7 +142,7 @@ export const POST: RequestHandler = async ({ request }) => {
 function buildSystemPrompt(content: Awaited<ReturnType<typeof getContentById>>): string {
 	return `Tu es un assistant éditorial SEO francophone intégré à WeBurst.
 Tu aides l’utilisateur à écrire et optimiser l’article courant. Réponds en Markdown clair et concis.
-N’invente jamais de données issues de SERPmantics. Appuie tes conseils sur le contexte ci-dessous.
+N’invente jamais de données issues de l’analyse SEO. Appuie tes conseils sur le contexte ci-dessous.
 Avant une modification importante, relis le contexte avec getArticleContext si une conversation précédente a pu le changer.
 Quand l’utilisateur te demande d’appliquer, réécrire, créer ou optimiser le texte, utilise write_article au lieu de seulement proposer le texte dans le chat.
 Transmets toujours l’article complet dans le champ content, en Markdown valide. Pour toute donnée tabulaire ou comparaison, utilise impérativement la syntaxe de tableau Markdown avec en-têtes ; n’utilise jamais de tableau ASCII dans un bloc de code. Ne produis jamais de diagramme, organigramme ou autre dessin ASCII. Exprime les relations et les enchaînements avec des titres, des listes ordonnées ou à puces et du texte explicatif afin que le résultat reste lisible, responsive et éditable. Préserve la structure, les images et les informations utiles, et n’ajoute pas de faux faits. L’utilisateur validera la proposition avant qu’elle soit appliquée.
@@ -141,9 +160,9 @@ ${content.contentHtml}
 ARTICLE TEXTE :
 ${content.contentText}
 
-DERNIER GUIDE SERPMANTICS :
+DERNIER GUIDE D’OPTIMISATION SEO :
 ${JSON.stringify(content.serpmanticsGuide ?? null)}
 
-DERNIÈRE ANALYSE SERPMANTICS :
+DERNIÈRE ANALYSE SEO :
 ${JSON.stringify(content.serpmanticsAnalysis ?? null)}`;
 }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { safeParse } from "valibot";
-import { CreateUser } from "./users.schema";
+import { CreateUser, UpdateCurrentUser } from "./users.schema";
 
 const baseUser = {
 	firstName: "Jeanne",
@@ -29,4 +29,14 @@ describe("CreateUser", () => {
 			}).success,
 		).toBe(false);
 	});
+});
+
+test("UpdateCurrentUser accepts the admin email preference", () => {
+	expect(
+		safeParse(UpdateCurrentUser, {
+			firstName: "Jeanne",
+			lastName: "Martin",
+			clientInvitationEmailsEnabled: false,
+		}).success,
+	).toBe(true);
 });

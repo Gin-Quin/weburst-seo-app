@@ -20,8 +20,9 @@
 
 	const content = defineContent({
 			en: {
-			title: "Account Settings",
-			createTitle: "Create a new user",
+				title: "Account Settings",
+				createTitle: "Create a new user",
+				inviteClientTitle: "Invite a client",
 			firstName: "First Name",
 			lastName: "Last Name",
 			email: "Email Address",
@@ -35,10 +36,14 @@
 			userCreated: "User created successfully",
 			userCreationFailed: "User creation failed",
 			userUpdateFailed: "User update failed",
+			clientInvitationEmails: "Client invitation notifications",
+			clientInvitationEmailsDescription:
+				"Receive an email when a project manager invites a client.",
 		},
-		fr: {
-			title: "Paramètres du compte",
-			createTitle: "Créer un nouvel utilisateur",
+			fr: {
+				title: "Paramètres du compte",
+				createTitle: "Créer un nouvel utilisateur",
+				inviteClientTitle: "Inviter un client",
 			firstName: "Prénom",
 			lastName: "Nom",
 			email: "Adresse email",
@@ -52,21 +57,29 @@
 			userCreated: "Utilisateur créé avec succès",
 			userCreationFailed: "Impossible de créer l'utilisateur",
 			userUpdateFailed: "Impossible de mettre à jour l'utilisateur",
+			clientInvitationEmails: "Notifications d’invitation client",
+			clientInvitationEmailsDescription:
+				"Recevoir un email lorsqu’un chef de projet invite un client.",
 		},
 	});
-	const creatableRoles = ["admin", "project_manager", "client"] as const;
+	const creatableRoles = $derived(
+		context.user?.role === "admin"
+			? (["admin", "project_manager", "client"] as const)
+			: (["client"] as const),
+	);
 
 	let createMode = $state(false);
 	let updating = $state(false);
 	let updates: UpdateCurrentUser = $state({
-		firstName: context.user!.firstName,
-		lastName: context.user!.lastName,
+		firstName: context.user?.firstName ?? "",
+		lastName: context.user?.lastName ?? "",
+		clientInvitationEmailsEnabled: context.user?.clientInvitationEmailsEnabled ?? true,
 	});
 	let newUser: CreateUser = $state({
 		firstName: "",
 		lastName: "",
 		email: "",
-		role: "project_manager",
+		role: context.user?.role === "admin" ? "project_manager" : "client",
 	});
 	let selectedClientId = $state("");
 
@@ -79,11 +92,14 @@
 				(newUser.role !== "client" || selectedClientId)
 			: updates.firstName &&
 					updates.lastName &&
-					(updates.firstName !== context.user!.firstName ||
-						updates.lastName !== context.user!.lastName),
+					(updates.firstName !== context.user?.firstName ||
+						updates.lastName !== context.user?.lastName ||
+						updates.clientInvitationEmailsEnabled !==
+							context.user?.clientInvitationEmailsEnabled),
 	);
 
 	openUserDialog = (mode = "account") => {
+		if (mode === "account" && !context.user) return;
 		createMode = mode === "create";
 		if (createMode) {
 			selectedClientId = "";
@@ -91,11 +107,13 @@
 				firstName: "",
 				lastName: "",
 				email: "",
-				role: "project_manager",
+				role: context.user?.role === "admin" ? "project_manager" : "client",
 			};
 		} else {
-			updates.firstName = context.user!.firstName;
-			updates.lastName = context.user!.lastName;
+			updates.firstName = context.user?.firstName ?? "";
+			updates.lastName = context.user?.lastName ?? "";
+			updates.clientInvitationEmailsEnabled =
+				context.user?.clientInvitationEmailsEnabled ?? true;
 		}
 		ref?.showModal();
 	};
@@ -131,7 +149,11 @@
 <dialog bind:this={ref} class="modal">
 	<div class="modal-box w-[42rem]">
 		<header>
-			{createMode ? $content.createTitle : $content.title}
+			{createMode
+				? context.user?.role === "admin"
+					? $content.createTitle
+					: $content.inviteClientTitle
+				: $content.title}
 		</header>
 
 		<form method="dialog" class="col gap-6 items-stretch">
@@ -173,7 +195,7 @@
 								class="grow"
 								name="email"
 								type="email"
-								value={context.user!.email}
+								value={context.user?.email ?? ""}
 								placeholder={$content.email}
 								disabled
 								required
@@ -188,7 +210,7 @@
 							<input
 								class="grow"
 								name="role"
-								value={$userRoles[context.user!.role]}
+								value={context.user ? $userRoles[context.user.role] : ""}
 								placeholder={$content.role}
 								disabled
 								required
@@ -196,6 +218,22 @@
 						</label>
 					</div>
 				</div>
+
+				{#if context.user?.role === "admin"}
+					<label class="row items-start gap-3 rounded-box border border-base-300 p-4">
+						<input
+							type="checkbox"
+							class="checkbox mt-1"
+							bind:checked={updates.clientInvitationEmailsEnabled}
+						/>
+						<span class="col gap-1">
+							<strong>{$content.clientInvitationEmails}</strong>
+							<small class="text-base-content/60">
+								{$content.clientInvitationEmailsDescription}
+							</small>
+						</span>
+					</label>
+				{/if}
 			{:else}
 				<div class="grid grid-cols-2 gap-3">
 					<div class="field grow">

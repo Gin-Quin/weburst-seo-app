@@ -25,7 +25,7 @@ export async function sendEmail({
 		filename: string;
 		content: string | Buffer;
 	}>;
-} & ({ html: string } | { text: string })) {
+} & ({ html: string; text?: string } | { text: string; html?: string })) {
 	const response = await fetch("https://api.resend.com/emails", {
 		method: "POST",
 		headers: {

@@ -1,11 +1,22 @@
 <script lang="ts">
 	import { convertAsciiTablesInHtml } from "$lib/contents/articleHtml";
-	import { onMount } from "svelte";
-	import { Schema, DOMParser as ProseMirrorDOMParser, DOMSerializer, type MarkSpec, type MarkType } from "prosemirror-model";
-	import { EditorState, type Command } from "prosemirror-state";
-	import { EditorView } from "prosemirror-view";
+	import { setListType } from "$lib/contents/editorLists";
+	import type { SerpmanticsGuide } from "$lib/server/serpmantics";
+	import {
+		autoUpdate,
+		computePosition,
+		flip,
+		inline,
+		offset,
+		shift,
+		type VirtualElement,
+	} from "@floating-ui/dom";
+	import { onMount, tick } from "svelte";
+	import { Schema, DOMParser as ProseMirrorDOMParser, DOMSerializer, type MarkSpec, type MarkType, type Node as ProseMirrorNode } from "prosemirror-model";
+	import { EditorState, Plugin, PluginKey, TextSelection, type Command } from "prosemirror-state";
+	import { Decoration, DecorationSet, EditorView } from "prosemirror-view";
 	import { schema as basicSchema } from "prosemirror-schema-basic";
-	import { addListNodes, wrapInList } from "prosemirror-schema-list";
+	import { addListNodes } from "prosemirror-schema-list";
 	import { history, redo, undo } from "prosemirror-history";
 	import { baseKeymap, setBlockType, toggleMark } from "prosemirror-commands";
 	import { keymap } from "prosemirror-keymap";
@@ -24,20 +35,46 @@
 	import IconTextBRegular from "phosphor-icons-svelte/IconTextBRegular.svelte";
 	import IconTextItalicRegular from "phosphor-icons-svelte/IconTextItalicRegular.svelte";
 	import IconTextUnderlineRegular from "phosphor-icons-svelte/IconTextUnderlineRegular.svelte";
+	import IconArrowUpRegular from "phosphor-icons-svelte/IconArrowUpRegular.svelte";
+	import { toast } from "svelte-sonner";
+	import ArticleChangesDialog from "./ArticleChangesDialog.svelte";
+	import RewriteLoadingDialog from "./RewriteLoadingDialog.svelte";
 
 	let {
 		html,
+		projectId,
+		contentId,
+		guide,
 		readOnly = false,
 		onChange,
 		setEditorContent = $bindable(),
 	}: {
 		html: string;
+		projectId: string;
+		contentId: string;
+		guide: SerpmanticsGuide | null;
 		readOnly?: boolean;
 		onChange?: (value: { html: string; json: string; text: string }) => void;
 		setEditorContent?: (html: string) => EditorContent | undefined;
 	} = $props();
 	type EditorContent = { html: string; json: string; text: string };
 	type BlockStyle = "paragraph" | "h1" | "h2" | "h3";
+	type RewriteSelection = {
+		from: number;
+		to: number;
+		blockFrom: number;
+		blockTo: number;
+		selectedText: string;
+		currentHtml: string;
+		range: Range;
+	};
+	type RewriteProposal = Omit<RewriteSelection, "range"> & {
+		proposedHtml: string;
+		deletesSelection: boolean;
+	};
+	type RewriteHighlight = { from: number; to: number } | null;
+	const REWRITE_BUBBLE_DELAY_MS = 300;
+	const rewriteHighlightKey = new PluginKey<DecorationSet>("rewrite-selection-highlight");
 
 	const underline: MarkSpec = {
 		parseDOM: [{ tag: "u" }, { style: "text-decoration=underline" }],
@@ -60,6 +97,7 @@
 	const codeBlockNode = schema.nodes.code_block!;
 	const bulletListNode = schema.nodes.bullet_list!;
 	const orderedListNode = schema.nodes.ordered_list!;
+	const listItemNode = schema.nodes.list_item!;
 
 	let mount: HTMLDivElement;
 	let view: EditorView | undefined;
@@ -67,6 +105,16 @@
 	let lastHtml = html;
 	let revision = $state(0);
 	let selectedBlock = $state<BlockStyle>("paragraph");
+	let bubbleMenu = $state<HTMLFormElement>();
+	let bubbleVisible = $state(false);
+	let rewriteInstruction = $state("");
+	let rewriteLoading = $state(false);
+	let acceptingRewrite = $state(false);
+	let rewriteSelection = $state<RewriteSelection | undefined>();
+	let rewriteProposal = $state<RewriteProposal | undefined>();
+	let cleanupFloating: (() => void) | undefined;
+	let positionFrame: number | undefined;
+	let rewriteBubbleTimeout: ReturnType<typeof setTimeout> | undefined;
 
 	setEditorContent = (nextHtml: string): EditorContent | undefined => {
 		if (!view) return undefined;
@@ -107,6 +155,7 @@
 				view.updateState(view.state.apply(transaction));
 				syncSelectedBlock();
 				revision += 1;
+				if (transaction.getMeta(rewriteHighlightKey) === undefined) scheduleRewriteBubble();
 				if (transaction.docChanged && !suppressChange) {
 					lastHtml = serializeHtml();
 					onChange?.({
@@ -119,11 +168,34 @@
 		});
 		syncSelectedBlock();
 		lastHtml = serializeHtml();
-		return () => view?.destroy();
+		scheduleRewriteBubble();
+		return () => {
+			cleanupFloating?.();
+			clearTimeout(rewriteBubbleTimeout);
+			if (positionFrame !== undefined) cancelAnimationFrame(positionFrame);
+			view?.destroy();
+		};
 	});
 
 	function createPlugins() {
 		return [
+			new Plugin<DecorationSet>({
+				key: rewriteHighlightKey,
+				state: {
+					init: () => DecorationSet.empty,
+					apply(transaction, decorations) {
+						const highlight = transaction.getMeta(rewriteHighlightKey) as
+							| RewriteHighlight
+							| undefined;
+						if (highlight === null) return DecorationSet.empty;
+						if (highlight) return createRewriteHighlight(transaction.doc, highlight);
+						return decorations.map(transaction.mapping, transaction.doc);
+					},
+				},
+				props: {
+					decorations: (state) => rewriteHighlightKey.getState(state),
+				},
+			}),
 			history(),
 			tableEditing(),
 			inputRules({
@@ -152,11 +224,22 @@
 				"Mod-b": toggleMark(strongMark),
 				"Mod-i": toggleMark(emphasisMark),
 				"Mod-u": toggleMark(underlineMark),
-				"Mod-Shift-8": wrapInList(bulletListNode),
-				"Mod-Shift-7": wrapInList(orderedListNode),
+				"Mod-Shift-8": setListType(bulletListNode, listItemNode),
+				"Mod-Shift-7": setListType(orderedListNode, listItemNode),
 			}),
 			keymap(baseKeymap),
 		];
+	}
+
+	function createRewriteHighlight(doc: ProseMirrorNode, highlight: Exclude<RewriteHighlight, null>) {
+		const decorations: Decoration[] = [];
+		doc.nodesBetween(highlight.from, highlight.to, (node, position) => {
+			if (!node.isText) return;
+			const from = Math.max(highlight.from, position);
+			const to = Math.min(highlight.to, position + node.nodeSize);
+			if (from < to) decorations.push(Decoration.inline(from, to, { class: "RewriteSelection" }));
+		});
+		return DecorationSet.create(doc, decorations);
 	}
 
 	function markdownMarkInputRule(expression: RegExp, mark: MarkType) {
@@ -182,6 +265,226 @@
 		const container = document.createElement("div");
 		container.appendChild(DOMSerializer.fromSchema(schema).serializeFragment(view.state.doc.content));
 		return container.innerHTML;
+	}
+
+	function serializeFragment(from: number, to: number) {
+		if (!view) return "";
+		const container = document.createElement("div");
+		container.appendChild(
+			DOMSerializer.fromSchema(schema).serializeFragment(view.state.doc.slice(from, to).content),
+		);
+		return container.innerHTML;
+	}
+
+	function scheduleRewriteBubble() {
+		hideRewriteBubble();
+		clearTimeout(rewriteBubbleTimeout);
+		if (positionFrame !== undefined) cancelAnimationFrame(positionFrame);
+		rewriteBubbleTimeout = setTimeout(() => {
+			rewriteBubbleTimeout = undefined;
+			positionFrame = requestAnimationFrame(() => {
+				positionFrame = undefined;
+				void syncRewriteBubble();
+			});
+		}, REWRITE_BUBBLE_DELAY_MS);
+	}
+
+	async function syncRewriteBubble() {
+		if (!view || readOnly || rewriteLoading || rewriteProposal) {
+			hideRewriteBubble();
+			return;
+		}
+
+		const { selection } = view.state;
+		if (!(selection instanceof TextSelection) || selection.empty) {
+			hideRewriteBubble();
+			return;
+		}
+
+		const browserSelection = window.getSelection();
+		if (!browserSelection?.rangeCount) {
+			hideRewriteBubble();
+			return;
+		}
+		const range = browserSelection.getRangeAt(0);
+		if (!view.dom.contains(range.commonAncestorContainer)) {
+			hideRewriteBubble();
+			return;
+		}
+
+		let blockFrom: number | undefined;
+		let blockTo: number | undefined;
+		view.state.doc.nodesBetween(selection.from, selection.to, (node, position, parent) => {
+			if (parent !== view?.state.doc) return;
+			blockFrom ??= position;
+			blockTo = position + node.nodeSize;
+			return false;
+		});
+		if (blockFrom === undefined || blockTo === undefined) {
+			hideRewriteBubble();
+			return;
+		}
+		const selectedText = view.state.doc.textBetween(selection.from, selection.to, "\n");
+		if (!selectedText.trim()) {
+			hideRewriteBubble();
+			return;
+		}
+
+		rewriteSelection = {
+			from: selection.from,
+			to: selection.to,
+			blockFrom,
+			blockTo,
+			selectedText,
+			currentHtml: serializeFragment(blockFrom, blockTo),
+			range: range.cloneRange(),
+		};
+		bubbleVisible = true;
+		await positionRewriteBubble(rewriteSelection.range);
+	}
+
+	async function positionRewriteBubble(range: Range) {
+		await tick();
+		const floatingElement = bubbleMenu;
+		if (!bubbleVisible || !floatingElement || !view) return;
+		cleanupFloating?.();
+		const reference: VirtualElement = {
+			getBoundingClientRect: () => range.getBoundingClientRect(),
+			getClientRects: () => range.getClientRects(),
+			contextElement: view.dom,
+		};
+		const update = async () => {
+			const position = await computePosition(reference, floatingElement, {
+				strategy: "fixed",
+				placement: "top",
+				middleware: [inline(), offset(10), flip({ fallbackPlacements: ["bottom"] }), shift({ padding: 12 })],
+			});
+			Object.assign(floatingElement.style, {
+				left: `${position.x}px`,
+				top: `${position.y}px`,
+			});
+		};
+		cleanupFloating = autoUpdate(reference, floatingElement, () => void update());
+		await update();
+	}
+
+	function hideRewriteBubble() {
+		bubbleVisible = false;
+		clearTimeout(rewriteBubbleTimeout);
+		rewriteBubbleTimeout = undefined;
+		cleanupFloating?.();
+		cleanupFloating = undefined;
+	}
+
+	function showRewriteHighlight() {
+		if (!view || !rewriteSelection) return;
+		view.dispatch(
+			view.state.tr.setMeta(rewriteHighlightKey, {
+				from: rewriteSelection.from,
+				to: rewriteSelection.to,
+			} satisfies Exclude<RewriteHighlight, null>),
+		);
+	}
+
+	function clearRewriteHighlight() {
+		if (!view || rewriteHighlightKey.getState(view.state) === DecorationSet.empty) return;
+		view.dispatch(view.state.tr.setMeta(rewriteHighlightKey, null satisfies RewriteHighlight));
+	}
+
+	function handleWindowPointerDown(event: PointerEvent) {
+		if (!bubbleVisible || !(event.target instanceof Node)) return;
+		if (bubbleMenu?.contains(event.target) || view?.dom.contains(event.target)) return;
+		hideRewriteBubble();
+		clearRewriteHighlight();
+	}
+
+	async function requestRewrite(event: SubmitEvent) {
+		event.preventDefault();
+		const instruction = rewriteInstruction.trim();
+		if (!rewriteSelection || rewriteLoading || !instruction) return;
+		const selection = rewriteSelection;
+		hideRewriteBubble();
+		clearRewriteHighlight();
+		rewriteLoading = true;
+		try {
+			const response = await fetch("/api/contents/rewrite-selection", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					projectId,
+					contentId,
+					instruction,
+					selectedText: selection.selectedText,
+					fragmentHtml: selection.currentHtml,
+				}),
+			});
+			if (!response.ok) throw new Error((await response.text()) || "La réécriture a échoué.");
+			const result = (await response.json()) as { html?: unknown };
+			if (typeof result.html !== "string") throw new Error("La réponse de réécriture est invalide.");
+			rewriteProposal = {
+				...selection,
+				proposedHtml: result.html,
+				deletesSelection: result.html.trim() === "",
+			};
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : "La réécriture a échoué.", {
+				richColors: true,
+			});
+			restoreRewriteSelection(selection);
+		} finally {
+			rewriteLoading = false;
+		}
+	}
+
+	function restoreRewriteSelection(selection: Pick<RewriteSelection, "from" | "to">) {
+		if (!view || selection.to > view.state.doc.content.size) return;
+		view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, selection.from, selection.to)));
+		view.focus();
+	}
+
+	function cancelRewrite() {
+		if (!rewriteProposal || acceptingRewrite) return;
+		const position = Math.min(rewriteProposal.from, view?.state.doc.content.size ?? 0);
+		rewriteProposal = undefined;
+		rewriteInstruction = "";
+		if (view) {
+			view.dispatch(view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(position))));
+			view.focus();
+		}
+	}
+
+	async function acceptRewrite(afterHtml: string) {
+		if (!view || !rewriteProposal || acceptingRewrite) return;
+		acceptingRewrite = true;
+		try {
+			if (rewriteProposal.to > view.state.doc.content.size) {
+				throw new Error("Le passage a changé depuis la proposition. Relancez la réécriture.");
+			}
+			if (rewriteProposal.deletesSelection) {
+				view.dispatch(
+					view.state.tr.delete(rewriteProposal.from, rewriteProposal.to).scrollIntoView(),
+				);
+			} else {
+				if (rewriteProposal.blockTo > view.state.doc.content.size) {
+					throw new Error("Le passage a changé depuis la proposition. Relancez la réécriture.");
+				}
+				const replacement = parseHtml(afterHtml).content;
+				view.dispatch(
+					view.state.tr
+						.replaceWith(rewriteProposal.blockFrom, rewriteProposal.blockTo, replacement)
+						.scrollIntoView(),
+				);
+			}
+			rewriteProposal = undefined;
+			rewriteInstruction = "";
+			view.focus();
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : "Impossible d’appliquer la réécriture.", {
+				richColors: true,
+			});
+		} finally {
+			acceptingRewrite = false;
+		}
 	}
 
 	function run(command: Command) {
@@ -217,6 +520,8 @@
 	}
 </script>
 
+<svelte:window onpointerdown={handleWindowPointerDown} />
+
 <div class="EditorShell" class:is-readonly={readOnly}>
 	{#if !readOnly}
 		<div class="EditorToolbar" aria-label="Mise en forme du contenu">
@@ -248,16 +553,55 @@
 				<IconTextUnderlineRegular class="icon" />
 			</button>
 			<span class="ToolbarSeparator"></span>
-			<button class="ToolbarButton" title="Liste à puces" onclick={() => run(wrapInList(bulletListNode))}>
+			<button class="ToolbarButton" title="Liste à puces" onclick={() => run(setListType(bulletListNode, listItemNode))}>
 				<IconListBulletsRegular class="icon" />
 			</button>
-			<button class="ToolbarButton" title="Liste numérotée" onclick={() => run(wrapInList(orderedListNode))}>
+			<button class="ToolbarButton" title="Liste numérotée" onclick={() => run(setListType(orderedListNode, listItemNode))}>
 				<IconListNumbersRegular class="icon" />
 			</button>
 		</div>
 	{/if}
 	<div class="EditorSurface" bind:this={mount}></div>
 </div>
+
+{#if bubbleVisible}
+	<form class="RewriteBubble" bind:this={bubbleMenu} onsubmit={requestRewrite} aria-label="Réécrire le passage sélectionné">
+		<input
+			type="text"
+			bind:value={rewriteInstruction}
+			placeholder="Que souhaitez-vous modifier ?"
+			aria-label="Consigne de réécriture"
+			onfocus={showRewriteHighlight}
+			onblur={clearRewriteHighlight}
+			onkeydown={(event) => {
+				if (event.key === "Escape") {
+					event.preventDefault();
+					hideRewriteBubble();
+					view?.focus();
+				}
+			}}
+		/>
+		<button type="submit" aria-label="Lancer la réécriture" disabled={!rewriteInstruction.trim()}>
+			<IconArrowUpRegular class="icon" />
+		</button>
+	</form>
+{/if}
+
+{#if rewriteLoading}
+	<RewriteLoadingDialog />
+{:else if rewriteProposal}
+	<ArticleChangesDialog
+		currentHtml={rewriteProposal.currentHtml}
+		proposedHtml={rewriteProposal.proposedHtml}
+		{guide}
+		showScores={false}
+		cancelLabel="Refuser les modifications"
+		acceptLabel="Appliquer les modifications"
+		accepting={acceptingRewrite}
+		onAccept={acceptRewrite}
+		onCancel={cancelRewrite}
+	/>
+{/if}
 
 <style>
 	.EditorShell {
@@ -319,6 +663,11 @@
 		white-space: pre-wrap;
 		word-wrap: break-word;
 	}
+	.EditorSurface :global(.ProseMirror ::selection) { background: #e8d9ff; }
+	.EditorSurface :global(.ProseMirror .RewriteSelection) {
+		background: #e8d9ff;
+		border-radius: 0.2rem;
+	}
 
 	.EditorSurface :global(.ProseMirror h1) { font-size: 2.55rem; line-height: 1.15; font-weight: 750; margin: 0.75rem 0 1rem; }
 	.EditorSurface :global(.ProseMirror h2) { font-size: 2rem; line-height: 1.2; font-weight: 720; margin: 2rem 0 0.75rem; }
@@ -343,4 +692,48 @@
 	.EditorSurface :global(.ProseMirror .selectedCell::after) { position: absolute; inset: 0; pointer-events: none; content: ""; background: rgb(139 69 255 / 12%); }
 	.EditorSurface :global(.ProseMirror img) { max-width: 100%; border-radius: 0.75rem; }
 	.is-readonly .EditorSurface :global(.ProseMirror) { color: #505050; }
+
+	.RewriteBubble {
+		position: fixed;
+		z-index: 40;
+		width: min(32rem, calc(100vw - 1.5rem));
+		display: flex;
+		align-items: center;
+		gap: 0.65rem;
+		padding: 0.55rem 0.65rem 0.55rem 1rem;
+		background: #fbf9fd;
+		border: 1px solid #ece8ef;
+		border-radius: 0.75rem;
+		box-shadow: 0 5px 20px rgb(35 23 51 / 18%);
+	}
+
+	.RewriteBubble input {
+		min-width: 0;
+		flex: 1;
+		border: 0;
+		outline: none;
+		background: transparent;
+		color: var(--color-base-content);
+		font-size: 1rem;
+		line-height: 1.4;
+	}
+
+	.RewriteBubble input::placeholder { color: var(--color-text-light); opacity: 1; }
+
+	.RewriteBubble button {
+		flex: 0 0 auto;
+		width: 2.4rem;
+		height: 2.4rem;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		color: white;
+		background: var(--color-primary);
+		border-radius: 0.4rem;
+		cursor: pointer;
+	}
+
+	.RewriteBubble button:hover:not(:disabled) { background: #7a32f3; }
+	.RewriteBubble button:disabled { opacity: 0.5; cursor: default; }
+	.RewriteBubble button :global(.icon) { width: 1.45rem; height: 1.45rem; }
 </style>

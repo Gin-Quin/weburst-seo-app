@@ -48,22 +48,28 @@
 			{/if}
 		</header>
 
-		<div class="Filters" aria-label="Filtres des projets">
+		<div
+			class:FiltersWithClient={context.user?.role === "admin" || context.user?.role === "project_manager"}
+			class="Filters"
+			aria-label="Filtres des projets"
+		>
 			<label class="input control-size-1 SearchFilter w-full">
 				<IconMagnifyingGlassRegular />
 				<input bind:value={search} placeholder="Nom du projet ou domaine" />
 			</label>
 
-			<select
-				class="select control-size-1 w-full"
-				bind:value={clientId}
-				aria-label="Client"
-			>
-				<option value="">Tous les clients</option>
-				{#each context.clients ?? [] as client (client.id)}
-					<option value={client.id}>{client.name}</option>
-				{/each}
-			</select>
+			{#if context.user?.role === "admin" || context.user?.role === "project_manager"}
+				<select
+					class="select control-size-1 w-full"
+					bind:value={clientId}
+					aria-label="Client"
+				>
+					<option value="">Tous les clients</option>
+					{#each context.clients ?? [] as client (client.id)}
+						<option value={client.id}>{client.name}</option>
+					{/each}
+				</select>
+			{/if}
 
 			{#if context.user?.role === "admin"}
 				<select
@@ -102,7 +108,8 @@
 	.ProjectsPage { display: flex; flex-direction: column; gap: 1.25rem; padding: 2rem 2.5rem; border: 1px solid var(--color-border); border-radius: 1.25rem; background: var(--color-base-100); }
 	.PageHeader { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 	h1 { font-size: 1.75rem; font-weight: 700; }
-	.Filters { display: grid; grid-template-columns: minmax(16rem, 2fr) repeat(2, minmax(12rem, 1fr)); gap: 0.75rem; }
+	.Filters { display: grid; grid-template-columns: minmax(16rem, 1fr); gap: 0.75rem; }
+	.FiltersWithClient { grid-template-columns: minmax(16rem, 2fr) repeat(2, minmax(12rem, 1fr)); }
 	.SearchFilter { display: flex; align-items: center; gap: 0.65rem; }
 	.SearchFilter :global(svg) { width: 1.25rem; height: 1.25rem; flex: 0 0 auto; }
 	.SearchFilter input { min-width: 0; width: 100%; background: transparent; }

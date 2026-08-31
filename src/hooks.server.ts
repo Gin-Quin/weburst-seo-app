@@ -26,10 +26,16 @@ if (!building) {
 		task: KeywordsService.fetchTasksReady,
 	});
 
-	runtime.__weburstBackgroundJobs = {
-		stop: () => {
-			stopAnalysisScheduler();
-			stopReadyTaskPoller();
-		},
+	let stopped = false;
+	const stop = () => {
+		if (stopped) return;
+		stopped = true;
+
+		process.off("sveltekit:shutdown", stop);
+		stopAnalysisScheduler();
+		stopReadyTaskPoller();
 	};
+
+	process.once("sveltekit:shutdown", stop);
+	runtime.__weburstBackgroundJobs = { stop };
 }

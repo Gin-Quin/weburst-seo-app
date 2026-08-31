@@ -17,7 +17,7 @@ test("contentHtmlToText extracts plain text", () => {
 });
 
 test("createInitialArticleHtml escapes the title", () => {
-	expect(createInitialArticleHtml('A & <B>')).toBe("<h1>A &amp; &lt;B&gt;</h1><p></p>");
+	expect(createInitialArticleHtml("A & <B>")).toBe("<h1>A &amp; &lt;B&gt;</h1><p></p>");
 });
 
 test("convertAsciiTablesInHtml turns fenced ASCII comparisons into semantic tables", () => {
@@ -47,5 +47,15 @@ test("sanitizeContentHtml preserves safe table markup", () => {
 		),
 	).toBe(
 		'<table><tbody><tr><th colspan="2">Titre</th></tr><tr><td>Cellule</td></tr></tbody></table>',
+	);
+});
+
+test("sanitizeContentHtml resolves imported links and images against their source page", () => {
+	expect(
+		sanitizeContentHtml('<p><a href="../contact">Contact</a></p><img src="/photo.jpg">', {
+			baseUrl: "https://example.com/blog/article",
+		}),
+	).toBe(
+		'<p><a href="https://example.com/contact" rel="noopener noreferrer">Contact</a></p><img src="https://example.com/photo.jpg" />',
 	);
 });

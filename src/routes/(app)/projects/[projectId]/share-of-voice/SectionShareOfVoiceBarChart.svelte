@@ -4,6 +4,7 @@
 		getClusterBarChartData,
 		type ClusterBarChartData,
 	} from "$lib/keywords/getClusterBarChartData";
+	import { wrapSvgLabel } from "$lib/charts/wrapSvgLabel";
 	import { formatPercent } from "$lib/numbers/formatPercent";
 	import type {
 		AggregatedKeywordAnalysis,
@@ -16,14 +17,12 @@
 			competitors: "Competitors",
 			clusterShare: "Share of voice per cluster (%)",
 			globalVolume: "Global volume",
-			clusters: "Clusters",
 			chartLabel: "Latest share of voice analysis by keyword cluster",
 		},
 		fr: {
 			competitors: "Concurrents",
 			clusterShare: "Part de voix par cluster (en %)",
 			globalVolume: "Volume global",
-			clusters: "Clusters",
 			chartLabel: "Dernière analyse de part de voix par cluster",
 		},
 	});
@@ -40,10 +39,14 @@
 
 	const LEFT = 58;
 	const RIGHT = 24;
-	const TOP = 38;
-	const BOTTOM = 252;
-	const HEIGHT = 326;
-	const PLOT_HEIGHT = BOTTOM - TOP;
+	const TOP = 8;
+	const BOTTOM_GUTTER = 36;
+	const DEFAULT_HEIGHT = 326;
+	let graphWidth = $state(0);
+	let graphHeight = $state(0);
+	const chartHeight = $derived(graphHeight || DEFAULT_HEIGHT);
+	const bottom = $derived(Math.max(TOP, chartHeight - BOTTOM_GUTTER));
+	const plotHeight = $derived(bottom - TOP);
 
 	const chartResult = $derived(
 		getClusterBarChartData({
@@ -56,7 +59,11 @@
 		chartResult.comparisonDomain ?? $content.competitors,
 	);
 	const chartWidth = $derived(
-		Math.max(620, analysisResults.clusters.length * 92 + LEFT + RIGHT),
+		Math.max(
+			620,
+			graphWidth,
+			analysisResults.clusters.length * 92 + LEFT + RIGHT,
+		),
 	);
 	const shareMax = $derived.by(() => {
 		const highestShare = Math.max(
@@ -72,7 +79,7 @@
 		Array.from({ length: 5 }, (_, index) => (shareMax / 4) * index),
 	);
 	function shareY(value: number): number {
-		return BOTTOM - (value / shareMax) * PLOT_HEIGHT;
+		return bottom - (value / shareMax) * plotHeight;
 	}
 
 	function formatVolume(value: number): string {
@@ -111,10 +118,10 @@
 			barWidth,
 			clientX: backgroundX,
 			clientY,
-			clientHeight: BOTTOM - clientY,
+			clientHeight: bottom - clientY,
 			comparisonX: backgroundX + barWidth + gap,
 			comparisonY,
-			comparisonHeight: BOTTOM - comparisonY,
+			comparisonHeight: bottom - comparisonY,
 		};
 	}
 </script>
@@ -130,12 +137,17 @@
 	</div>
 </div>
 
-<div class="Graph" tabindex="0">
+<div
+	class="Graph"
+	tabindex="0"
+	bind:clientWidth={graphWidth}
+	bind:clientHeight={graphHeight}
+>
 	<svg
 		role="img"
 		aria-label={$content.chartLabel}
-		viewBox={`0 0 ${chartWidth} ${HEIGHT}`}
-		style={`width: ${chartWidth}px`}
+		viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+		style={`width: ${chartWidth}px; height: 100%`}
 	>
 		{#each shareTicks as tick (tick)}
 			{@const y = shareY(tick)}
@@ -148,20 +160,21 @@
 		<text
 			class="AxisTitle"
 			x="18"
-			y={(TOP + BOTTOM) / 2}
+			y={(TOP + bottom) / 2}
 			text-anchor="middle"
-			transform={`rotate(-90 18 ${(TOP + BOTTOM) / 2})`}
+			transform={`rotate(-90 18 ${(TOP + bottom) / 2})`}
 		>
 			{$content.clusterShare}
 		</text>
 		{#each chartResult.data as item, index (item.name)}
 			{@const geometry = getGeometry(item, index)}
+			{@const labelLines = wrapSvgLabel(item.name)}
 			<rect
 				class="VolumeBar"
 				x={geometry.backgroundX}
 				y={geometry.backgroundY}
 				width={geometry.backgroundWidth}
-				height={BOTTOM - geometry.backgroundY}
+				height={bottom - geometry.backgroundY}
 				rx="9"
 			>
 				<title>{item.name} — {$content.globalVolume}: {formatVolume(item.totalVolume)}</title>
@@ -191,38 +204,24 @@
 				<text
 					class="BarLabel ClientLabel"
 					x={geometry.clientX + geometry.barWidth / 2}
-					y={BOTTOM - 8}
-					transform={`rotate(-90 ${geometry.clientX + geometry.barWidth / 2} ${BOTTOM - 8})`}
+					y={bottom - 8}
+					transform={`rotate(-90 ${geometry.clientX + geometry.barWidth / 2} ${bottom - 8})`}
 				>
 					{compactLabel(client.domain)}
 				</text>
 			{/if}
-			{#if geometry.comparisonHeight > 34}
-				<text
-					class="BarLabel ComparisonLabel"
-					x={geometry.comparisonX + geometry.barWidth / 2}
-					y={BOTTOM - 8}
-					transform={`rotate(-90 ${geometry.comparisonX + geometry.barWidth / 2} ${BOTTOM - 8})`}
-				>
-					{compactLabel(comparisonLabel)}
-				</text>
-			{/if}
-
 			<text
 				class="ClusterLabel"
 				x={geometry.centerX}
-				y={BOTTOM + 18}
-				text-anchor="end"
-				transform={`rotate(-42 ${geometry.centerX} ${BOTTOM + 18})`}
+				y={bottom + 18}
+				text-anchor="middle"
 			>
-				{compactLabel(item.name)}
+				{#each labelLines as line, lineIndex (`${lineIndex}-${line}`)}
+					<tspan x={geometry.centerX} dy={lineIndex === 0 ? 0 : 13}>{line}</tspan>
+				{/each}
 				<title>{item.name}</title>
 			</text>
 		{/each}
-
-		<text class="XAxisTitle" x={chartWidth - RIGHT} y={HEIGHT - 5} text-anchor="end">
-			{$content.clusters}
-		</text>
 	</svg>
 </div>
 
@@ -285,9 +284,6 @@
 
 	svg {
 		display: block;
-		min-width: 100%;
-		height: 100%;
-		min-height: 19rem;
 	}
 
 	.GridLine {
@@ -312,8 +308,7 @@
 		font-size: 11px;
 	}
 
-	.AxisTitle,
-	.XAxisTitle {
+	.AxisTitle {
 		fill: var(--color-base-content);
 		font-size: 11px;
 		font-weight: 700;
@@ -330,7 +325,6 @@
 		fill: white;
 	}
 
-	.ComparisonLabel,
 	.ClusterLabel {
 		fill: var(--color-base-content);
 	}

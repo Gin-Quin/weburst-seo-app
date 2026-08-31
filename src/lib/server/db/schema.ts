@@ -15,6 +15,11 @@ const usersSchema = {
 
 	hashedPassword: text("hashed_password"),
 	emailVerified: integer("email_verified", { mode: "boolean" }).default(false),
+	clientInvitationEmailsEnabled: integer("client_invitation_emails_enabled", {
+		mode: "boolean",
+	})
+		.notNull()
+		.default(true),
 	createdAt: integer("created_at").notNull().default(Date.now()),
 	updatedAt: integer("updated_at").notNull().default(Date.now()),
 } as const;
@@ -30,6 +35,11 @@ export const deletedUsers = sqliteTable("deleted_users", {
 	email: text("email").notNull(),
 	hashedPassword: text("hashed_password"),
 	emailVerified: integer("email_verified", { mode: "boolean" }).default(false),
+	clientInvitationEmailsEnabled: integer("client_invitation_emails_enabled", {
+		mode: "boolean",
+	})
+		.notNull()
+		.default(true),
 	createdAt: integer("created_at").notNull().default(Date.now()),
 	updatedAt: integer("updated_at").notNull().default(Date.now()),
 	deletedAt: integer("deleted_at").notNull().default(Date.now()),
@@ -167,11 +177,18 @@ export const projects = sqliteTable(
 		clientId: text("client_id").references(() => clients.id),
 		domain: text("domain").notNull(),
 		websiteUrl: text("website_url").notNull(),
+		// `prospect` remains readable for legacy rows, but new API inputs reject it.
 		type: text("type").$type<"audit" | "prospect" | "monthly_subscription">().notNull(),
 		keywordAnalysisFrequency: text("keyword_analysis_frequency")
 			.$type<KeywordAnalysisFrequency>()
 			.notNull(),
 		articleLimit: integer("article_limit").notNull().default(10),
+		shareOfVoiceEnabled: integer("share_of_voice_enabled", { mode: "boolean" })
+			.notNull()
+			.default(true),
+		contentWritingEnabled: integer("content_writing_enabled", { mode: "boolean" })
+			.notNull()
+			.default(true),
 		deletedAt: integer("deleted_at"),
 	},
 	(table) => [index("projects_client_id_idx").on(table.clientId)],

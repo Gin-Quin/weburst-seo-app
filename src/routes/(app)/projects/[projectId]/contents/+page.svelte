@@ -3,11 +3,12 @@
 	import { page } from "$app/state";
 	import Loader from "$lib/components/Loader.svelte";
 	import OptimizationScore from "$lib/components/OptimizationScore.svelte";
-	import type { ContentPriority, ContentStatus } from "$lib/server/db/schema";
+	import type { Content, ContentPriority, ContentStatus } from "$lib/server/db/schema";
 	import { context } from "$lib/stores/context.svelte";
 	import IconArchiveRegular from "phosphor-icons-svelte/IconArchiveRegular.svelte";
 	import IconArrowCounterClockwiseRegular from "phosphor-icons-svelte/IconArrowCounterClockwiseRegular.svelte";
 	import IconBrainRegular from "phosphor-icons-svelte/IconBrainRegular.svelte";
+	import IconPencilSimpleRegular from "phosphor-icons-svelte/IconPencilSimpleRegular.svelte";
 	import IconPlusRegular from "phosphor-icons-svelte/IconPlusRegular.svelte";
 	import { toast } from "svelte-sonner";
 	import {
@@ -20,6 +21,9 @@
 	const projectId = $derived(page.params.projectId!);
 	let archived = $state(false);
 	let openCreateContentDialog = $state<(() => void) | undefined>();
+	let openEditContentDialog = $state<
+		((content: Pick<Content, "id" | "title" | "cluster" | "priority" | "brief">) => void) | undefined
+	>();
 	let openClientContextDialog = $state<(() => void) | undefined>();
 	const contentsQuery = $derived(listContents({ projectId, archived }));
 
@@ -74,7 +78,7 @@
 
 <svelte:head><title>Contenus</title></svelte:head>
 
-<CreateContentDialog {projectId} bind:openCreateContentDialog />
+<CreateContentDialog {projectId} bind:openCreateContentDialog bind:openEditContentDialog />
 {#if context.project?.clientId}
 	<ClientContextDialog clientId={context.project.clientId} bind:openClientContextDialog />
 {/if}
@@ -146,16 +150,32 @@
 									<OptimizationScore score={content.score} label="" suffix="%" />
 								</td>
 								<td>
-									<button
-										class="btn control-size-1 ActionButton"
-										title={archived ? "Restaurer" : "Archiver"}
-									onclick={(event) => {
-										event.stopPropagation();
-										requestArchive(content.id);
-									}}
-									>
-										{#if archived}<IconArrowCounterClockwiseRegular class="icon" />{:else}<IconArchiveRegular class="icon" />{/if}
-									</button>
+									<div class="ActionButtons">
+										<button
+											type="button"
+											class="ActionButton"
+											data-tooltip="Éditer"
+											aria-label={`Éditer ${content.title}`}
+											onclick={(event) => {
+												event.stopPropagation();
+												openEditContentDialog?.(content);
+											}}
+										>
+											<IconPencilSimpleRegular />
+										</button>
+										<button
+											type="button"
+											class="ActionButton"
+											data-tooltip={archived ? "Restaurer" : "Archiver"}
+											aria-label={`${archived ? "Restaurer" : "Archiver"} ${content.title}`}
+											onclick={(event) => {
+												event.stopPropagation();
+												requestArchive(content.id);
+											}}
+										>
+											{#if archived}<IconArrowCounterClockwiseRegular />{:else}<IconArchiveRegular />{/if}
+										</button>
+									</div>
 								</td>
 							</tr>
 						{/each}
@@ -286,8 +306,65 @@
 		color: #8f2222;
 	}
 
+	.ActionButtons {
+		display: flex;
+		align-items: center;
+		gap: 0.2rem;
+	}
+
 	.ActionButton {
-		padding-inline: 0.6rem;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.75rem;
+		height: 1.75rem;
+		padding: 0;
+		border: 0;
+		border-radius: 0.4rem;
+		background: transparent;
+		color: var(--color-base-content);
+		cursor: pointer;
+		position: relative;
+		transition: background 120ms ease;
+	}
+
+	.ActionButton:hover {
+		background: #e2e2e2;
+	}
+
+	.ActionButton:focus-visible {
+		box-shadow: 0 0 0 2px var(--color-primary-light);
+	}
+
+	.ActionButton :global(svg) {
+		width: 1rem;
+		height: 1rem;
+	}
+
+	.ActionButton::after {
+		content: attr(data-tooltip);
+		position: absolute;
+		left: 50%;
+		bottom: calc(100% + 0.4rem);
+		z-index: 2;
+		padding: 0.25rem 0.45rem;
+		border-radius: 0.3rem;
+		background: var(--color-neutral);
+		color: var(--color-neutral-content);
+		font-size: 0.75rem;
+		font-weight: 500;
+		line-height: 1.2;
+		white-space: nowrap;
+		opacity: 0;
+		pointer-events: none;
+		transform: translate(-50%, 0.2rem);
+		transition: opacity 120ms ease, transform 120ms ease;
+	}
+
+	.ActionButton:hover::after,
+	.ActionButton:focus-visible::after {
+		opacity: 1;
+		transform: translate(-50%, 0);
 	}
 
 	.EmptyContents {

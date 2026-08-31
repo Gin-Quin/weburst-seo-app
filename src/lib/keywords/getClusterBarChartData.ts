@@ -23,18 +23,20 @@ export function getClusterBarChartData({
 } {
 	const competitors = [...new Set(selectedDomains)].filter((domain) => domain !== clientDomain);
 	const comparisonDomain = competitors.length === 1 ? competitors[0] : undefined;
+	const selectedCompetitors = new Set(competitors);
 
 	return {
 		comparisonDomain,
 		data: clusters.map((cluster) => {
 			const clientVolume =
 				cluster.domains.find(({ domain }) => domain === clientDomain)?.volume ?? 0;
-			const comparisonVolume = comparisonDomain
-				? (cluster.domains.find(({ domain }) => domain === comparisonDomain)?.volume ?? 0)
-				: cluster.domains.reduce(
-						(total, domain) => (domain.domain === clientDomain ? total : total + domain.volume),
-						0,
-					);
+			const comparisonVolume = cluster.domains.reduce((total, domain) => {
+				const isCompetitor = domain.domain !== clientDomain;
+				const isIncluded =
+					selectedCompetitors.size === 0 || selectedCompetitors.has(domain.domain);
+
+				return isCompetitor && isIncluded ? total + domain.volume : total;
+			}, 0);
 			const shareDivisor = cluster.totalTraffic || 1;
 
 			return {

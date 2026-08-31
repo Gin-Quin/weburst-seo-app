@@ -3,13 +3,15 @@
 	"private": true,
 	"version": "0.0.1",
 	"type": "module",
+	"engines": {
+		"bun": "1.4.0"
+	},
 	"scripts": {
 		"dev": "bun --bun vite dev",
 		"dev:turso": "turso dev --db-file ./data/$(git branch --show-current).db",
 		"build": "bun --bun vite build",
-		"deploy": "bun run build && bun scripts/deploy.ts",
-		"deploy:app:prod": "bun run deploy",
-		"deploy:prod": "bun run turso:migrate:prod && bun run clickhouse:migrate:prod && bun run deploy:app:prod",
+		"deploy:app": "bun run build && bun scripts/deploy.ts",
+		"deploy": "bun run turso:migrate:prod && bun run clickhouse:migrate:prod && bun run deploy:app:prod",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"postinstall": "bun scripts/postinstall.ts",
@@ -63,6 +65,7 @@
 		"@ai-sdk/google": "^4.0.51",
 		"@ai-sdk/svelte": "^5.0.79",
 		"@clickhouse/client": "^1.12.1",
+		"@floating-ui/dom": "^1.8.0",
 		"@lucia-auth/adapter-drizzle": "^1.1.0",
 		"@modelcontextprotocol/server": "^2.0.0",
 		"@paralleldrive/cuid2": "^2.2.2",

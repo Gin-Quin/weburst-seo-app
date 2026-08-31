@@ -83,9 +83,14 @@ export function renderOauthAuthorizationPage(
       const session = localStorage.getItem("bearer");
       if (session) headers.Authorization = "Bearer " + session;
       try {
-        const response = await fetch(form.action, { method: "POST", headers, body: data });
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload.error_description || "Autorisation impossible.");
+        const endpoint = form.getAttribute("action") || window.location.pathname;
+        const response = await fetch(endpoint, { method: "POST", headers, body: data });
+        const isJson = response.headers.get("content-type")?.includes("application/json");
+        const payload = isJson ? await response.json() : null;
+        if (!response.ok) {
+          throw new Error(payload?.error_description || "Autorisation impossible (HTTP " + response.status + ").");
+        }
+        if (!payload?.redirect) throw new Error("Réponse d’autorisation invalide.");
         window.location.assign(payload.redirect);
       } catch (error) {
         errorBox.textContent = error instanceof Error ? error.message : "Autorisation impossible.";

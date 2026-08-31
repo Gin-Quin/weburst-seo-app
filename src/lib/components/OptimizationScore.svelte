@@ -35,7 +35,12 @@
 </span>
 
 <style>
-	.OptimizationScore { border: 1px solid; white-space: nowrap; }
+	.OptimizationScore {
+		flex-shrink: 0;
+		width: max-content;
+		border: 1px solid;
+		white-space: nowrap;
+	}
 	.bad { color: #aa1118; background: #fff0f1; border-color: #ffb9bd; }
 	.mid { color: #a65a00; background: #fff8df; border-color: #f4d477; }
 	.good { color: #0c7a25; background: #e8ffed; border-color: #a4efb1; }

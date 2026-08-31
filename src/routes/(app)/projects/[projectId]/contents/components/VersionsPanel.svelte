@@ -43,7 +43,7 @@
 		saving = true;
 		try {
 			await onBeforeSave();
-			await createVersion({ id: content.id, projectId: content.projectId });
+			await createVersion({ id: content.id, projectId: content.projectId }).updates(versionsQuery);
 			toast.success("Version sauvegardée", { richColors: true });
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : "Sauvegarde impossible.", { richColors: true });
@@ -84,7 +84,7 @@
 </script>
 
 <section class="VersionsPanel">
-	<button class="SaveVersionButton" disabled={saving} onclick={confirmSave}>
+	<button class="btn btn-primary SaveVersionButton" disabled={saving} onclick={confirmSave}>
 		<IconPlusRegular class="icon" /> {saving ? "Sauvegarde…" : "Sauvegarder nouvelle version"}
 	</button>
 

@@ -49,7 +49,7 @@
 		min-height: 17rem;
 		flex-direction: column;
 		padding: 1.5rem;
-		border: 1px solid var(--input);
+		border: 1px solid var(--color-border);
 		border-radius: 1.25rem;
 		background: var(--color-base-200);
 	}

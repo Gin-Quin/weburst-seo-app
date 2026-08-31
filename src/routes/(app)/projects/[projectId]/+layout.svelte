@@ -19,7 +19,6 @@
 	} from "../../../api/keywords/index.remote";
 	import AddKeywordsDialog from "./AddKeywordsDialog.svelte";
 	import { exportDataToCsv } from "./exportDataToCsv";
-	import ProjectSettingsDropdown from "./ProjectSettingsDropdown.svelte";
 	import KeywordAnalysisProgress from "./share-of-voice/KeywordAnalysisProgress.svelte";
 	import { startNewAnalysis } from "./startNewAnalysis";
 
@@ -48,13 +47,31 @@
 	let lastAnalysisStatus = $state<KeywordAnalysisStatus | undefined>();
 	let fetchLastAnalysisStatusTimeout: ReturnType<typeof setTimeout>;
 	const isContentsPage = $derived(page.url.pathname.includes("/contents"));
+	const isShareOfVoicePage = $derived(
+		page.url.pathname.endsWith("/share-of-voice") ||
+			page.url.pathname.endsWith("/keyword-similarities"),
+	);
+	const canViewShareOfVoice = $derived(
+		context.project?.shareOfVoiceEnabled ?? true,
+	);
 	const canViewContents = $derived(
-		canViewProjectContents(context.user?.role, context.project?.type),
+		(context.project?.contentWritingEnabled ?? true) &&
+			canViewProjectContents(context.user?.role, context.project?.type),
 	);
 
 	$effect(() => {
 		if (context.project && isContentsPage && !canViewContents) {
-			void goto(`/projects/${context.project.id}/share-of-voice`, { replaceState: true });
+			void goto(
+				canViewShareOfVoice
+					? `/projects/${context.project.id}/share-of-voice`
+					: "/projects",
+				{ replaceState: true },
+			);
+		} else if (context.project && isShareOfVoicePage && !canViewShareOfVoice) {
+			void goto(
+				canViewContents ? `/projects/${context.project.id}/contents` : "/projects",
+				{ replaceState: true },
+			);
 		}
 	});
 
@@ -184,10 +201,6 @@
 						<KeywordAnalysisProgress analysis={lastAnalysisStatus} />
 					{/if}
 				</div>
-
-				<div class="ToolbarSettings">
-					<ProjectSettingsDropdown />
-				</div>
 			</header>
 
 			{@render children()}
@@ -211,8 +224,7 @@
 	}
 
 	.ProjectToolbar,
-	.ToolbarActions,
-	.ToolbarSettings {
+	.ToolbarActions {
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
@@ -226,11 +238,6 @@
 	.ToolbarActions {
 		flex-wrap: wrap;
 		min-width: 0;
-	}
-
-	.ToolbarSettings {
-		flex: 0 0 auto;
-		margin-left: auto;
 	}
 
 	.Page-keyword-similarities {

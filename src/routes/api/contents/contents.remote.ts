@@ -2,21 +2,29 @@ import { command, query } from "$app/server";
 import { canViewProjectContents } from "$lib/contents/access";
 import { requireProjectAccess } from "$lib/server/auth/authorization";
 import {
+	countProjectContents,
 	createContent as createContentService,
 	createContentVersion as createContentVersionService,
 	getContentById,
 	listContentVersions as listContentVersionsService,
 	listProjectContents,
 	refreshContentOptimization,
+	refreshContentOptimizationScore,
 	restoreContentVersion as restoreContentVersionService,
 	retrySerpmanticsGuide,
 	saveContentChatMessages,
 	saveContentDraft,
 	setContentArchived,
 	setContentStatus,
+	updateContent as updateContentService,
 	updateContentBrief,
 } from "$lib/server/contents";
-import { getContentCreationPolicy } from "$lib/server/contents/quota";
+import {
+	getContentCreationPolicy,
+	getRemainingContentQuota,
+	shouldSendContentQuotaWarning,
+} from "$lib/server/contents/quota";
+import { sendContentQuotaWarningEmail } from "$lib/server/email/contentQuota";
 import { getRequestUser } from "../utilities";
 import {
 	ContentIdentity,
@@ -27,6 +35,7 @@ import {
 	SetArchived,
 	SetStatus,
 	UpdateBrief,
+	UpdateContent,
 } from "./contents.schema";
 
 export const listContents = query(ListContents, async ({ projectId, archived }) => {
@@ -52,8 +61,35 @@ export const createContent = command(CreateContent, async (input) => {
 	const created = await createContentService(input, {
 		maxContents: policy.limit ?? undefined,
 	});
+	if (policy.limit !== null) {
+		const currentCount = await countProjectContents(input.projectId);
+		const remaining = getRemainingContentQuota(currentCount, policy.limit);
+		if (shouldSendContentQuotaWarning(remaining)) {
+			try {
+				await sendContentQuotaWarningEmail(user.email, remaining);
+			} catch (error) {
+				console.error("Failed to send content quota warning email", {
+					userId: user.id,
+					projectId: input.projectId,
+					remaining,
+					error,
+				});
+			}
+		}
+	}
 	await listContents({ projectId: input.projectId, archived: false }).refresh();
 	return created;
+});
+
+export const updateContent = command(UpdateContent, async (input) => {
+	await requireProjectAccess(await getRequestUser(), input.projectId, "manage");
+	const updated = await updateContentService(input);
+	await Promise.all([
+		getContent({ projectId: input.projectId, id: input.id }).refresh(),
+		listContents({ projectId: input.projectId, archived: false }).refresh(),
+		listContents({ projectId: input.projectId, archived: true }).refresh(),
+	]);
+	return updated;
 });
 
 export const saveDraft = command(SaveDraft, async (input) => {
@@ -84,6 +120,11 @@ export const archiveContent = command(SetArchived, async (input) => {
 export const refreshOptimization = command(ContentIdentity, async ({ projectId, id }) => {
 	await requireContentsViewAccess(projectId);
 	return refreshContentOptimization(id, projectId);
+});
+
+export const refreshOptimizationScore = command(ContentIdentity, async ({ projectId, id }) => {
+	await requireProjectAccess(await getRequestUser(), projectId, "manage");
+	return refreshContentOptimizationScore(id, projectId);
 });
 
 export const retryOptimizationGuide = command(ContentIdentity, async ({ projectId, id }) => {

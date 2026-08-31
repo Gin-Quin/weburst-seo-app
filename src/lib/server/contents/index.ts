@@ -21,6 +21,7 @@ import {
 } from "$lib/server/serpmantics";
 import { createId } from "@paralleldrive/cuid2";
 import { and, count, desc, eq, isNotNull, isNull, max } from "drizzle-orm";
+import { importArticleFromUrl } from "./importArticle";
 import { CONTENT_QUOTA_EXCEEDED_MESSAGE, isContentQuotaReached } from "./quota";
 
 export type ContentDetail = Omit<
@@ -66,12 +67,33 @@ export async function listProjectContents(
 	return rows.map(toContentDetail);
 }
 
+export async function countProjectContents(projectId: string): Promise<number> {
+	const [row] = await db
+		.select({ value: count() })
+		.from(contents)
+		.where(eq(contents.projectId, projectId));
+	return row?.value ?? 0;
+}
+
 export async function createContent(
 	input: CreateContentInput,
 	options: { maxContents?: number } = {},
 ): Promise<ContentDetail> {
 	const id = createId();
-	const contentHtml = createInitialArticleHtml(input.title);
+	if (options.maxContents !== undefined) {
+		const [row] = await db
+			.select({ value: count() })
+			.from(contents)
+			.where(eq(contents.projectId, input.projectId));
+		if (isContentQuotaReached(row?.value ?? 0, options.maxContents)) {
+			throw new Error(CONTENT_QUOTA_EXCEEDED_MESSAGE);
+		}
+	}
+
+	const existingUrl = emptyToNull(input.existingUrl);
+	const contentHtml = existingUrl
+		? await importArticleFromUrl(existingUrl)
+		: createInitialArticleHtml(input.title);
 	const now = Date.now();
 	await db.transaction(async (tx) => {
 		if (options.maxContents !== undefined) {
@@ -90,7 +112,7 @@ export async function createContent(
 			title: input.title.trim(),
 			cluster: emptyToNull(input.cluster),
 			priority: input.priority,
-			existingUrl: emptyToNull(input.existingUrl),
+			existingUrl,
 			brief: input.brief.trim(),
 			contentHtml,
 			contentText: contentHtmlToText(contentHtml),
@@ -157,13 +179,45 @@ export async function updateContentBrief(input: {
 		.set({ brief: input.brief.trim(), updatedAt: Date.now() })
 		.where(eq(contents.id, input.id));
 
-	// SERPmantics does not expose a dedicated brief field. Re-scoring with
+	// The external analysis service does not expose a dedicated brief field. Re-scoring with
 	// saveToGuide synchronizes the latest article whenever its brief changes.
 	try {
 		await refreshContentOptimization(input.id, input.projectId);
 	} catch {
 		// The brief is still saved when the external analysis is unavailable.
 	}
+	return getContentById(input.id, input.projectId);
+}
+
+export async function updateContent(input: {
+	id: string;
+	projectId: string;
+	title: string;
+	cluster: string;
+	priority: ContentPriority | null;
+	brief: string;
+}): Promise<ContentDetail> {
+	const existing = await getContentRow(input.id, input.projectId);
+	const brief = input.brief.trim();
+	await db
+		.update(contents)
+		.set({
+			title: input.title.trim(),
+			cluster: emptyToNull(input.cluster),
+			priority: input.priority,
+			brief,
+			updatedAt: Date.now(),
+		})
+		.where(and(eq(contents.id, input.id), eq(contents.projectId, input.projectId)));
+
+	if (brief !== existing.brief) {
+		try {
+			await refreshContentOptimization(input.id, input.projectId);
+		} catch {
+			// Metadata remains saved when the external analysis is unavailable.
+		}
+	}
+
 	return getContentById(input.id, input.projectId);
 }
 
@@ -197,7 +251,9 @@ export async function refreshContentOptimization(
 ): Promise<ContentDetail> {
 	const content = await getContentRow(id, projectId);
 	if (!content.serpmanticsGuideId) {
-		throw new Error(content.serpmanticsError ?? "Aucun guide SERPmantics n’est associé.");
+		throw new Error(
+			publicAnalysisError(content.serpmanticsError) ?? "Aucune analyse SEO n’est associée.",
+		);
 	}
 
 	try {
@@ -233,6 +289,41 @@ export async function refreshContentOptimization(
 				serpmanticsStatus: "ready",
 				serpmanticsError: null,
 				serpmanticsGuideJson: JSON.stringify(guideState.guide),
+				serpmanticsAnalysisJson: JSON.stringify(analysis),
+				score: analysis.score,
+			})
+			.where(eq(contents.id, id));
+		return getContentById(id, projectId);
+	} catch (error) {
+		await db
+			.update(contents)
+			.set({ serpmanticsError: errorMessage(error) })
+			.where(eq(contents.id, id));
+		throw error;
+	}
+}
+
+export async function refreshContentOptimizationScore(
+	id: string,
+	projectId: string,
+): Promise<ContentDetail> {
+	const content = await getContentRow(id, projectId);
+	if (!content.serpmanticsGuideId) {
+		throw new Error(
+			publicAnalysisError(content.serpmanticsError) ?? "Aucune analyse SEO n’est associée.",
+		);
+	}
+
+	try {
+		const analysis = await analyzeSerpmanticsContent(
+			content.serpmanticsGuideId,
+			content.contentHtml,
+		);
+		await db
+			.update(contents)
+			.set({
+				serpmanticsStatus: "ready",
+				serpmanticsError: null,
 				serpmanticsAnalysisJson: JSON.stringify(analysis),
 				score: analysis.score,
 			})
@@ -382,6 +473,7 @@ function toContentDetail(content: Content): ContentDetail {
 	const { serpmanticsGuideJson, serpmanticsAnalysisJson, chatMessagesJson, ...rest } = content;
 	return {
 		...rest,
+		serpmanticsError: publicAnalysisError(rest.serpmanticsError),
 		serpmanticsGuide: parseJson<SerpmanticsGuide>(serpmanticsGuideJson),
 		serpmanticsAnalysis: parseJson<SerpmanticsContentAnalysis>(serpmanticsAnalysisJson),
 		chatMessages: parseJson<unknown[]>(chatMessagesJson) ?? [],
@@ -422,5 +514,12 @@ function validateDocumentJson(value: string): string {
 }
 
 function errorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : "Une erreur inattendue est survenue.";
+	return (
+		publicAnalysisError(error instanceof Error ? error.message : null) ??
+		"Une erreur inattendue est survenue."
+	);
+}
+
+function publicAnalysisError(message: string | null): string | null {
+	return message?.replace(/serp\s*mantics/giu, "le service d’analyse SEO") ?? null;
 }

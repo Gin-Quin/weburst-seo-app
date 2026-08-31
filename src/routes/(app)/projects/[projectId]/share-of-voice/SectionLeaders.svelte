@@ -64,8 +64,10 @@
 		</div>
 	</header>
 
-	<main class="col justify-stretch w-full grow overflow-auto">
-		<Table.Root>
+	<main
+		class="LeadersTable col justify-stretch w-full grow overflow-x-hidden overflow-y-auto"
+	>
+		<Table.Root class="w-fit">
 			<Table.Header>
 				<Table.Row class="border-none h-9">
 					<Table.Head></Table.Head>
@@ -126,3 +128,14 @@
 		</Table.Root>
 	</main>
 </div>
+
+<style>
+	.card > .LeadersTable {
+		padding-block-start: 0;
+	}
+
+	.LeadersTable :global([data-slot="table-container"]) {
+		width: fit-content;
+		overflow: visible;
+	}
+</style>

@@ -64,6 +64,20 @@
       "when": 1787791608610,
       "tag": "0008_legal_maverick",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1788189404403,
+      "tag": "0009_cold_living_lightning",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1788191975354,
+      "tag": "0010_massive_rhino",
+      "breakpoints": true
     }
   ]
 }

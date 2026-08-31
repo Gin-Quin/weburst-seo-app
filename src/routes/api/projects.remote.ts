@@ -28,7 +28,12 @@ import {
 } from "$lib/server/projects";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { CreateProject as CreateProjectInput, ProjectUpdate } from "./projects.schema";
-import { CreateProject, DeleteProject, UpdateProject } from "./projects.schema";
+import {
+	CreateProject,
+	DeleteProject,
+	hasAtLeastOneProjectTool,
+	UpdateProject,
+} from "./projects.schema";
 import { listClients } from "./clients.remote";
 import { getRequestUser } from "./utilities";
 
@@ -82,6 +87,9 @@ export const listProjects = query(async (): Promise<ProjectInfo[]> => {
 export const updateProject = command(UpdateProject, async ([id, input]): Promise<void> => {
 	const user = await getRequestUser();
 	const existingProject = await requireProjectAccess(user, id, "manage");
+	if (!hasAtLeastOneProjectTool({ ...existingProject, ...input })) {
+		throw new Error("At least one project tool must be enabled");
+	}
 	if (user!.role === "admin" && (input.projectManagerIds || input.leaderIds)) {
 		await validateProjectManagerIds(input.projectManagerIds ?? input.leaderIds ?? []);
 	}

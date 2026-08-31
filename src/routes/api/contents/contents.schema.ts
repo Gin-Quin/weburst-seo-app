@@ -32,6 +32,15 @@ export const CreateContent = v.object({
 	brief: v.optional(v.pipe(v.string(), v.maxLength(50_000)), ""),
 });
 
+export const UpdateContent = v.object({
+	projectId: Id,
+	id: Id,
+	title: Title,
+	cluster: v.pipe(v.string(), v.maxLength(20_000)),
+	priority: v.nullable(ContentPriority),
+	brief: v.pipe(v.string(), v.maxLength(50_000)),
+});
+
 export const SaveDraft = v.object({
 	projectId: Id,
 	id: Id,

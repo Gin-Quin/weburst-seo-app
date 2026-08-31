@@ -108,7 +108,7 @@
 
 <ConfirmDialog bind:openConfirmDialog={context.openConfirmDialog} />
 
-{#if loading}
+{#if loading || !context.user}
 	<Loader class="h-[100dvh] center" />
 {:else}
 	<ProjectDialog bind:openProjectDialog={context.openProjectDialog} />
@@ -127,7 +127,8 @@
 <style>
 	:global(:root) {
 		--app-header-height: 5rem;
-		--app-sidebar-width: 18rem;
+		--app-sidebar-width: 5.5rem;
+		--app-sidebar-expanded-width: 18rem;
 	}
 
 	.AppShell {
@@ -146,12 +147,6 @@
 		grid-row: 2;
 		min-width: 0;
 		min-height: calc(100dvh - var(--app-header-height));
-	}
-
-	@media (max-width: 1100px) {
-		:global(:root) {
-			--app-sidebar-width: 5.5rem;
-		}
 	}
 
 	@media (max-width: 640px) {

@@ -3,6 +3,7 @@ import { DAY, HOUR } from "$lib/timeUnits";
 import {
 	ANALYSIS_INTERVALS,
 	FAILED_ANALYSIS_RETRY_DELAY,
+	RECURRING_ANALYSIS_PROJECT_TYPES,
 	isProjectAnalysisDue,
 	runDueProjectAnalyses,
 	selectProjectsDueForAnalysis,
@@ -15,6 +16,11 @@ const project = (
 ): SchedulableProject => ({ id, keywordAnalysisFrequency });
 
 describe("analysis scheduling", () => {
+	test("schedules only monthly subscriptions", () => {
+		expect(RECURRING_ANALYSIS_PROJECT_TYPES).toEqual(["monthly_subscription"]);
+		expect(RECURRING_ANALYSIS_PROJECT_TYPES.includes("audit")).toBe(false);
+	});
+
 	test("uses elapsed intervals for every configured frequency", () => {
 		const nowMs = 10_000_000_000;
 

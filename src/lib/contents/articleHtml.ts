@@ -31,7 +31,7 @@ const allowedTags = [
 	"td",
 ];
 
-export function sanitizeContentHtml(html: string): string {
+export function sanitizeContentHtml(html: string, options: { baseUrl?: string } = {}): string {
 	return sanitizeHtml(convertAsciiTablesInHtml(html), {
 		allowedTags,
 		allowedAttributes: {
@@ -46,17 +46,35 @@ export function sanitizeContentHtml(html: string): string {
 				tagName: "a",
 				attribs: {
 					...attributes,
+					href: absoluteUrl(attributes.href, options.baseUrl),
 					rel: "noopener noreferrer",
+				},
+			}),
+			img: (_tagName, attributes) => ({
+				tagName: "img",
+				attribs: {
+					...attributes,
+					src: absoluteUrl(attributes.src, options.baseUrl),
 				},
 			}),
 		},
 	});
 }
 
+function absoluteUrl(value: string | undefined, baseUrl: string | undefined): string {
+	if (!value || !baseUrl) return value ?? "";
+	try {
+		return new URL(value, baseUrl).toString();
+	} catch {
+		return value;
+	}
+}
+
 export function convertAsciiTablesInHtml(html: string): string {
 	return html.replace(
 		/<pre(?:\s[^>]*)?>\s*<code(?:\s[^>]*)?>([\s\S]*?)<\/code>\s*<\/pre>/gi,
-		(original, encodedCode: string) => asciiTableToHtml(decodeHtmlEntities(encodedCode)) ?? original,
+		(original, encodedCode: string) =>
+			asciiTableToHtml(decodeHtmlEntities(encodedCode)) ?? original,
 	);
 }
 
@@ -93,7 +111,12 @@ function asciiTableToHtml(value: string): string | undefined {
 		.split(/\r?\n/)
 		.map((line) => line.trim())
 		.filter((line) => line.startsWith("|") && line.endsWith("|"))
-		.map((line) => line.slice(1, -1).split("|").map((cell) => cell.trim()));
+		.map((line) =>
+			line
+				.slice(1, -1)
+				.split("|")
+				.map((cell) => cell.trim()),
+		);
 	const headerIndex = rows.findIndex((row) => row.length > 1);
 	if (headerIndex < 0) return undefined;
 
@@ -118,12 +141,15 @@ function decodeHtmlEntities(value: string): string {
 		(entity, reference: string) => {
 			if (reference[0] === "#") {
 				const hexadecimal = reference[1]?.toLowerCase() === "x";
-				const codePoint = Number.parseInt(reference.slice(hexadecimal ? 2 : 1), hexadecimal ? 16 : 10);
+				const codePoint = Number.parseInt(
+					reference.slice(hexadecimal ? 2 : 1),
+					hexadecimal ? 16 : 10,
+				);
 				return Number.isNaN(codePoint) ? entity : String.fromCodePoint(codePoint);
 			}
-			return { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" }[
-				reference.toLowerCase()
-			] ?? entity;
+			return (
+				{ amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" }[reference.toLowerCase()] ?? entity
+			);
 		},
 	);
 }
