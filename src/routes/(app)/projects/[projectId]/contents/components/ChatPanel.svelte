@@ -7,7 +7,7 @@
 	import { marked } from "marked";
 	import IconArrowUpRegular from "phosphor-icons-svelte/IconArrowUpRegular.svelte";
 	import IconChatCircleDotsRegular from "phosphor-icons-svelte/IconChatCircleDotsRegular.svelte";
-	import { onMount } from "svelte";
+	import { onMount, tick } from "svelte";
 	import { toast } from "svelte-sonner";
 	import { clearContentChat } from "../../../../../api/contents/contents.remote";
 	import ArticleChangesDialog from "./ArticleChangesDialog.svelte";
@@ -39,7 +39,9 @@
 	let clearing = $state(false);
 	let acceptingProposal = $state(false);
 	let articleProposal = $state<ArticleProposal | undefined>();
+	let chatPanelElement: HTMLElement;
 	let messagesElement: HTMLDivElement;
+	let textareaElement: HTMLTextAreaElement;
 	let scrollTimeout: ReturnType<typeof setTimeout>;
 	const scrollAfterSendDelay = 100;
 	const chat = new Chat<ChatMessage>({
@@ -145,9 +147,25 @@
 		}, delay);
 	}
 
+	function resizeComposer() {
+		if (!chatPanelElement || !textareaElement) return;
+		textareaElement.style.height = "auto";
+		const minHeight = Number.parseFloat(getComputedStyle(textareaElement).minHeight) || 0;
+		const maxHeight = Math.max(minHeight, chatPanelElement.clientHeight / 2);
+		const nextHeight = Math.min(Math.max(textareaElement.scrollHeight, minHeight), maxHeight);
+		textareaElement.style.height = `${nextHeight}px`;
+		textareaElement.style.overflowY = textareaElement.scrollHeight > maxHeight ? "auto" : "hidden";
+	}
+
 	onMount(() => {
 		scheduleScrollToBottom(0);
-		return () => clearTimeout(scrollTimeout);
+		resizeComposer();
+		const resizeObserver = new ResizeObserver(resizeComposer);
+		resizeObserver.observe(chatPanelElement);
+		return () => {
+			clearTimeout(scrollTimeout);
+			resizeObserver.disconnect();
+		};
 	});
 
 	function submit(event: SubmitEvent) {
@@ -155,6 +173,7 @@
 		const prompt = input.trim();
 		if (!prompt) return;
 		input = "";
+		void tick().then(resizeComposer);
 		sendChatPrompt?.(prompt);
 	}
 
@@ -203,7 +222,7 @@
 	}
 </script>
 
-<section class="ChatPanel">
+<section class="ChatPanel" bind:this={chatPanelElement}>
 	<div class="Messages" bind:this={messagesElement}>
 		{#if chat.messages.length === 0}
 			<div class="EmptyChat">
@@ -253,8 +272,11 @@
 	{/if}
 	<form class="ChatComposer" onsubmit={submit}>
 		<textarea
+			bind:this={textareaElement}
 			bind:value={input}
+			rows="1"
 			placeholder="Écrire un message..."
+			oninput={resizeComposer}
 			onkeydown={(event) => {
 				if (event.key === "Enter" && !event.shiftKey) {
 					event.preventDefault();
@@ -312,8 +334,8 @@
 	.ClearChatButton { justify-self: end; margin: 0 1rem 0.4rem; padding: 0; border: 0; background: transparent; color: var(--color-text-light); font-size: calc(0.7rem + 1px); line-height: 1; cursor: pointer; }
 	.ClearChatButton:hover { color: var(--color-base-content); }
 	.ClearChatButton:disabled { opacity: 0.45; cursor: default; }
-	.ChatComposer { min-height: 4.5rem; margin: 0 0.75rem 0.75rem; padding: 0.65rem 0.75rem; background: white; border: 1px solid var(--color-border); border-radius: 0.7rem; display: flex; align-items: flex-end; gap: 0.5rem; }
-	.ChatComposer textarea { flex: 1; min-height: 2.5rem; max-height: 9rem; border: 0; padding: 0.45rem 0.25rem; font-size: 1rem; line-height: 1.4; background: transparent; }
+	.ChatComposer { margin: 0 0.75rem 0.75rem; padding: 0.75rem; background: white; border: 1px solid var(--color-border); border-radius: 0.7rem; display: flex; align-items: flex-end; gap: 0.5rem; }
+	.ChatComposer textarea { flex: 1; min-height: 2.5rem; border: 0; padding: 0.45rem 0.25rem; overflow-y: hidden; resize: none; font-size: 1rem; line-height: 1.4; background: transparent; }
 	.SendButton { flex: 0 0 auto; width: 2.5rem; height: 2.5rem; border-radius: 0.4rem; background: var(--color-primary); color: white; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: background-color 150ms ease, color 150ms ease; }
 	.SendButton :global(.icon) { width: 1.45rem; height: 1.45rem; }
 	.SendButton:disabled { background: rgb(197 164 255 / 45%); color: rgb(255 255 255 / 80%); cursor: default; }

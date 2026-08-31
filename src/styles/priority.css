@@ -1,0 +1,29 @@
+@layer components {
+	.PriorityBadge {
+		display: inline-flex;
+		align-items: center;
+		border: 1px solid var(--color-border);
+		border-radius: 0.6rem;
+		padding: 0.3rem 0.6rem;
+		color: var(--color-base-content);
+		background: var(--color-base-100);
+	}
+
+	.PriorityBadge.priority-low {
+		background: #eef4ff;
+		border-color: #bcd2ff;
+		color: #173372;
+	}
+
+	.PriorityBadge.priority-moderate {
+		background: #fff8e8;
+		border-color: #ffdc83;
+		color: #673700;
+	}
+
+	.PriorityBadge.priority-high {
+		background: #fff1f1;
+		border-color: #ffc1c1;
+		color: #8f2222;
+	}
+}

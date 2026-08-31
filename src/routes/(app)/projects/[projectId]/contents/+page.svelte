@@ -269,8 +269,7 @@
 	}
 
 	.NeutralBadge,
-	.StatusBadge,
-	.PriorityBadge {
+	.StatusBadge {
 		display: inline-flex;
 		align-items: center;
 		border: 1px solid var(--color-border);
@@ -280,15 +279,13 @@
 		background: var(--color-base-100);
 	}
 
-	.status-new,
-	.priority-low {
+	.status-new {
 		background: #eef4ff;
 		border-color: #bcd2ff;
 		color: #173372;
 	}
 
-	.status-in_progress,
-	.priority-moderate {
+	.status-in_progress {
 		background: #fff8e8;
 		border-color: #ffdc83;
 		color: #673700;
@@ -298,12 +295,6 @@
 		background: #e9ffee;
 		border-color: #a5f3b3;
 		color: #0d7021;
-	}
-
-	.priority-high {
-		background: #fff1f1;
-		border-color: #ffc1c1;
-		color: #8f2222;
 	}
 
 	.ActionButtons {

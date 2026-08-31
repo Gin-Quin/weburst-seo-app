@@ -178,14 +178,6 @@ export async function updateContentBrief(input: {
 		.update(contents)
 		.set({ brief: input.brief.trim(), updatedAt: Date.now() })
 		.where(eq(contents.id, input.id));
-
-	// The external analysis service does not expose a dedicated brief field. Re-scoring with
-	// saveToGuide synchronizes the latest article whenever its brief changes.
-	try {
-		await refreshContentOptimization(input.id, input.projectId);
-	} catch {
-		// The brief is still saved when the external analysis is unavailable.
-	}
 	return getContentById(input.id, input.projectId);
 }
 

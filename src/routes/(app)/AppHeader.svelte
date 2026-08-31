@@ -4,29 +4,20 @@
 	import WeBurstLogo from "$lib/assets/images/WeBurst.png";
 	import WeBurstMark from "$lib/assets/images/WeBurstMark.png";
 	import { canViewProjectContents } from "$lib/contents/access";
-	import { context } from "$lib/stores/context.svelte";
 	import { getProjectPath } from "$lib/projects/getProjectPath";
+	import { groupProjectsByClient } from "$lib/projects/groupProjectsByClient";
+	import { context } from "$lib/stores/context.svelte";
 	import IconCaretDownRegular from "phosphor-icons-svelte/IconCaretDownRegular.svelte";
 	import IconMagnifyingGlassRegular from "phosphor-icons-svelte/IconMagnifyingGlassRegular.svelte";
 	import IconPlusRegular from "phosphor-icons-svelte/IconPlusRegular.svelte";
 
 	let search = $state("");
 	let searchFocused = $state(false);
-	const selectedClientId = $derived(context.project?.clientId ?? "");
-
-	const clientProjects = $derived(
-		selectedClientId
-			? (context.projects?.filter(
-					({ clientId }) => clientId === selectedClientId,
-				) ?? [])
-			: [],
+	const selectedClientId = $derived(context.project?.clientId);
+	const projectGroups = $derived(
+		groupProjectsByClient(context.projects ?? [], selectedClientId),
 	);
-	const selectedClient = $derived(
-		context.clients?.find(({ id }) => id === selectedClientId),
-	);
-	const selectedProject = $derived(
-		context.project?.clientId === selectedClientId ? context.project : undefined,
-	);
+	const selectedProject = $derived(context.project);
 	const searchResults = $derived(
 		search.trim().length < 2
 			? []
@@ -107,18 +98,20 @@
 
 					<ul
 						tabindex="0"
-						class="dropdown-content menu bg-base-100 rounded-box z-20 mt-2 w-[19rem] shadow-md"
+						class="dropdown-content menu bg-base-100 rounded-box z-20 mt-2 max-h-[70dvh] w-[19rem] overflow-y-auto shadow-md"
 					>
-						<li class="ClientName">{selectedClient?.name ?? context.project.clientName}</li>
-						{#each clientProjects as project (project.id)}
-							<li>
-								<a
-									href={projectPath(project)}
-									class:menu-active={project.id === context.project?.id}
-								>
-									{project.domain}
-								</a>
-							</li>
+						{#each projectGroups as group (`${group.clientId ?? "legacy"}:${group.clientName}`)}
+							<li class="ClientName">{group.clientName}</li>
+							{#each group.projects as project (project.id)}
+								<li>
+									<a
+										href={projectPath(project)}
+										class:menu-active={project.id === context.project?.id}
+									>
+										{project.domain}
+									</a>
+								</li>
+							{/each}
 						{/each}
 					</ul>
 				</div>

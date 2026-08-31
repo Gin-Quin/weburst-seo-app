@@ -35,6 +35,12 @@
 	const canCreate = $derived(title.trim().length > 0 && !saving);
 	const isEditing = $derived(editingContentId !== null);
 	const importingArticle = $derived(!isEditing && saving && Boolean(existingUrl));
+	const priorityOptions: { value: ContentPriority | ""; label: string; className: string }[] = [
+		{ value: "", label: "Aucune", className: "priority-none" },
+		{ value: "high", label: "Haute", className: "priority-high" },
+		{ value: "moderate", label: "Modérée", className: "priority-moderate" },
+		{ value: "low", label: "Faible", className: "priority-low" },
+	];
 
 	openCreateContentDialog = () => {
 		reset();
@@ -122,6 +128,27 @@
 	function handleCancel(event: Event) {
 		if (importingArticle) event.preventDefault();
 	}
+
+	function autoGrow(node: HTMLTextAreaElement, value: string) {
+		function resize() {
+			const minHeight = Number.parseFloat(getComputedStyle(node).minHeight) || 0;
+			node.style.height = "0";
+			node.style.height = `${Math.max(node.scrollHeight, minHeight)}px`;
+		}
+
+		resize();
+		node.addEventListener("input", resize);
+
+		return {
+			update(nextValue: string) {
+				if (nextValue !== value) resize();
+				value = nextValue;
+			},
+			destroy() {
+				node.removeEventListener("input", resize);
+			},
+		};
+	}
 </script>
 
 <dialog bind:this={ref} class="modal" oncancel={handleCancel}>
@@ -162,22 +189,25 @@
 				</div>
 			{/if}
 
-			<div class="field">
-				<label class="field-title" for="content-priority">Assigner une priorité</label>
-				<label class="select control-size-3 w-full">
-					<IconFolderRegular class="icon" />
-					<select
-						id="content-priority"
-						class="select control-size-3 PrioritySelect priority-{priority || 'unset'}"
-						bind:value={priority}
-					>
-						<option value="">Sélectionner une priorité</option>
-						<option class="PriorityOption priority-high" value="high">Haute</option>
-						<option class="PriorityOption priority-moderate" value="moderate">Modérée</option>
-						<option class="PriorityOption priority-low" value="low">Faible</option>
-					</select>
-				</label>
-			</div>
+			<fieldset class="field PriorityField">
+				<legend class="field-title">Assigner une priorité</legend>
+				<div class="PriorityChoices">
+					{#each priorityOptions as option (option.value)}
+						<label
+							class="PriorityChoice PriorityBadge control-size-2 {option.className}"
+							class:PriorityChoiceSelected={priority === option.value}
+						>
+							<input
+								type="radio"
+								name="content-priority"
+								value={option.value}
+								bind:group={priority}
+							/>
+							<span>{option.label}</span>
+						</label>
+					{/each}
+				</div>
+			</fieldset>
 
 			{#if !isEditing}
 				<div class="field">
@@ -201,9 +231,11 @@
 				<label class="field-title" for="content-brief">Brief</label>
 				<textarea
 					id="content-brief"
-					class="textarea w-full min-h-34"
+					class="textarea w-full"
 					bind:value={brief}
+					rows="1"
 					placeholder="Taper votre brief dans cet espace"
+					use:autoGrow={brief}
 				></textarea>
 			</div>
 
@@ -253,26 +285,67 @@
 		border: 1px solid var(--input);
 		border-radius: var(--control-size-3-radius);
 		padding: 1rem 1.25rem;
+		min-height: var(--control-size-3-height);
+		overflow-y: hidden;
+		resize: none;
+		font-size: 1rem;
 	}
 
-	.PrioritySelect:not(.priority-unset),
-	.PriorityOption {
-		font-weight: bold;
+	.PriorityChoices {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.75rem;
 	}
 
-	.PrioritySelect.priority-high,
-	.PriorityOption.priority-high {
-		color: var(--color-error);
+	.PriorityField {
+		min-width: 0;
+		margin: 0;
+		padding: 0;
+		border: 0;
+		gap: 4px;
 	}
 
-	.PrioritySelect.priority-moderate,
-	.PriorityOption.priority-moderate {
-		color: var(--color-warning);
+	.PriorityChoice {
+		gap: 0.45rem;
+		height: var(--control-height);
+		min-height: var(--control-height);
+		padding: 0 var(--control-padding-inline);
+		border: 1px solid var(--color-border);
+		border-radius: var(--control-radius);
+		background: transparent;
+		font-weight: 400;
+		cursor: pointer;
+		transition: border-color 120ms ease, transform 120ms ease;
+		user-select: none;
 	}
 
-	.PrioritySelect.priority-low,
-	.PriorityOption.priority-low {
-		color: var(--color-success);
+	.PriorityChoice.priority-none {
+		color: var(--color-base-content);
+	}
+
+	.PriorityChoice:hover {
+		transform: translateY(-1px);
+	}
+
+	.PriorityChoiceSelected {
+		border-color: currentColor;
+	}
+
+	.PriorityChoice.PriorityChoiceSelected:focus-within {
+		border-color: currentColor !important;
+	}
+
+	.PriorityChoice:has(input:focus-visible) {
+		outline: 2px solid currentColor;
+		outline-offset: 2px;
+	}
+
+	.PriorityChoice input {
+		width: 1rem;
+		height: 1rem;
+		margin: 0;
+		color: inherit;
+		accent-color: currentColor;
 	}
 
 	.ImportStatus {

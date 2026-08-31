@@ -376,7 +376,7 @@
 			</div>
 
 			<div class="field">
-				<div class="field-title">{$content.availableTools}</div>
+				<div class="field-title mb-1">{$content.availableTools}</div>
 				<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
 					<label class="label cursor-pointer justify-start gap-3">
 						<input

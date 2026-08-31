@@ -65,6 +65,7 @@
 		blockFrom: number;
 		blockTo: number;
 		selectedText: string;
+		selectedHtml: string;
 		currentHtml: string;
 		range: Range;
 	};
@@ -336,6 +337,7 @@
 			blockFrom,
 			blockTo,
 			selectedText,
+			selectedHtml: serializeFragment(selection.from, selection.to),
 			currentHtml: serializeFragment(blockFrom, blockTo),
 			range: range.cloneRange(),
 		};
@@ -421,10 +423,12 @@
 			if (!response.ok) throw new Error((await response.text()) || "La réécriture a échoué.");
 			const result = (await response.json()) as { html?: unknown };
 			if (typeof result.html !== "string") throw new Error("La réponse de réécriture est invalide.");
+			const deletesSelection = result.html.trim() === "";
 			rewriteProposal = {
 				...selection,
+				currentHtml: deletesSelection ? selection.selectedHtml : selection.currentHtml,
 				proposedHtml: result.html,
-				deletesSelection: result.html.trim() === "",
+				deletesSelection,
 			};
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : "La réécriture a échoué.", {
@@ -605,9 +609,10 @@
 
 <style>
 	.EditorShell {
+		flex: 1;
 		display: flex;
 		flex-direction: column;
-		min-height: 100%;
+		min-height: 0;
 		background: var(--color-base-100);
 	}
 
@@ -652,11 +657,13 @@
 	}
 	.EditorSurface {
 		flex: 1;
+		display: flex;
 		padding: 1.5rem 0.5rem 6rem;
 	}
 
 	.EditorSurface :global(.ProseMirror) {
-		min-height: 70dvh;
+		flex: 1;
+		min-height: 0;
 		outline: none;
 		font-size: 1.12rem;
 		line-height: 1.62;

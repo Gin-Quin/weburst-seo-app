@@ -11,7 +11,7 @@
 		"dev:turso": "turso dev --db-file ./data/$(git branch --show-current).db",
 		"build": "bun --bun vite build",
 		"deploy:app": "bun run build && bun scripts/deploy.ts",
-		"deploy": "bun run turso:migrate:prod && bun run clickhouse:migrate:prod && bun run deploy:app:prod",
+		"deploy": "bun run turso:migrate:prod && bun run clickhouse:migrate:prod && bun run deploy:app",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"postinstall": "bun scripts/postinstall.ts",

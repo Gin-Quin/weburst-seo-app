@@ -242,7 +242,7 @@
 
 <style>
 	.EditorWorkspace { --content-editor-topbar-height: 3.25rem; height: calc(100dvh - var(--app-header-height)); display: grid; grid-template-columns: minmax(0, 1fr) 480px; background: var(--color-base-100); overflow: hidden; }
-	.ArticleColumn { min-width: 0; overflow-y: auto; padding: 0 2.5rem; }
+	.ArticleColumn { min-width: 0; min-height: 0; overflow-y: auto; padding: 0 2.5rem; }
 	.ArticleTopbar { position: sticky; top: 0; z-index: 8; height: var(--content-editor-topbar-height); display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.95); }
 	.BackButton {
 		display: inline-flex;
@@ -260,7 +260,7 @@
 	.BackButton :global(.icon) { width: 1rem; height: 1rem; }
 	.SaveState { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--color-text-light); font-size: 0.875rem; }
 	.SaveState :global(.icon) { width: 1rem; height: 1rem; }
-	.EditorContainer { max-width: 62rem; margin: 0 auto; }
+	.EditorContainer { width: 100%; max-width: 62rem; min-height: calc(100% - var(--content-editor-topbar-height)); margin: 0 auto; display: flex; flex-direction: column; }
 	.PreviewBar { max-width: 62rem; margin: 0 auto 0.5rem; background: #fff8e8; border: 1px solid #ffdc83; padding: 0.6rem 0.8rem; border-radius: 0.6rem; display: flex; justify-content: space-between; gap: 1rem; font-size: 0.85rem; }
 	.PreviewBar button { color: var(--color-primary); font-weight: 650; cursor: pointer; }
 	.SidePanel { width: 480px; min-width: 0; background: var(--color-base-300); border-left: 1px solid var(--color-border); display: grid; grid-template-rows: auto minmax(0, 1fr); }
@@ -268,7 +268,7 @@
 	.PanelTabs button { flex: 1 1 auto; display: inline-flex; align-items: center; justify-content: center; gap: 0.25rem; padding: 0.5rem 0.4rem; border-radius: 0.5rem; white-space: nowrap; cursor: pointer; font-size: 0.84rem; }
 	.PanelTabs button :global(.icon) { width: 1.1rem; height: 1.1rem; }
 	.PanelTabs button.active { color: #2c155c; background: #fbf8ff; border: 1px solid #dccaff; }
-	.PanelContent { min-height: 0; overflow-y: auto; padding: 0 0.5rem 2rem; }
+	.PanelContent { min-height: 0; overflow-y: auto; padding: 0 0.5rem 0.5rem; }
 	.PanelContent.chat { overflow: hidden; padding: 0; }
 	.PanelContent :global(.PanelCard) { background: white; border: 1px solid var(--color-border); border-radius: 0.7rem; padding: 1.4rem; margin-bottom: 0.65rem; }
 	@media (max-width: 1150px) { .ArticleColumn { padding: 0 1.25rem; } .PanelTabs button { font-size: 0.8rem; } }
