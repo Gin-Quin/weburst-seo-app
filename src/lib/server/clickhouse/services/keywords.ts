@@ -10,7 +10,7 @@ import { db } from "$lib/server/db";
 import { projects } from "$lib/server/db/schema";
 import { normalizeUrlForSimilarity } from "$lib/strings/normalizeUrlForSimilarity";
 import { DAY, MINUTE } from "$lib/timeUnits";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { getClickhouseClient } from "../index";
 import type { ClickhouseTable } from "../migrations";
 import { parseClickhouseCsvRows } from "../parseClickhouseCsvRow";
@@ -21,6 +21,7 @@ import {
 	runDueProjectAnalyses,
 	selectProjectsDueForAnalysis,
 	type LatestAnalysisState,
+	type SchedulableProject,
 } from "./analysisScheduler";
 import { getReadySerpTasks } from "./getReadySerpTasks";
 import { selectLatestAnalysisPerDay } from "./selectLatestAnalysisPerDay";
@@ -1733,13 +1734,16 @@ export namespace KeywordsService {
 		if (signal?.aborted) return;
 		console.log("⏰ Checking for due keyword analyses");
 
-		const recurringAnalysisProjects = await db.query.projects.findMany({
-			where: and(
-				inArray(projects.type, RECURRING_ANALYSIS_PROJECT_TYPES),
-				isNull(projects.deletedAt),
-			),
-			columns: { id: true, keywordAnalysisFrequency: true },
-		});
+		const recurringAnalysisProjects = (
+			await db.query.projects.findMany({
+				where: and(
+					inArray(projects.type, RECURRING_ANALYSIS_PROJECT_TYPES),
+					isNotNull(projects.keywordAnalysisFrequency),
+					isNull(projects.deletedAt),
+				),
+				columns: { id: true, keywordAnalysisFrequency: true },
+			})
+		).filter((project): project is SchedulableProject => project.keywordAnalysisFrequency !== null);
 		const projectIds = recurringAnalysisProjects.map(({ id }) => id);
 		const [latestAnalysisByProjectId, projectIdsWithKeywords] = await Promise.all([
 			getLatestAnalysisByProjectId(projectIds),

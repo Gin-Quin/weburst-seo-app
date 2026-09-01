@@ -85,6 +85,13 @@
       "when": 1788266552571,
       "tag": "0011_goofy_doorman",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1788267635370,
+      "tag": "0012_complete_jazinda",
+      "breakpoints": true
     }
   ]
 }

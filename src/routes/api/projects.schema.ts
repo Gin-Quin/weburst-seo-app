@@ -15,6 +15,18 @@ export const KeywordAnalysisFrequency = v.union([
 ]);
 export type KeywordAnalysisFrequency = v.InferOutput<typeof KeywordAnalysisFrequency>;
 
+export function hasValidAnalysisFrequency({
+	type,
+	keywordAnalysisFrequency,
+}: {
+	type: ProjectType;
+	keywordAnalysisFrequency: KeywordAnalysisFrequency | null;
+}): boolean {
+	return type === "monthly_subscription"
+		? keywordAnalysisFrequency !== null
+		: keywordAnalysisFrequency === null;
+}
+
 export function hasAtLeastOneProjectTool({
 	shareOfVoiceEnabled,
 	contentWritingEnabled,
@@ -35,13 +47,17 @@ export const CreateProject = v.pipe(
 		domain: v.string(),
 		websiteUrl: v.string(),
 		type: ProjectType,
-		keywordAnalysisFrequency: KeywordAnalysisFrequency,
+		keywordAnalysisFrequency: v.optional(v.nullable(KeywordAnalysisFrequency), null),
 		articleLimit: ArticleLimit,
 		shareOfVoiceEnabled: v.optional(v.boolean(), true),
 		contentWritingEnabled: v.optional(v.boolean(), true),
 		leaderIds: v.optional(v.array(v.string()), []),
 		projectManagerIds: v.optional(v.array(v.string())),
 	}),
+	v.check(
+		(input) => hasValidAnalysisFrequency(input),
+		"Analysis frequency must only be set for monthly subscriptions",
+	),
 	v.check((input) => hasAtLeastOneProjectTool(input), "At least one project tool must be enabled"),
 );
 export type CreateProject = v.InferOutput<typeof CreateProject>;
@@ -59,7 +75,7 @@ export const ProjectUpdate = v.partial(
 		domain: v.string(),
 		websiteUrl: v.string(),
 		type: ProjectType,
-		keywordAnalysisFrequency: KeywordAnalysisFrequency,
+		keywordAnalysisFrequency: v.nullable(KeywordAnalysisFrequency),
 		articleLimit: ArticleLimit,
 		shareOfVoiceEnabled: v.boolean(),
 		contentWritingEnabled: v.boolean(),

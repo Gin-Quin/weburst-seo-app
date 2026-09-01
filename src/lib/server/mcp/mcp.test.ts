@@ -59,6 +59,35 @@ describe("MCP OAuth client metadata", () => {
 		});
 	});
 
+	test("accepts ChatGPT CIMD auth method negotiation", () => {
+		const chatGptClientId = "https://chatgpt.com/oauth/client.json";
+		const chatGptRedirectUri = "https://chatgpt.com/connector_platform_oauth_redirect";
+		expect(
+			validateClientMetadataDocument(chatGptClientId, chatGptRedirectUri, {
+				client_id: chatGptClientId,
+				client_name: "ChatGPT",
+				redirect_uris: [chatGptRedirectUri],
+				grant_types: ["authorization_code", "refresh_token"],
+				response_types: ["code"],
+				token_endpoint_auth_method: "private_key_jwt",
+				token_endpoint_auth_methods_supported: ["none", "private_key_jwt"],
+			}),
+		).toEqual({
+			displayName: "ChatGPT (chatgpt.com)",
+			redirectUris: [chatGptRedirectUri],
+		});
+	});
+
+	test("rejects a CIMD client that cannot use public PKCE token exchange", () => {
+		expect(() =>
+			validateClientMetadataDocument(clientId, redirectUri, {
+				...metadata,
+				token_endpoint_auth_method: "private_key_jwt",
+				token_endpoint_auth_methods_supported: ["private_key_jwt"],
+			}),
+		).toThrow(ClientMetadataError);
+	});
+
 	test("rejects a metadata document that changes its identity or callback origin", () => {
 		expect(() =>
 			validateClientMetadataDocument(clientId, redirectUri, {
@@ -160,7 +189,9 @@ describe("MCP OAuth authorization page", () => {
 		expect(page).toContain('fetch("/oauth/session"');
 		expect(page).toContain('id="signed-in-email"');
 		expect(page).toContain('id="api-key-fields" hidden');
-		expect(page).toContain('id="authorize-button" type="submit" name="action" value="approve" disabled');
+		expect(page).toContain(
+			'id="authorize-button" type="submit" name="action" value="approve" disabled',
+		);
 		expect(page).toContain('headers.Authorization = "Bearer " + session');
 	});
 });

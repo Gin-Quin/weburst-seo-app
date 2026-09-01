@@ -32,6 +32,7 @@ import {
 	CreateProject,
 	DeleteProject,
 	hasAtLeastOneProjectTool,
+	hasValidAnalysisFrequency,
 	UpdateProject,
 } from "./projects.schema";
 import { listClients } from "./clients.remote";
@@ -89,6 +90,9 @@ export const updateProject = command(UpdateProject, async ([id, input]): Promise
 	const existingProject = await requireProjectAccess(user, id, "manage");
 	if (!hasAtLeastOneProjectTool({ ...existingProject, ...input })) {
 		throw new Error("At least one project tool must be enabled");
+	}
+	if (!hasValidAnalysisFrequency({ ...existingProject, ...input })) {
+		throw new Error("Analysis frequency must only be set for monthly subscriptions");
 	}
 	if (user!.role === "admin" && (input.projectManagerIds || input.leaderIds)) {
 		await validateProjectManagerIds(input.projectManagerIds ?? input.leaderIds ?? []);

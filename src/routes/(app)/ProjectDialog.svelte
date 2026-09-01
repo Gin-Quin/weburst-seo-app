@@ -186,8 +186,11 @@
 			clientName: edit?.clientName ?? presetClient?.name ?? "",
 			clientId: edit?.clientId ?? presetClient?.id,
 			domain: edit?.domain ?? "",
-			keywordAnalysisFrequency: edit?.keywordAnalysisFrequency ?? "1/month",
-			type: edit?.type === "prospect" ? "audit" : (edit?.type ?? "audit"),
+			keywordAnalysisFrequency:
+				edit?.type === "monthly_subscription"
+					? (edit.keywordAnalysisFrequency ?? "1/month")
+					: null,
+			type: edit?.type ?? "audit",
 			websiteUrl: edit?.websiteUrl ?? "",
 			articleLimit: edit?.articleLimit ?? 10,
 			shareOfVoiceEnabled: edit?.shareOfVoiceEnabled ?? true,
@@ -278,7 +281,15 @@
 					<div class="field-title">{$content.type}</div>
 					<label class="select control-size-3 w-full">
 						<IconFolderRegular class="icon" />
-						<select class="select control-size-3" bind:value={project.type}>
+						<select
+							class="select control-size-3"
+							value={project.type}
+							onchange={(event) => {
+								project.type = event.currentTarget.value as CreateProject["type"];
+								project.keywordAnalysisFrequency =
+									project.type === "monthly_subscription" ? "1/month" : null;
+							}}
+						>
 							{#each Object.entries($projectTypes) as [value, label]}
 								<option {value}>{label}</option>
 							{/each}

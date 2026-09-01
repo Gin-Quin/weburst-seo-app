@@ -75,12 +75,7 @@ export function validateClientMetadataDocument(
 	) {
 		throw new ClientMetadataError();
 	}
-	if (
-		payload.token_endpoint_auth_method !== undefined &&
-		payload.token_endpoint_auth_method !== "none"
-	) {
-		throw new ClientMetadataError();
-	}
+	validateTokenEndpointAuthMethods(payload);
 	if (!arrayContains(payload.response_types, "code")) throw new ClientMetadataError();
 	if (!arrayContains(payload.grant_types, "authorization_code")) {
 		throw new ClientMetadataError();
@@ -226,6 +221,30 @@ async function readLimitedJson(response: Response): Promise<unknown> {
 
 function arrayContains(value: unknown, expected: string): boolean {
 	return Array.isArray(value) && value.includes(expected);
+}
+
+function validateTokenEndpointAuthMethods(payload: Record<string, unknown>): void {
+	const preferred = payload.token_endpoint_auth_method;
+	const supported = payload.token_endpoint_auth_methods_supported;
+
+	if (preferred !== undefined && typeof preferred !== "string") {
+		throw new ClientMetadataError();
+	}
+
+	if (supported === undefined) {
+		if (preferred !== undefined && preferred !== "none") throw new ClientMetadataError();
+		return;
+	}
+
+	if (
+		!Array.isArray(supported) ||
+		supported.length === 0 ||
+		supported.some((method) => typeof method !== "string") ||
+		!supported.includes("none") ||
+		(preferred !== undefined && !supported.includes(preferred))
+	) {
+		throw new ClientMetadataError();
+	}
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

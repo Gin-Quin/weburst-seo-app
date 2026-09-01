@@ -177,11 +177,8 @@ export const projects = sqliteTable(
 		clientId: text("client_id").references(() => clients.id),
 		domain: text("domain").notNull(),
 		websiteUrl: text("website_url").notNull(),
-		// `prospect` remains readable for legacy rows, but new API inputs reject it.
-		type: text("type").$type<"audit" | "prospect" | "monthly_subscription">().notNull(),
-		keywordAnalysisFrequency: text("keyword_analysis_frequency")
-			.$type<KeywordAnalysisFrequency>()
-			.notNull(),
+		type: text("type").$type<"audit" | "monthly_subscription">().notNull(),
+		keywordAnalysisFrequency: text("keyword_analysis_frequency").$type<KeywordAnalysisFrequency>(),
 		articleLimit: integer("article_limit").notNull().default(10),
 		shareOfVoiceEnabled: integer("share_of_voice_enabled", { mode: "boolean" })
 			.notNull()

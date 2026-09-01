@@ -206,11 +206,15 @@
 				<div class="ConnectionGrid">
 					<article class="ConnectionCard">
 						<div class="PlatformMark openai"><img src="/brands/openai.svg" alt="" /></div>
-						<div><h3>ChatGPT</h3><p>Application MCP personnalisée avec autorisation OAuth.</p></div>
-						<button class="btn btn-primary" disabled={!connection.hasKey || isLocalServer} onclick={() => openConnector("https://chatgpt.com/#settings/Apps", "ChatGPT")}>
+						<div><h3>ChatGPT</h3><p>Connexion MCP privée dans le répertoire Plugins, avec autorisation OAuth.</p></div>
+						<button
+							class="btn btn-primary"
+							disabled={!connection.hasKey || isLocalServer}
+							onclick={() => openConnector("https://chatgpt.com/plugins", "ChatGPT")}
+						>
 							Connecter à ChatGPT <IconArrowSquareOutRegular />
 						</button>
-						<small>Paramètres → Applications → Créer, après activation du mode développeur.</small>
+						<small>Activez Paramètres → Sécurité et connexion → Mode développeur, puis ouvrez Plugins → + et collez l’URL.</small>
 					</article>
 
 					<article class="ConnectionCard">

@@ -4,6 +4,7 @@ import {
 	ArticleLimit,
 	CreateProject,
 	hasAtLeastOneProjectTool,
+	hasValidAnalysisFrequency,
 	ProjectName,
 	ProjectType,
 } from "./projects.schema";
@@ -38,7 +39,7 @@ describe("project schema", () => {
 			domain: "example.com",
 			websiteUrl: "https://example.com",
 			type: "audit" as const,
-			keywordAnalysisFrequency: "1/month" as const,
+			keywordAnalysisFrequency: null,
 			articleLimit: 10,
 			shareOfVoiceEnabled: false,
 			contentWritingEnabled: false,
@@ -53,5 +54,39 @@ describe("project schema", () => {
 
 	test("keeps both tools enabled when older callers omit them", () => {
 		expect(hasAtLeastOneProjectTool({})).toBe(true);
+	});
+
+	test("only keeps an analysis frequency for monthly subscriptions", () => {
+		expect(hasValidAnalysisFrequency({ type: "audit", keywordAnalysisFrequency: null })).toBe(true);
+		expect(hasValidAnalysisFrequency({ type: "audit", keywordAnalysisFrequency: "1/month" })).toBe(
+			false,
+		);
+		expect(
+			hasValidAnalysisFrequency({
+				type: "monthly_subscription",
+				keywordAnalysisFrequency: "1/month",
+			}),
+		).toBe(true);
+		expect(
+			hasValidAnalysisFrequency({
+				type: "monthly_subscription",
+				keywordAnalysisFrequency: null,
+			}),
+		).toBe(false);
+	});
+
+	test("defaults an omitted audit analysis frequency to null", () => {
+		const result = safeParse(CreateProject, {
+			id: "audit-1",
+			name: "SEO audit",
+			clientId: "client-1",
+			domain: "example.com",
+			websiteUrl: "https://example.com",
+			type: "audit",
+			articleLimit: 10,
+		});
+
+		expect(result.success).toBe(true);
+		if (result.success) expect(result.output.keywordAnalysisFrequency).toBeNull();
 	});
 });

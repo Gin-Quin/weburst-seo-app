@@ -14,9 +14,9 @@ export const projectTypes = defineContent<Record<ProjectType, string>>({
 
 export function getProjectTypeLabel(
 	labels: Record<ProjectType, string>,
-	projectType: ProjectType | "prospect",
+	projectType: ProjectType,
 ): string {
-	return labels[projectType === "prospect" ? "audit" : projectType];
+	return labels[projectType];
 }
 
 export const projectRoles = defineContent({
