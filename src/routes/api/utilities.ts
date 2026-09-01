@@ -11,15 +11,11 @@ export const getRequestBearerToken = (): string | null => {
 
 export const getRequestUserId = async (): Promise<string | null> => {
 	const bearerToken = getRequestBearerToken();
-	console.log("Getting current user with bearer token:", bearerToken);
-
 	if (!bearerToken) return null;
 
 	const session = await db.query.sessions.findFirst({
 		where: eq(sessions.id, bearerToken),
 	});
-
-	console.log("Found session:", session);
 
 	return session?.userId ?? null;
 };
