@@ -1,16 +1,21 @@
 export type RecurringTaskOptions = {
 	name: string;
 	intervalMs: number;
-	task: () => Promise<void>;
+	task: (signal: AbortSignal) => Promise<void>;
 	initialDelayMs?: number;
 	onError?: (error: unknown) => void;
 	schedule?: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
 	cancel?: (timer: ReturnType<typeof setTimeout>) => void;
 };
 
+export type RecurringTask = {
+	stop: () => Promise<void>;
+};
+
 /**
  * Run a background task repeatedly, waiting for each run to finish before the
- * next interval begins. The returned function permanently stops the runner.
+ * next interval begins. Stopping aborts the active task and waits for it to
+ * settle, so process shutdown cannot leave work half-owned by this runner.
  */
 export function startRecurringTask({
 	name,
@@ -20,9 +25,11 @@ export function startRecurringTask({
 	onError = (error) => console.error(`Background task ${name} failed:`, error),
 	schedule = setTimeout,
 	cancel = clearTimeout,
-}: RecurringTaskOptions): () => void {
+}: RecurringTaskOptions): RecurringTask {
+	const abortController = new AbortController();
 	let stopped = false;
 	let timer: ReturnType<typeof setTimeout> | undefined;
+	let currentRun: Promise<void> | undefined;
 
 	const scheduleNext = (delayMs: number) => {
 		if (stopped) return;
@@ -30,20 +37,33 @@ export function startRecurringTask({
 	};
 
 	const run = async () => {
+		if (stopped) return;
+
+		const runPromise = task(abortController.signal);
+		currentRun = runPromise;
 		try {
-			await task();
+			await runPromise;
 		} catch (error) {
-			onError(error);
+			if (!abortController.signal.aborted) onError(error);
 		} finally {
+			if (currentRun === runPromise) currentRun = undefined;
 			scheduleNext(intervalMs);
 		}
 	};
 
 	scheduleNext(initialDelayMs);
 
-	return () => {
-		if (stopped) return;
-		stopped = true;
-		if (timer !== undefined) cancel(timer);
+	return {
+		stop: async () => {
+			if (stopped) {
+				await currentRun;
+				return;
+			}
+
+			stopped = true;
+			abortController.abort();
+			if (timer !== undefined) cancel(timer);
+			await currentRun;
+		},
 	};
 }

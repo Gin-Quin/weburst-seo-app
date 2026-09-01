@@ -9,7 +9,7 @@ describe("startRecurringTask", () => {
 		let finishTask: (() => void) | undefined;
 		let runs = 0;
 
-		const stop = startRecurringTask({
+		const recurringTask = startRecurringTask({
 			name: "test",
 			intervalMs: 1_000,
 			task: () => {
@@ -33,14 +33,14 @@ describe("startRecurringTask", () => {
 		finishTask?.();
 		await flushPromises();
 		expect(scheduled.map(({ delayMs }) => delayMs)).toEqual([1_000]);
-		stop();
+		await recurringTask.stop();
 	});
 
 	test("reports failures and schedules another run", async () => {
 		const scheduled: Array<{ callback: () => void; delayMs: number }> = [];
 		const errors: unknown[] = [];
 
-		const stop = startRecurringTask({
+		const recurringTask = startRecurringTask({
 			name: "test",
 			intervalMs: 500,
 			task: async () => {
@@ -59,14 +59,14 @@ describe("startRecurringTask", () => {
 
 		expect(errors).toHaveLength(1);
 		expect(scheduled.map(({ delayMs }) => delayMs)).toEqual([500]);
-		stop();
+		await recurringTask.stop();
 	});
 
-	test("cancels a pending run when stopped", () => {
+	test("cancels a pending run when stopped", async () => {
 		const cancelled: ReturnType<typeof setTimeout>[] = [];
 		const timer = 42 as unknown as ReturnType<typeof setTimeout>;
 
-		const stop = startRecurringTask({
+		const recurringTask = startRecurringTask({
 			name: "test",
 			intervalMs: 1_000,
 			task: async () => undefined,
@@ -74,8 +74,8 @@ describe("startRecurringTask", () => {
 			cancel: (pendingTimer) => cancelled.push(pendingTimer),
 		});
 
-		stop();
-		stop();
+		await recurringTask.stop();
+		await recurringTask.stop();
 
 		expect(cancelled).toEqual([timer]);
 	});
@@ -84,7 +84,7 @@ describe("startRecurringTask", () => {
 		const scheduled: Array<{ callback: () => void; delayMs: number }> = [];
 		let finishTask: (() => void) | undefined;
 
-		const stop = startRecurringTask({
+		const recurringTask = startRecurringTask({
 			name: "test",
 			intervalMs: 1_000,
 			task: () =>
@@ -99,10 +99,43 @@ describe("startRecurringTask", () => {
 		});
 
 		scheduled.shift()!.callback();
-		stop();
+		const stopping = recurringTask.stop();
 		finishTask?.();
+		await stopping;
 		await flushPromises();
 
+		expect(scheduled).toHaveLength(0);
+	});
+
+	test("aborts and waits for a running task when stopped", async () => {
+		const scheduled: Array<() => void> = [];
+		let observedAbort = false;
+
+		const recurringTask = startRecurringTask({
+			name: "test",
+			intervalMs: 1_000,
+			task: (signal) =>
+				new Promise<void>((resolve) => {
+					signal.addEventListener(
+						"abort",
+						() => {
+							observedAbort = true;
+							resolve();
+						},
+						{ once: true },
+					);
+				}),
+			schedule: (callback) => {
+				scheduled.push(callback);
+				return 1 as unknown as ReturnType<typeof setTimeout>;
+			},
+			cancel: () => undefined,
+		});
+
+		scheduled.shift()!();
+		await recurringTask.stop();
+
+		expect(observedAbort).toBe(true);
 		expect(scheduled).toHaveLength(0);
 	});
 });

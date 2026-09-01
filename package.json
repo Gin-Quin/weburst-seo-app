@@ -103,6 +103,7 @@
 		"zod": "^4.4.3"
 	},
 	"patchedDependencies": {
-		"layerchart@2.0.0-next.27": "patches/layerchart@2.0.0-next.27.patch"
+		"layerchart@2.0.0-next.27": "patches/layerchart@2.0.0-next.27.patch",
+		"svelte-adapter-bun@1.0.0": "patches/svelte-adapter-bun@1.0.0.patch"
 	}
 }

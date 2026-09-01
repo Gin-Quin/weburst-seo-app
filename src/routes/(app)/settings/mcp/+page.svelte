@@ -86,10 +86,6 @@
 		return `codex mcp add weburst --url ${connection?.serverUrl}\ncodex mcp login weburst`;
 	}
 
-	function claudeCodeCommand() {
-		return `claude mcp add --transport http --scope user weburst ${connection?.serverUrl}`;
-	}
-
 	function directCodexCommand() {
 		return `export WEBURST_MCP_KEY='${generatedKey}'\ncodex mcp add weburst --url ${connection?.serverUrl} --bearer-token-env-var WEBURST_MCP_KEY`;
 	}
@@ -125,7 +121,7 @@
 			{#if isLocalServer}
 				<div class="LocalWarning">
 					<strong>Serveur local</strong>
-					ChatGPT, Claude et Cowork nécessitent une URL HTTPS publique. Codex et Claude Code peuvent utiliser cette URL locale depuis votre machine.
+					ChatGPT et les connecteurs partagés de Claude nécessitent une URL HTTPS publique. Les connexions CLI directes de Codex et Claude Code peuvent utiliser cette URL locale depuis votre machine.
 				</div>
 			{/if}
 
@@ -228,20 +224,11 @@
 
 					<article class="ConnectionCard">
 						<div class="PlatformMark anthropic"><img src="/brands/anthropic.svg" alt="" /></div>
-						<div><h3>Claude & Cowork</h3><p>Un seul connecteur distant, partagé avec Claude Desktop et Cowork.</p></div>
-						<button class="btn btn-primary" disabled={!connection.hasKey || isLocalServer} onclick={() => openConnector("https://claude.ai/settings/connectors", "Claude et Cowork")}>
-							Connecter à Claude & Cowork <IconArrowSquareOutRegular />
+						<div><h3>Claude</h3><p>Un seul connecteur distant, partagé avec Claude Web, Desktop, Cowork et Code.</p></div>
+						<button class="btn btn-primary" disabled={!connection.hasKey || isLocalServer} onclick={() => openConnector("https://claude.ai/#settings/customize-connectors", "Claude")}>
+							Connecter à Claude <IconArrowSquareOutRegular />
 						</button>
-						<small>Personnaliser → Connecteurs → Ajouter un connecteur personnalisé.</small>
-					</article>
-
-					<article class="ConnectionCard">
-						<div class="PlatformMark anthropic"><img src="/brands/anthropic.svg" alt="" /></div>
-						<div><h3>Claude Code</h3><p>Serveur HTTP distant au niveau de votre profil.</p></div>
-						<button class="btn btn-primary" disabled={!connection.hasKey} onclick={() => copy(claudeCodeCommand(), "Commande Claude Code copiée")}>
-							<IconTerminalRegular /> Connecter à Claude Code
-						</button>
-						<small>Après l’ajout, ouvrez <code>/mcp</code> dans Claude Code pour autoriser.</small>
+						<small>Ajouter → Connecteur personnalisé, puis collez l’URL. La connexion sera disponible sur tous vos clients Claude.</small>
 					</article>
 				</div>
 			</section>

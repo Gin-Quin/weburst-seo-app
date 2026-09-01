@@ -116,6 +116,26 @@ export namespace KeywordsService {
 	const analysisCompletionLocks = new Map<string, Promise<void>>();
 	let scheduledAnalysisRun: Promise<void> | undefined;
 
+	async function waitForDelay(milliseconds: number, signal?: AbortSignal): Promise<boolean> {
+		if (signal?.aborted) return false;
+		if (!signal) {
+			await new Promise((resolve) => setTimeout(resolve, milliseconds));
+			return true;
+		}
+
+		return await new Promise<boolean>((resolve) => {
+			const timer = setTimeout(() => {
+				signal.removeEventListener("abort", abort);
+				resolve(true);
+			}, milliseconds);
+			const abort = () => {
+				clearTimeout(timer);
+				resolve(false);
+			};
+			signal.addEventListener("abort", abort, { once: true });
+		});
+	}
+
 	/**
 	 * Return the total volume of a keyword set.
 	 */
@@ -229,6 +249,10 @@ export namespace KeywordsService {
 		keywords: Array<KeywordTuple>,
 		mode: "replace" | "append" = "replace",
 	): Promise<void> {
+		if (keywords.length === 0) {
+			throw new Error("Cannot create an empty keyword set");
+		}
+
 		const clickhouse = getClickhouseClient();
 		const setId = crypto.randomUUID();
 		let keywordsToAdd = keywords;
@@ -643,10 +667,12 @@ export namespace KeywordsService {
 		analysisId,
 		taskId,
 		retries = Infinity,
+		signal,
 	}: {
 		analysisId: string;
 		taskId: string;
 		retries?: number;
+		signal?: AbortSignal;
 	}) {
 		const url = `https://api.dataforseo.com/v3/serp/google/organic/task_get/regular/${taskId}`;
 		let result: DataForSeo.Serp.Response;
@@ -654,19 +680,21 @@ export namespace KeywordsService {
 		let tries = 0;
 
 		do {
+			if (signal?.aborted) return;
 			if (tries >= retries) {
 				console.error(`Max retries reached for task ${taskId}`);
 				return;
 			}
 			tries++;
 
-			await new Promise((resolve) => setTimeout(resolve, 1_000));
+			if (!(await waitForDelay(1_000, signal))) return;
 			const response = await fetch(url, {
 				method: "GET",
 				headers: {
 					Authorization: `Basic ${btoa(`${env.DATA_FOR_SEO_LOGIN}:${env.DATA_FOR_SEO_PASSWORD}`)}`,
 					"Content-Type": "application/json",
 				},
+				signal,
 			});
 
 			if (!response.ok) {
@@ -688,7 +716,9 @@ export namespace KeywordsService {
 		}
 
 		// Got the result, save it in database
-		await saveKeywordAnalysisResult({ analysisId, result: { ...result, tasks: [task] } });
+		if (!signal?.aborted) {
+			await saveKeywordAnalysisResult({ analysisId, result: { ...result, tasks: [task] } });
+		}
 	}
 
 	/**
@@ -817,7 +847,7 @@ export namespace KeywordsService {
 				SELECT
 					if(empty(results.status), tasks.status, results.status) AS status,
 					(
-						SELECT count(*)
+						SELECT uniqExact(tuple(keyword, position, domain, url, type, title, description))
 						FROM keywordAnalysisResponses
 						WHERE analysisId = {analysisIdString:String} AND taskId = {taskId:UUID}
 					) AS persistedItems
@@ -855,7 +885,7 @@ export namespace KeywordsService {
 		const clickhouse = getClickhouseClient();
 		const response = await clickhouse.query({
 			query: `
-				SELECT count(*) AS total
+				SELECT uniqExact(tuple(keyword, position, domain, url, type, title, description)) AS total
 				FROM keywordAnalysisResponses
 				WHERE analysisId = {analysisId:String} AND taskId = {taskId:UUID}
 			`,
@@ -1068,7 +1098,7 @@ export namespace KeywordsService {
 
 		const response = await clickhouse.query({
 			query: `
-				SELECT keyword, position, domain, type
+				SELECT DISTINCT keyword, position, domain, type
 				FROM keywordAnalysisResponses
 				WHERE analysisId = {analysisId:String}
 				${positionLimit ? "AND position <= {positionLimit:UInt32}" : ""}
@@ -1312,12 +1342,15 @@ export namespace KeywordsService {
 					responses.domain AS domain,
 					responses.position AS position,
 					responses.type AS type
-				FROM keywordAnalysisResponses AS responses
+				FROM
+				(
+					SELECT DISTINCT keyword, domain, position, type
+					FROM keywordAnalysisResponses
+					WHERE analysisId = {analysisId:String} AND position <= 10
+				) AS responses
 				INNER JOIN keywords
 					ON keywords.setId = {setId:UUID} AND keywords.name = responses.keyword
-				WHERE responses.analysisId = {analysisId:String}
-					AND notEmpty(trim(keywords.clusters))
-					AND responses.position <= 10
+				WHERE notEmpty(trim(keywords.clusters))
 				ORDER BY cluster ASC, responses.position ASC
 			`,
 			query_params: { analysisId, setId },
@@ -1526,7 +1559,7 @@ export namespace KeywordsService {
 
 		const response = await clickhouse.query({
 			query: `
-				SELECT keyword, domain, url, position, type
+				SELECT DISTINCT keyword, domain, url, position, type
 				FROM keywordAnalysisResponses
 				WHERE analysisId = {analysisId: String}
 					AND positionCaseInsensitive(type, 'organic') > 0
@@ -1681,13 +1714,13 @@ export namespace KeywordsService {
 	}
 
 	/** Check every active project with recurring analysis and start analyses whose interval elapsed. */
-	export function startAllKeywordAnalysis(): Promise<void> {
+	export function startAllKeywordAnalysis(signal?: AbortSignal): Promise<void> {
 		if (scheduledAnalysisRun) {
 			console.log("Keyword analysis scheduler is already running; skipping overlapping run");
 			return scheduledAnalysisRun;
 		}
 
-		const currentRun = runScheduledKeywordAnalyses();
+		const currentRun = runScheduledKeywordAnalyses(signal);
 		scheduledAnalysisRun = currentRun;
 		const clearScheduledRun = () => {
 			if (scheduledAnalysisRun === currentRun) scheduledAnalysisRun = undefined;
@@ -1696,7 +1729,8 @@ export namespace KeywordsService {
 		return currentRun;
 	}
 
-	async function runScheduledKeywordAnalyses(): Promise<void> {
+	async function runScheduledKeywordAnalyses(signal?: AbortSignal): Promise<void> {
+		if (signal?.aborted) return;
 		console.log("⏰ Checking for due keyword analyses");
 
 		const recurringAnalysisProjects = await db.query.projects.findMany({
@@ -1727,7 +1761,8 @@ export namespace KeywordsService {
 		const results = await runDueProjectAnalyses({
 			projects: dueProjects,
 			startAnalysis: (projectId) => startKeywordAnalysis(projectId, { priority: 1 }),
-			waitBetweenProjects: () => new Promise((resolve) => setTimeout(resolve, 2 * MINUTE)),
+			waitBetweenProjects: () => waitForDelay(2 * MINUTE, signal).then(() => undefined),
+			signal,
 		});
 
 		for (const result of results) {
@@ -1792,7 +1827,8 @@ export namespace KeywordsService {
 	/**
 	 * Fetch the ready tasks.
 	 */
-	export async function fetchTasksReady() {
+	export async function fetchTasksReady(signal?: AbortSignal) {
+		if (signal?.aborted) return;
 		console.log("⏰ Fetching tasks ready");
 
 		const url = `https://api.dataforseo.com/v3/serp/google/organic/tasks_ready`;
@@ -1804,6 +1840,7 @@ export namespace KeywordsService {
 					Authorization: `Basic ${btoa(`${env.DATA_FOR_SEO_LOGIN}:${env.DATA_FOR_SEO_PASSWORD}`)}`,
 					"Content-Type": "application/json",
 				},
+				signal,
 			});
 
 			if (!response.ok) {
@@ -1818,6 +1855,7 @@ export namespace KeywordsService {
 			}
 
 			for (const task of getReadySerpTasks(result)) {
+				if (signal?.aborted) break;
 				const analysisId = await getAnalysisIdFromTaskId({ taskId: task.id });
 				if (!analysisId) {
 					console.warn(`No analysis ID found for task ${task.id}`);
@@ -1827,17 +1865,20 @@ export namespace KeywordsService {
 					analysisId,
 					taskId: task.id,
 					retries: 1,
+					signal,
 				});
 			}
 		} catch (error) {
-			console.error(`Error fetching tasks ready: ${error}`);
+			if (!signal?.aborted) console.error(`Error fetching tasks ready: ${error}`);
 		} finally {
-			await reconcilePendingKeywordAnalyses().catch((error) => {
-				console.error(`Error reconciling pending keyword analyses: ${error}`);
-			});
-			await failStaleKeywordAnalyses().catch((error) => {
-				console.error(`Error failing stale keyword analyses: ${error}`);
-			});
+			if (!signal?.aborted) {
+				await reconcilePendingKeywordAnalyses().catch((error) => {
+					console.error(`Error reconciling pending keyword analyses: ${error}`);
+				});
+				await failStaleKeywordAnalyses().catch((error) => {
+					console.error(`Error failing stale keyword analyses: ${error}`);
+				});
+			}
 		}
 	}
 

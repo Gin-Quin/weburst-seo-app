@@ -70,14 +70,18 @@ export async function runDueProjectAnalyses({
 	projects,
 	startAnalysis,
 	waitBetweenProjects,
+	signal,
 }: {
 	projects: SchedulableProject[];
 	startAnalysis: (projectId: string) => Promise<unknown>;
 	waitBetweenProjects: () => Promise<void>;
+	signal?: AbortSignal;
 }): Promise<DueAnalysisRunResult[]> {
 	const results: DueAnalysisRunResult[] = [];
 
 	for (const [index, project] of projects.entries()) {
+		if (signal?.aborted) break;
+
 		try {
 			await startAnalysis(project.id);
 			results.push({ projectId: project.id, status: "started" });
@@ -85,7 +89,7 @@ export async function runDueProjectAnalyses({
 			results.push({ projectId: project.id, status: "failed", error });
 		}
 
-		if (index < projects.length - 1) {
+		if (!signal?.aborted && index < projects.length - 1) {
 			await waitBetweenProjects();
 		}
 	}

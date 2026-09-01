@@ -1,0 +1,22 @@
+[Unit]
+Description=Weburst API
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/app
+ExecStart=/root/.bun/bin/bun index.js
+Restart=always
+RestartSec=2
+KillMode=control-group
+KillSignal=SIGTERM
+TimeoutStopSec=75
+Environment=NODE_ENV=production
+Environment=RUN_BACKGROUND_JOBS=true
+Environment=SHUTDOWN_TIMEOUT=60
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

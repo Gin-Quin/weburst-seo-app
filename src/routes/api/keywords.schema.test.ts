@@ -27,4 +27,14 @@ describe("keyword schema", () => {
 			).toMatchObject({ mode });
 		}
 	});
+
+	test("rejects empty keyword imports", () => {
+		expect(() =>
+			parse(AddKeywords, {
+				projectId: "project-a",
+				mode: "replace",
+				keywords: [],
+			}),
+		).toThrow();
+	});
 });

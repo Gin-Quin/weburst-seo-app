@@ -1,0 +1,51 @@
+diff --git a/dist/files/index.js b/dist/files/index.js
+index dd154f53eb1bf0c068f167b2c9eb23a486649001..dc332535f00c6e7a88f85a3fba3f34ea55ecf472 100644
+--- a/dist/files/index.js
++++ b/dist/files/index.js
+@@ -21,13 +21,41 @@ var options = {
+ };
+ var server = Bun.serve(options);
+ console.log(`Listening on ${server.url} ${websocket ? "with WebSocket" : ""}`);
+-async function graceful_shutdown(reason) {
+-  console.info("Stopping server...");
+-  process.emit("sveltekit:shutdown", reason);
+-  await server.stop(true);
+-  console.info("Stopped server");
++var shutdown_timeout = parseInt(env("SHUTDOWN_TIMEOUT", "60"));
++var shutdown_promise;
++function graceful_shutdown(reason) {
++  if (shutdown_promise) return shutdown_promise;
+   process.removeListener("SIGINT", graceful_shutdown);
+   process.removeListener("SIGTERM", graceful_shutdown);
++  shutdown_promise = stop_server(reason);
++  return shutdown_promise;
++}
++async function stop_server(reason) {
++  console.info("Stopping server gracefully...");
++  const pending = [];
++  const waitUntil = (promise) => pending.push(Promise.resolve(promise));
++  const stopPromise = server.stop();
++  process.emit("sveltekit:shutdown", reason, waitUntil);
++  let timeout;
++  try {
++    await Promise.race([
++      Promise.all([stopPromise, Promise.allSettled(pending)]),
++      new Promise((_, reject) => {
++        timeout = setTimeout(
++          () => reject(new Error(`Graceful shutdown exceeded ${shutdown_timeout}s`)),
++          shutdown_timeout * 1000
++        );
++      })
++    ]);
++    clearTimeout(timeout);
++    console.info("Stopped server gracefully");
++    process.exit(0);
++  } catch (error) {
++    clearTimeout(timeout);
++    console.error("Graceful shutdown failed; forcing active connections closed", error);
++    await server.stop(true);
++    process.exit(1);
++  }
+ }
+ process.on("SIGTERM", graceful_shutdown);
+ process.on("SIGINT", graceful_shutdown);

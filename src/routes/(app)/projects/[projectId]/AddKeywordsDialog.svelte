@@ -27,6 +27,7 @@
 			keywordsAddedSuccessfully: "Keywords added successfully.",
 			errorAddingKeywords: "An error occurred while adding keywords.",
 			errorLoadingKeywords: "The existing keywords could not be loaded.",
+			noValidKeywords: "No valid keyword was found in this file.",
 			startAnalysis: "Start Analysis?",
 			startAnalysisDescription:
 				"Keywords added successfully. Do you want to start a analysis using the new keywords?",
@@ -46,6 +47,7 @@
 				"Une erreur est survenue lors de l'ajout des mots-clés.",
 			errorLoadingKeywords:
 				"Les mots-clés existants n’ont pas pu être chargés.",
+			noValidKeywords: "Aucun mot-clé valide n’a été trouvé dans ce fichier.",
 			startAnalysis: "Démarrer une analyse ?",
 			startAnalysisDescription:
 				"Les mots-clés ont été ajoutés avec succès. Voulez-vous démarrer une analyse en utilisant les nouveaux mots-clés ?",
@@ -103,18 +105,20 @@
 	}
 
 	async function parseFile(file: File) {
-		if (file.type == "text/csv") {
+		const extension = file.name.split(".").at(-1)?.toLowerCase();
+		if (file.type == "text/csv" || extension === "csv") {
 			keywords = await parseKeywordsCsv(file);
 		} else if (
 			file.type ==
-			"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+				"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+			extension === "xlsx"
 		) {
 			keywords = await parseKeywordsXlsx(file);
 		}
 	}
 
 	async function submit(mode: "replace" | "append") {
-		if (!Array.isArray(keywords) || hasExistingKeywords === undefined) return;
+		if (!Array.isArray(keywords) || keywords.length === 0 || hasExistingKeywords === undefined) return;
 
 		loading = true;
 		try {
@@ -170,6 +174,8 @@
 
 			{#if keywords instanceof Error}
 				<div class="py-1 text-error bold">{String(keywords)}</div>
+			{:else if Array.isArray(keywords) && keywords.length === 0}
+				<div class="py-1 text-error bold">{$content.noValidKeywords}</div>
 			{/if}
 
 			<div class="grid grid-cols-1 gap-3 pt-2 sm:grid-cols-2">
@@ -177,7 +183,7 @@
 					<button
 						class="btn btn-primary h-auto! min-h-12 py-2! text-sm whitespace-normal text-balance"
 						type="button"
-						disabled={!Array.isArray(keywords) || loading}
+						disabled={!Array.isArray(keywords) || keywords.length === 0 || loading}
 						onclick={() => submit("replace")}
 					>
 						{$content.replace}
@@ -185,7 +191,7 @@
 					<button
 						class="btn btn-primary h-auto! min-h-12 py-2! text-sm whitespace-normal text-balance"
 						type="button"
-						disabled={!Array.isArray(keywords) || loading}
+						disabled={!Array.isArray(keywords) || keywords.length === 0 || loading}
 						onclick={() => submit("append")}
 					>
 						{$content.append}
@@ -212,6 +218,7 @@
 						type="button"
 						disabled={
 							!Array.isArray(keywords) ||
+							keywords.length === 0 ||
 							loading ||
 							hasExistingKeywords === undefined
 						}

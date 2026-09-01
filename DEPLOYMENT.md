@@ -63,6 +63,15 @@ After deployment:
 ## Current deployment implementation
 
 `deploy:app:prod` builds locally, then `scripts/deploy.ts` uploads `build/` and
-`.env.prod` and restarts `my-bun-app`. The SvelteKit API routes are part of the
-same build. This command does not apply database migrations; use `deploy:prod`
-for the complete ordered deployment.
+`.env.prod` into a timestamped directory under `/root/weburst-releases`. The
+script refuses to deploy when an unmanaged Bun process is running, atomically
+switches `/root/app` to the new release, installs the versioned systemd unit,
+restarts `my-bun-app`, and runs a local health check. A failed health check
+automatically restores the previous release.
+
+Only the systemd service sets `RUN_BACKGROUND_JOBS=true`. Local servers and ad
+hoc scripts therefore cannot start the keyword scheduler or DataForSEO poller
+unless they explicitly opt in.
+
+This command does not apply database migrations; use `deploy:prod` for the
+complete ordered deployment.

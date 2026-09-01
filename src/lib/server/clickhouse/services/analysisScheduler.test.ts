@@ -127,4 +127,24 @@ describe("analysis scheduling", () => {
 			{ projectId: "two", status: "started" },
 		]);
 	});
+
+	test("stops before starting another project when aborted", async () => {
+		const abortController = new AbortController();
+		const events: string[] = [];
+
+		const results = await runDueProjectAnalyses({
+			projects: [project("one", "1/day"), project("two", "1/day")],
+			startAnalysis: async (projectId) => {
+				events.push(`start:${projectId}`);
+			},
+			waitBetweenProjects: async () => {
+				events.push("wait");
+				abortController.abort();
+			},
+			signal: abortController.signal,
+		});
+
+		expect(events).toEqual(["start:one", "wait"]);
+		expect(results).toHaveLength(1);
+	});
 });
