@@ -55,7 +55,9 @@
 					{$content.trafficPotential}
 				</h2>
 				<div class="center gap-2">
-					<span class="text-xl font-bold">{totalVolume}</span>
+					<span class="text-xl font-bold">
+						{totalVolume.toLocaleString("fr-FR")}
+					</span>
 					<Trend trend={client.trend} />
 				</div>
 			</div>
