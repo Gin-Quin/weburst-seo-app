@@ -52,5 +52,10 @@ describe("MCP OAuth authorization page", () => {
 		expect(page).toContain('form.getAttribute("action")');
 		expect(page).not.toContain("fetch(form.action");
 		expect(page).toContain('includes("application/json")');
+		expect(page).toContain('fetch("/oauth/session"');
+		expect(page).toContain('id="signed-in-email"');
+		expect(page).toContain('id="api-key-fields" hidden');
+		expect(page).toContain('id="authorize-button" type="submit" name="action" value="approve" disabled');
+		expect(page).toContain('headers.Authorization = "Bearer " + session');
 	});
 });

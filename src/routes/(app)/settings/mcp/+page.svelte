@@ -225,7 +225,7 @@
 					<article class="ConnectionCard">
 						<div class="PlatformMark anthropic"><img src="/brands/anthropic.svg" alt="" /></div>
 						<div><h3>Claude</h3><p>Un seul connecteur distant, partagé avec Claude Web, Desktop, Cowork et Code.</p></div>
-						<button class="btn btn-primary" disabled={!connection.hasKey || isLocalServer} onclick={() => openConnector("https://claude.ai/#settings/customize-connectors", "Claude")}>
+						<button class="btn btn-primary" disabled={!connection.hasKey || isLocalServer} onclick={() => openConnector("https://claude.ai/customize/connectors", "Claude")}>
 							Connecter à Claude <IconArrowSquareOutRegular />
 						</button>
 						<small>Ajouter → Connecteur personnalisé, puis collez l’URL. La connexion sera disponible sur tous vos clients Claude.</small>

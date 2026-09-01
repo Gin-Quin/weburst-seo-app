@@ -37,6 +37,12 @@ export function renderOauthAuthorizationPage(
     p { color: #656565; line-height: 1.55; }
     .permission { display: flex; gap: 12px; padding: 16px; margin: 24px 0; border-radius: 16px; background: #f5f8ff; color: #153a9d; }
     .permission strong { display: block; color: #11182d; margin-bottom: 4px; }
+    .identity { display: flex; align-items: center; gap: 12px; min-height: 72px; margin-top: 24px; padding: 14px 16px; border: 1px solid #e2e8e4; border-radius: 16px; background: #f6fbf7; color: #245b32; }
+    .identity-icon { display: grid; place-items: center; flex: 0 0 auto; width: 36px; height: 36px; border-radius: 999px; background: #dff3e4; font-weight: 800; }
+    .identity strong, .identity span { display: block; }
+    .identity span { margin-top: 2px; color: #46634d; font-size: 14px; overflow-wrap: anywhere; }
+    #identity-loading { color: #777; background: #fafafa; }
+    [hidden] { display: none !important; }
     label { display: block; margin: 24px 0 8px; font-size: 14px; font-weight: 650; }
     input[type=password] { width: 100%; height: 48px; padding: 0 16px; border: 1px solid #dedede; border-radius: 13px; font: inherit; }
     input[type=password]:focus { outline: none; border-color: #9453f4; box-shadow: 0 0 0 3px #f2e9ff; }
@@ -59,19 +65,63 @@ export function renderOauthAuthorizationPage(
     </div>
     <form method="post" action="/oauth/authorize" id="oauth-form">
       ${hiddenFields}
-      <label for="api-key">Clé MCP WeBurst</label>
-      <input id="api-key" name="api_key" type="password" autocomplete="off" placeholder="wb_mcp_…">
-      <small>Facultatif si vous êtes déjà connecté à WeBurst dans ce navigateur. Sinon, copiez la clé depuis Paramètres → Connexion MCP.</small>
+      <div class="identity" id="identity-loading" aria-live="polite">
+        <div>Vérification de votre session WeBurst…</div>
+      </div>
+      <div class="identity" id="signed-in-identity" hidden>
+        <div class="identity-icon" aria-hidden="true">✓</div>
+        <div><strong>Connecté à WeBurst</strong><span id="signed-in-email"></span></div>
+      </div>
+      <div id="api-key-fields" hidden>
+        <label for="api-key">Clé MCP WeBurst</label>
+        <input id="api-key" name="api_key" type="password" autocomplete="off" placeholder="wb_mcp_…">
+        <small>Vous n’êtes pas connecté à WeBurst dans ce navigateur. Copiez la clé depuis Paramètres → Connexion MCP.</small>
+      </div>
       <div id="error" role="alert">${escapeHtml(error ?? "")}</div>
       <div class="actions">
         <button type="submit" name="action" value="deny">Annuler</button>
-        <button class="primary" type="submit" name="action" value="approve">Autoriser</button>
+        <button class="primary" id="authorize-button" type="submit" name="action" value="approve" disabled>Autoriser</button>
       </div>
     </form>
   </main>
   <script>
     const form = document.getElementById("oauth-form");
     const errorBox = document.getElementById("error");
+    const identityLoading = document.getElementById("identity-loading");
+    const signedInIdentity = document.getElementById("signed-in-identity");
+    const signedInEmail = document.getElementById("signed-in-email");
+    const apiKeyFields = document.getElementById("api-key-fields");
+    const authorizeButton = document.getElementById("authorize-button");
+    let session = localStorage.getItem("bearer");
+
+    const showApiKeyFields = () => {
+      session = null;
+      identityLoading.hidden = true;
+      signedInIdentity.hidden = true;
+      apiKeyFields.hidden = false;
+      authorizeButton.disabled = false;
+    };
+
+    const resolveIdentity = async () => {
+      if (!session) return showApiKeyFields();
+      try {
+        const response = await fetch("/oauth/session", {
+          headers: { "Accept": "application/json", "Authorization": "Bearer " + session },
+        });
+        if (!response.ok) return showApiKeyFields();
+        const payload = await response.json();
+        if (typeof payload.email !== "string" || !payload.email) return showApiKeyFields();
+        signedInEmail.textContent = payload.email;
+        identityLoading.hidden = true;
+        apiKeyFields.hidden = true;
+        signedInIdentity.hidden = false;
+        authorizeButton.disabled = false;
+      } catch {
+        showApiKeyFields();
+      }
+    };
+
+    void resolveIdentity();
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       const buttons = form.querySelectorAll("button");
@@ -80,7 +130,6 @@ export function renderOauthAuthorizationPage(
       const data = new URLSearchParams(new FormData(form));
       data.set("action", event.submitter?.value || "approve");
       const headers = { "Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded" };
-      const session = localStorage.getItem("bearer");
       if (session) headers.Authorization = "Bearer " + session;
       try {
         const endpoint = form.getAttribute("action") || window.location.pathname;
@@ -88,6 +137,7 @@ export function renderOauthAuthorizationPage(
         const isJson = response.headers.get("content-type")?.includes("application/json");
         const payload = isJson ? await response.json() : null;
         if (!response.ok) {
+          if (response.status === 401 && session) showApiKeyFields();
           throw new Error(payload?.error_description || "Autorisation impossible (HTTP " + response.status + ").");
         }
         if (!payload?.redirect) throw new Error("Réponse d’autorisation invalide.");
