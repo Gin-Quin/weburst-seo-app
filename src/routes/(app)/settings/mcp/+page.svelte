@@ -82,10 +82,6 @@
 		if (connection) await copy(connection.serverUrl, "URL MCP copiée");
 	}
 
-	function codexCommand() {
-		return `codex mcp add weburst --url ${connection?.serverUrl}\ncodex mcp login weburst`;
-	}
-
 	function directCodexCommand() {
 		return `export WEBURST_MCP_KEY='${generatedKey}'\ncodex mcp add weburst --url ${connection?.serverUrl} --bearer-token-env-var WEBURST_MCP_KEY`;
 	}
@@ -206,7 +202,7 @@
 				<div class="ConnectionGrid">
 					<article class="ConnectionCard">
 						<div class="PlatformMark openai"><img src="/brands/openai.svg" alt="" /></div>
-						<div><h3>ChatGPT</h3><p>Connexion MCP privée dans le répertoire Plugins, avec autorisation OAuth.</p></div>
+						<div><h3>ChatGPT</h3><p>Un seul connecteur MCP privé, partagé avec ChatGPT et Codex, avec autorisation OAuth.</p></div>
 						<button
 							class="btn btn-primary"
 							disabled={!connection.hasKey || isLocalServer}
@@ -214,16 +210,7 @@
 						>
 							Connecter à ChatGPT <IconArrowSquareOutRegular />
 						</button>
-						<small>Activez Paramètres → Sécurité et connexion → Mode développeur, puis ouvrez Plugins → + et collez l’URL.</small>
-					</article>
-
-					<article class="ConnectionCard">
-						<div class="PlatformMark openai"><img src="/brands/openai.svg" alt="" /></div>
-						<div><h3>Codex</h3><p>Ajout à Codex CLI et à l’application via OAuth.</p></div>
-						<button class="btn btn-primary" disabled={!connection.hasKey} onclick={() => copy(codexCommand(), "Commande Codex copiée")}>
-							<IconTerminalRegular /> Connecter à Codex
-						</button>
-						<small>Collez les deux commandes dans votre terminal.</small>
+						<small>Activez Paramètres → Sécurité et connexion → Mode développeur, puis ouvrez Plugins → + et collez l’URL. La connexion sera aussi disponible dans Codex.</small>
 					</article>
 
 					<article class="ConnectionCard">
