@@ -38,16 +38,13 @@ export const POST: RequestHandler = async ({ request, url }) => {
 		const params = new URLSearchParams(await request.text());
 		const authorization = await validateOauthAuthorizationRequest(params, url);
 		if (params.get("action") === "deny") {
-			return redirectPayload(
-				createOauthErrorRedirect(authorization, "access_denied", url),
-				request,
-			);
+			return redirectPayload(createOauthErrorRedirect(authorization, "access_denied"), request);
 		}
 
 		const user = await resolveAuthorizingUser(request, params.get("api_key"));
 		if (!user) return oauthErrorResponse("access_denied", 401);
 		return redirectPayload(
-			await createOauthAuthorizationRedirect(authorization, user, url),
+			await createOauthAuthorizationRedirect(authorization, user),
 			request,
 		);
 	} catch (error) {

@@ -37,7 +37,6 @@ export function getOauthMetadata(requestUrl?: URL) {
 	const baseUrl = getPublicBaseUrl(requestUrl);
 	return {
 		issuer: baseUrl.origin,
-		authorization_response_iss_parameter_supported: true,
 		authorization_endpoint: new URL("oauth/authorize", baseUrl).toString(),
 		token_endpoint: new URL("oauth/token", baseUrl).toString(),
 		registration_endpoint: new URL("oauth/register", baseUrl).toString(),
@@ -55,6 +54,7 @@ export function getProtectedResourceMetadata(requestUrl?: URL) {
 	return {
 		resource: getMcpServerUrl(requestUrl).toString(),
 		authorization_servers: [baseUrl.origin],
+		bearer_methods_supported: ["header"],
 		scopes_supported: [MCP_SCOPE],
 		resource_name: MCP_SERVER_NAME,
 		resource_documentation: new URL("settings/mcp", baseUrl).toString(),
@@ -168,7 +168,6 @@ export async function validateOauthAuthorizationRequest(
 export async function createOauthAuthorizationRedirect(
 	input: OauthAuthorizationRequest,
 	user: User,
-	requestUrl?: URL,
 ): Promise<string> {
 	const code = generateMcpSecret("wb_code_");
 	const now = Date.now();
@@ -188,19 +187,16 @@ export async function createOauthAuthorizationRedirect(
 	const redirect = new URL(input.redirectUri);
 	redirect.searchParams.set("code", code);
 	if (input.state) redirect.searchParams.set("state", input.state);
-	redirect.searchParams.set("iss", getPublicBaseUrl(requestUrl).origin);
 	return redirect.toString();
 }
 
 export function createOauthErrorRedirect(
 	input: OauthAuthorizationRequest,
 	error: string,
-	requestUrl?: URL,
 ): string {
 	const redirect = new URL(input.redirectUri);
 	redirect.searchParams.set("error", error);
 	if (input.state) redirect.searchParams.set("state", input.state);
-	redirect.searchParams.set("iss", getPublicBaseUrl(requestUrl).origin);
 	return redirect.toString();
 }
 

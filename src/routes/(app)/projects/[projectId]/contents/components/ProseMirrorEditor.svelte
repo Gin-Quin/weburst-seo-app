@@ -685,6 +685,7 @@
 	.EditorSurface :global(.ProseMirror ul) { list-style: disc; }
 	.EditorSurface :global(.ProseMirror ol) { list-style: decimal; }
 	.EditorSurface :global(.ProseMirror blockquote) { border-left: 3px solid var(--color-primary); padding-left: 1rem; color: var(--color-text-light); }
+	.EditorSurface :global(.ProseMirror hr) { margin-block: 2rem; border-color: var(--color-gray-300); }
 	.EditorSurface :global(.ProseMirror pre) { margin: 1rem 0; padding: 1rem; border-radius: 0.65rem; background: #17141d; color: white; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 	.EditorSurface :global(.ProseMirror code) { padding: 0.1rem 0.3rem; border-radius: 0.3rem; background: #f1eef7; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 	.EditorSurface :global(.ProseMirror pre code) { padding: 0; background: transparent; }

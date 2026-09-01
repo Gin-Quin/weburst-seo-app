@@ -44,8 +44,8 @@ export const listContents = query(ListContents, async ({ projectId, archived }) 
 });
 
 export const getContent = query(ContentIdentity, async ({ projectId, id }) => {
-	await requireContentsViewAccess(projectId);
-	return getContentById(id, projectId);
+	const { user } = await requireContentsViewAccess(projectId);
+	return getContentById(id, projectId, { chatUserId: user.id });
 });
 
 export const createContent = command(CreateContent, async (input) => {
@@ -150,8 +150,10 @@ export const restoreVersion = command(RestoreVersion, async (input) => {
 });
 
 export const clearContentChat = command(ContentIdentity, async ({ projectId, id }) => {
-	await requireProjectAccess(await getRequestUser(), projectId, "manage");
-	await saveContentChatMessages(id, projectId, []);
+	const user = await getRequestUser();
+	await requireProjectAccess(user, projectId, "manage");
+	if (!user) throw new Error("Unauthorized");
+	await saveContentChatMessages(id, projectId, user.id, []);
 });
 
 async function requireContentsViewAccess(projectId: string) {
@@ -159,5 +161,5 @@ async function requireContentsViewAccess(projectId: string) {
 	if (!user) throw new Error("Unauthorized");
 	const project = await requireProjectAccess(user, projectId, "view");
 	if (!canViewProjectContents(user.role, project.type)) throw new Error("Unauthorized");
-	return project;
+	return { project, user };
 }

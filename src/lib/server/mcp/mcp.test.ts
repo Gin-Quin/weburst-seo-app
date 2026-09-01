@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import { MCP_CLIENT_METADATA_DOCUMENT_SUPPORTED } from "./config";
 import { hashMcpSecret, verifyPkceChallenge } from "./crypto";
 import { ClientMetadataError, validateClientMetadataDocument } from "./clientMetadata";
@@ -87,6 +87,58 @@ describe("MCP OAuth client metadata", () => {
 			displayName: "Claude Code (claude.ai)",
 			redirectUris: ["http://127.0.0.1/callback", "http://localhost/callback"],
 		});
+	});
+});
+
+describe("MCP OAuth Claude compatibility", () => {
+	const loadOauthModule = async () => {
+		mock.module("$lib/server/db", () => ({ db: {} }));
+		return import("./oauth");
+	};
+
+	test("advertises CIMD public-client support and bearer header authentication", async () => {
+		const { getOauthMetadata, getProtectedResourceMetadata } = await loadOauthModule();
+		const previousBaseUrl = process.env.PUBLIC_BASE_URL;
+		process.env.PUBLIC_BASE_URL = "https://app.weburst.fr";
+		try {
+			const requestUrl = new URL("https://app.weburst.fr/mcp");
+			const metadata = getOauthMetadata(requestUrl);
+			expect(metadata).toMatchObject({
+				issuer: "https://app.weburst.fr",
+				token_endpoint_auth_methods_supported: ["none"],
+				client_id_metadata_document_supported: true,
+				code_challenge_methods_supported: ["S256"],
+			});
+			expect("authorization_response_iss_parameter_supported" in metadata).toBe(false);
+			expect(getProtectedResourceMetadata(requestUrl)).toMatchObject({
+				resource: "https://app.weburst.fr/mcp",
+				authorization_servers: ["https://app.weburst.fr"],
+				bearer_methods_supported: ["header"],
+			});
+		} finally {
+			if (previousBaseUrl === undefined) delete process.env.PUBLIC_BASE_URL;
+			else process.env.PUBLIC_BASE_URL = previousBaseUrl;
+		}
+	});
+
+	test("does not add an iss parameter to Claude callback redirects", async () => {
+		const { createOauthErrorRedirect } = await loadOauthModule();
+		const redirect = createOauthErrorRedirect(
+			{
+				clientId: "https://claude.ai/oauth/mcp-oauth-client-metadata",
+				clientName: "Claude",
+				redirectUri: "https://claude.ai/api/mcp/auth_callback",
+				codeChallenge: "A".repeat(43),
+				scope: "weburst.read",
+				resource: "https://app.weburst.fr/mcp",
+				state: "state",
+			},
+			"access_denied",
+		);
+		const callback = new URL(redirect);
+		expect(callback.searchParams.get("error")).toBe("access_denied");
+		expect(callback.searchParams.get("state")).toBe("state");
+		expect(callback.searchParams.has("iss")).toBe(false);
 	});
 });
 

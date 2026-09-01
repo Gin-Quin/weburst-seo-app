@@ -242,6 +242,34 @@ export const contents = sqliteTable(
 );
 export type Content = typeof contents.$inferSelect;
 
+/**
+ * A content chat belongs to exactly one authenticated user. Keeping it outside
+ * `contents` prevents collaborators on the same project from sharing history.
+ */
+export const contentChats = sqliteTable(
+	"content_chats",
+	{
+		contentId: text("content_id")
+			.notNull()
+			.references(() => contents.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => users.id, { onDelete: "cascade" }),
+		messagesJson: text("messages_json").notNull().default("[]"),
+		createdAt: integer("created_at")
+			.notNull()
+			.$defaultFn(() => Date.now()),
+		updatedAt: integer("updated_at")
+			.notNull()
+			.$defaultFn(() => Date.now()),
+	},
+	(table) => [
+		primaryKey({ columns: [table.contentId, table.userId] }),
+		index("content_chats_user_id_idx").on(table.userId),
+	],
+);
+export type ContentChat = typeof contentChats.$inferSelect;
+
 export const contentVersions = sqliteTable(
 	"content_versions",
 	{
@@ -306,6 +334,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
 	clientMemberships: many(usersToClients),
 	sessions: many(sessions),
 	mcpTokens: many(mcpTokens),
+	contentChats: many(contentChats),
 }));
 
 export const mcpTokensRelations = relations(mcpTokens, ({ one }) => ({
@@ -372,6 +401,18 @@ export const contentsRelations = relations(contents, ({ many, one }) => ({
 		references: [projects.id],
 	}),
 	versions: many(contentVersions),
+	chats: many(contentChats),
+}));
+
+export const contentChatsRelations = relations(contentChats, ({ one }) => ({
+	content: one(contents, {
+		fields: [contentChats.contentId],
+		references: [contents.id],
+	}),
+	user: one(users, {
+		fields: [contentChats.userId],
+		references: [users.id],
+	}),
 }));
 
 export const contentVersionsRelations = relations(contentVersions, ({ one }) => ({

@@ -4,6 +4,7 @@ import {
 	logContentChatEvent,
 	summarizeChatMessages,
 } from "$lib/server/ai/chatDiagnostics";
+import { protectToolInputStream } from "$lib/server/ai/protectToolInputStream";
 import { requireProjectAccess } from "$lib/server/auth/authorization";
 import {
 	getContentById,
@@ -13,25 +14,37 @@ import {
 } from "$lib/server/contents";
 import {
 	convertToModelMessages,
-	simulateStreamingMiddleware,
+	createUIMessageStream,
+	createUIMessageStreamResponse,
 	stepCountIs,
 	streamText,
 	tool,
 	type UIMessage,
 	validateUIMessages,
-	wrapLanguageModel,
 } from "ai";
 import { z } from "zod";
 import type { RequestHandler } from "./$types";
 import { getRequestUser } from "../../utilities";
 
+type ChatMessage = UIMessage<{ createdAt?: number }>;
+
 type ChatRequest = {
 	projectId?: string;
 	contentId?: string;
-	messages?: UIMessage<{ createdAt?: number }>[];
+	messages?: ChatMessage[];
 };
 
-export const POST: RequestHandler = async ({ request }) => {
+const WriteArticleInput = z.object({
+	content: z.string().describe("Le contenu Markdown complet de la nouvelle version"),
+	summary: z.string().describe("Un bref résumé des modifications proposées"),
+});
+
+export const POST: RequestHandler = async ({ request, platform }) => {
+	// Gemini can take longer than Bun's default 10-second idle timeout before
+	// producing the first byte. This endpoint is an SSE stream, so keep the
+	// underlying Bun request alive while the provider and tools are working.
+	platform?.server.timeout(platform.request, 0);
+
 	const requestId = crypto.randomUUID();
 	const startedAt = Date.now();
 	const elapsedMs = () => Date.now() - startedAt;
@@ -48,6 +61,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			contentLength: request.headers.get("content-length"),
 			via: request.headers.get("via"),
 			userAgent: request.headers.get("user-agent"),
+			bunIdleTimeoutDisabled: Boolean(platform),
 		}),
 	);
 	request.signal.addEventListener(
@@ -66,6 +80,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 		const user = await getRequestUser();
 		await requireProjectAccess(user, body.projectId, "manage");
+		if (!user) throw new Error("Unauthorized");
 
 		const content = await getContentById(body.contentId, body.projectId);
 		const google = getGoogleGenerativeAI();
@@ -102,10 +117,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			write_article: tool({
 				description:
 					"Proposer une nouvelle version complète de l’article en Markdown éditable, sans diagramme ni tableau ASCII. Le frontend affichera les différences et demandera à l’utilisateur d’accepter ou d’annuler avant toute modification.",
-				inputSchema: z.object({
-					content: z.string().describe("Le contenu Markdown complet de la nouvelle version"),
-					summary: z.string().describe("Un bref résumé des modifications proposées"),
-				}),
+				inputSchema: WriteArticleInput,
 				execute: async ({ summary }) => ({ status: "proposal_ready" as const, summary }),
 			}),
 			updateBrief: tool({
@@ -137,7 +149,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			}),
 		};
 
-		const messages = await validateUIMessages({ messages: body.messages });
+		const messages = await validateUIMessages<ChatMessage>({ messages: body.messages });
 		const modelMessages = await convertToModelMessages(messages, {
 			tools,
 			ignoreIncompleteToolCalls: true,
@@ -161,12 +173,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		logContentChatEvent("info", "request_validated", baseLog(diagnosticContext));
 
 		const result = streamText({
-			// Article drafts are long JSON tool arguments. Wait for Gemini's complete
-			// response so an interrupted provider stream cannot expose partial JSON.
-			model: wrapLanguageModel({
-				model: google(GOOGLE_CHAT_MODEL),
-				middleware: simulateStreamingMiddleware(),
-			}),
+			model: google(GOOGLE_CHAT_MODEL),
 			instructions: buildSystemPrompt(content),
 			// A provider or network interruption can leave a partial tool call in the
 			// client history. Ignore it so the next user attempt can still be sent.
@@ -277,11 +284,22 @@ export const POST: RequestHandler = async ({ request }) => {
 			},
 		});
 
-		return result.toUIMessageStreamResponse({
-			headers: { "x-request-id": requestId },
+		const uiStream = createUIMessageStream<ChatMessage>({
 			originalMessages: messages,
-			messageMetadata: ({ part }) =>
-				part.type === "start" ? { createdAt: Date.now() } : undefined,
+			execute: ({ writer }) => {
+				const providerStream = result.toUIMessageStream<ChatMessage>({
+					messageMetadata: ({ part }) =>
+						part.type === "start" ? { createdAt: Date.now() } : undefined,
+					onError: reportUiStreamError,
+				});
+				writer.merge(
+					protectToolInputStream(providerStream, {
+						toolName: "write_article",
+						isValid: (input) => WriteArticleInput.safeParse(input).success,
+						errorText: "La proposition d’article générée est invalide.",
+					}),
+				);
+			},
 			onEnd: async ({
 				messages: completedMessages,
 				responseMessage,
@@ -300,8 +318,21 @@ export const POST: RequestHandler = async ({ request }) => {
 						completedMessageCount: completedMessages.length,
 					}),
 				);
+				if (isAborted || finishReason === "error") {
+					logContentChatEvent(
+						"warn",
+						"messages_not_persisted",
+						baseLog({ reason: isAborted ? "aborted" : "generation_error" }),
+					);
+					return;
+				}
 				try {
-					await saveContentChatMessages(body.contentId!, body.projectId!, completedMessages);
+					await saveContentChatMessages(
+						body.contentId!,
+						body.projectId!,
+						user.id,
+						completedMessages,
+					);
 					logContentChatEvent(
 						"info",
 						"messages_persisted",
@@ -316,14 +347,12 @@ export const POST: RequestHandler = async ({ request }) => {
 					throw error;
 				}
 			},
-			onError: (error) => {
-				logContentChatEvent(
-					"error",
-					"ui_stream_error",
-					baseLog({ ...diagnosticContext, error: describeChatError(error) }),
-				);
-				return "Le chat n’a pas pu terminer sa réponse.";
-			},
+			onError: reportUiStreamError,
+		});
+
+		return createUIMessageStreamResponse({
+			stream: uiStream,
+			headers: { "x-request-id": requestId },
 			consumeSseStream: async ({ stream }) => {
 				const reader = stream.getReader();
 				let chunkCount = 0;
@@ -361,6 +390,15 @@ export const POST: RequestHandler = async ({ request }) => {
 				}
 			},
 		});
+
+		function reportUiStreamError(error: unknown) {
+			logContentChatEvent(
+				"error",
+				"ui_stream_error",
+				baseLog({ ...diagnosticContext, error: describeChatError(error) }),
+			);
+			return "Le chat n’a pas pu terminer sa réponse.";
+		}
 	} catch (error) {
 		logContentChatEvent("error", "request_error", baseLog({ error: describeChatError(error) }));
 		return new Response(error instanceof Error ? error.message : "Erreur de chat.", {

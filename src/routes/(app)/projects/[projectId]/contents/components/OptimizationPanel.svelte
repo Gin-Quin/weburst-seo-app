@@ -141,7 +141,7 @@
 				class="AiButton"
 				onclick={() =>
 					onOptimizeWithAi(
-						"Optimise à fond l’article en fonction des recommandations SEO, puis relance l’analyse.",
+						"Optimise à fond l’article en fonction des recommandations SEO.",
 					)}
 			>
 				<IconSparkleRegular class="icon" /> Optimiser via IA
@@ -464,8 +464,8 @@
 		justify-content: center;
 		gap: calc(0.25rem + 2px);
 	}
-	.Metric strong {
-		font-size: 2rem;
+	.MetricValue > strong {
+		font-size: 1.75rem;
 		font-weight: 500;
 		line-height: 1.1;
 	}

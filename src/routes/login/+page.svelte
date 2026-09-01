@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { goto } from "$app/navigation";
 	import WeBurstLogo from "$lib/assets/images/WeBurst.png";
 	import PinInput from "$lib/components/PinInput.svelte";
 	import { defineContent } from "$lib/i18n/locale.svelte";
@@ -70,8 +69,10 @@
 			loading = true;
 			const response = await verifyCode({ email, code });
 			if (response) {
+				localStorage.removeItem("user");
 				localStorage.setItem("bearer", response);
-				goto("/");
+				// Do not retain remote-query results from a previously authenticated user.
+				window.location.assign("/");
 			} else {
 				invalidToken = true;
 				loading = false;

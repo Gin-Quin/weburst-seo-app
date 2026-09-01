@@ -78,6 +78,13 @@
       "when": 1788191975354,
       "tag": "0010_massive_rhino",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1788266552571,
+      "tag": "0011_goofy_doorman",
+      "breakpoints": true
     }
   ]
 }

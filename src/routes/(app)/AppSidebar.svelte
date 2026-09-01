@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { goto } from "$app/navigation";
 	import { page } from "$app/state";
 	import Avatar from "$lib/components/Avatar.svelte";
 	import { canViewProjectContents } from "$lib/contents/access";
@@ -36,7 +35,9 @@
 			localStorage.removeItem("bearer");
 			localStorage.removeItem("user");
 			context.user = null;
-			await goto("/login");
+			// A full reload clears user-scoped remote-query caches before another
+			// account can authenticate in this browser tab.
+			window.location.assign("/login");
 		}
 	}
 </script>

@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { goto } from "$app/navigation";
 	import { page } from "$app/state";
 	import Loader from "$lib/components/Loader.svelte";
 	import { defineContent } from "$lib/i18n/locale.svelte";
@@ -38,8 +37,10 @@
 			if (!response) {
 				state = "invalidToken";
 			} else {
+				localStorage.removeItem("user");
 				localStorage.setItem("bearer", response);
-				goto("/");
+				// Do not retain remote-query results from a previously authenticated user.
+				window.location.assign("/");
 			}
 		}
 	}

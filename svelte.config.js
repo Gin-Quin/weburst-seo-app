@@ -10,6 +10,12 @@ const config = {
 		adapter: adapter({
 
 		}),
+		// OAuth token exchanges are server-to-server form submissions and normally
+		// do not include an Origin header. Authentication for application mutations
+		// is enforced with explicit bearer tokens rather than ambient cookies.
+		csrf: {
+			trustedOrigins: ["*"],
+		},
 		experimental: {
 			remoteFunctions: true,
 		},

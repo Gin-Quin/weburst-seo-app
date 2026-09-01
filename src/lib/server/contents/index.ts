@@ -22,6 +22,7 @@ import {
 import { createId } from "@paralleldrive/cuid2";
 import { and, count, desc, eq, isNotNull, isNull, max } from "drizzle-orm";
 import { importArticleFromUrl } from "./importArticle";
+import { loadContentChatMessages, upsertContentChatMessages } from "./contentChats";
 import { CONTENT_QUOTA_EXCEEDED_MESSAGE, isContentQuotaReached } from "./quota";
 
 export type ContentDetail = Omit<
@@ -64,7 +65,7 @@ export async function listProjectContents(
 			),
 		)
 		.orderBy(desc(contents.updatedAt));
-	return rows.map(toContentDetail);
+	return rows.map((row) => toContentDetail(row));
 }
 
 export async function countProjectContents(projectId: string): Promise<number> {
@@ -141,9 +142,16 @@ export async function createContent(
 	return getContentById(id, input.projectId);
 }
 
-export async function getContentById(id: string, projectId: string): Promise<ContentDetail> {
+export async function getContentById(
+	id: string,
+	projectId: string,
+	options: { chatUserId?: string } = {},
+): Promise<ContentDetail> {
 	const row = await getContentRow(id, projectId);
-	return toContentDetail(row);
+	const chatMessages = options.chatUserId
+		? await loadContentChatMessages(db, id, options.chatUserId)
+		: [];
+	return toContentDetail(row, chatMessages);
 }
 
 export async function saveContentDraft(input: {
@@ -423,13 +431,11 @@ export async function restoreContentVersion(input: {
 export async function saveContentChatMessages(
 	id: string,
 	projectId: string,
+	userId: string,
 	messages: unknown[],
 ): Promise<void> {
 	await getContentRow(id, projectId);
-	await db
-		.update(contents)
-		.set({ chatMessagesJson: JSON.stringify(messages) })
-		.where(eq(contents.id, id));
+	await upsertContentChatMessages(db, id, userId, messages);
 }
 
 export async function replaceContentFromChat(input: {
@@ -461,14 +467,14 @@ async function getContentRow(id: string, projectId: string): Promise<Content> {
 	return content;
 }
 
-function toContentDetail(content: Content): ContentDetail {
+function toContentDetail(content: Content, chatMessages: unknown[] = []): ContentDetail {
 	const { serpmanticsGuideJson, serpmanticsAnalysisJson, chatMessagesJson, ...rest } = content;
 	return {
 		...rest,
 		serpmanticsError: publicAnalysisError(rest.serpmanticsError),
 		serpmanticsGuide: parseJson<SerpmanticsGuide>(serpmanticsGuideJson),
 		serpmanticsAnalysis: parseJson<SerpmanticsContentAnalysis>(serpmanticsAnalysisJson),
-		chatMessages: parseJson<unknown[]>(chatMessagesJson) ?? [],
+		chatMessages,
 	};
 }
 
