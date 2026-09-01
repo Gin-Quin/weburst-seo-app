@@ -2,7 +2,18 @@ import { db } from "$lib/server/db";
 import { mcpOauthClients, mcpOauthCodes, mcpTokens, type User } from "$lib/server/db/schema";
 import { createId } from "@paralleldrive/cuid2";
 import { and, eq, isNull, lt } from "drizzle-orm";
-import { MCP_SCOPE, MCP_SERVER_NAME, getMcpServerUrl, getPublicBaseUrl } from "./config";
+import {
+	ClientMetadataError,
+	isClientMetadataDocumentId,
+	resolveClientMetadataDocument,
+} from "./clientMetadata";
+import {
+	MCP_CLIENT_METADATA_DOCUMENT_SUPPORTED,
+	MCP_SCOPE,
+	MCP_SERVER_NAME,
+	getMcpServerUrl,
+	getPublicBaseUrl,
+} from "./config";
 import { generateMcpSecret, getSecretPrefix, hashMcpSecret, verifyPkceChallenge } from "./crypto";
 import { isSafeRedirectUri } from "./redirect";
 
@@ -34,6 +45,7 @@ export function getOauthMetadata(requestUrl?: URL) {
 		grant_types_supported: ["authorization_code", "refresh_token"],
 		code_challenge_methods_supported: ["S256"],
 		token_endpoint_auth_methods_supported: ["none"],
+		client_id_metadata_document_supported: MCP_CLIENT_METADATA_DOCUMENT_SUPPORTED,
 		scopes_supported: [MCP_SCOPE, OFFLINE_ACCESS_SCOPE],
 	};
 }
@@ -99,14 +111,40 @@ export async function validateOauthAuthorizationRequest(
 		throw new OauthRequestError("invalid_request");
 	}
 
-	const [client] = await db
-		.select()
-		.from(mcpOauthClients)
-		.where(eq(mcpOauthClients.id, clientId))
-		.limit(1);
-	if (!client) throw new OauthRequestError("invalid_client");
-	const redirectUris = parseJsonArray(client.redirectUrisJson);
-	if (!redirectUris.includes(redirectUri)) throw new OauthRequestError("invalid_redirect_uri");
+	let clientName: string;
+	if (isClientMetadataDocumentId(clientId)) {
+		try {
+			const metadata = await resolveClientMetadataDocument(clientId, redirectUri);
+			clientName = metadata.displayName;
+			await db
+				.insert(mcpOauthClients)
+				.values({
+					id: clientId,
+					name: metadata.displayName,
+					redirectUrisJson: JSON.stringify(metadata.redirectUris),
+				})
+				.onConflictDoUpdate({
+					target: mcpOauthClients.id,
+					set: {
+						name: metadata.displayName,
+						redirectUrisJson: JSON.stringify(metadata.redirectUris),
+					},
+				});
+		} catch (error) {
+			if (error instanceof ClientMetadataError) throw new OauthRequestError("invalid_client");
+			throw error;
+		}
+	} else {
+		const [client] = await db
+			.select()
+			.from(mcpOauthClients)
+			.where(eq(mcpOauthClients.id, clientId))
+			.limit(1);
+		if (!client) throw new OauthRequestError("invalid_client");
+		const redirectUris = parseJsonArray(client.redirectUrisJson);
+		if (!redirectUris.includes(redirectUri)) throw new OauthRequestError("invalid_redirect_uri");
+		clientName = client.name;
+	}
 
 	const scope = normalizeScope(params.get("scope"));
 	const resource = params.get("resource") || getMcpServerUrl(requestUrl).toString();
@@ -118,7 +156,7 @@ export async function validateOauthAuthorizationRequest(
 
 	return {
 		clientId,
-		clientName: client.name,
+		clientName,
 		redirectUri,
 		codeChallenge,
 		scope,

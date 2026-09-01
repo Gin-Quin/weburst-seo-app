@@ -1,6 +1,7 @@
 export const MCP_SCOPE = "weburst.read";
 export const MCP_SERVER_NAME = "WeBurst";
 export const MCP_SERVER_VERSION = "1.1.0";
+export const MCP_CLIENT_METADATA_DOCUMENT_SUPPORTED = true;
 
 export function getPublicBaseUrl(requestUrl?: URL): URL {
 	const configured = process.env.PUBLIC_BASE_URL?.trim();

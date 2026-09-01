@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { MCP_CLIENT_METADATA_DOCUMENT_SUPPORTED } from "./config";
 import { hashMcpSecret, verifyPkceChallenge } from "./crypto";
+import { ClientMetadataError, validateClientMetadataDocument } from "./clientMetadata";
 import { renderOauthAuthorizationPage } from "./oauthPage";
 import { canReadMcpClients } from "./permissions";
 import { isSafeRedirectUri } from "./redirect";
@@ -34,6 +36,57 @@ describe("MCP authorization", () => {
 		expect(canReadMcpClients("project_manager")).toBe(true);
 		expect(canReadMcpClients("client")).toBe(false);
 		expect(canReadMcpClients("user")).toBe(false);
+	});
+});
+
+describe("MCP OAuth client metadata", () => {
+	const clientId = "https://claude.ai/oauth/mcp-oauth-client-metadata";
+	const redirectUri = "https://claude.ai/api/mcp/auth_callback";
+	const metadata = {
+		client_id: clientId,
+		client_name: "Claude",
+		redirect_uris: [redirectUri],
+		grant_types: ["authorization_code", "refresh_token"],
+		response_types: ["code"],
+		token_endpoint_auth_method: "none",
+	};
+
+	test("advertises and accepts Claude hosted client metadata", () => {
+		expect(MCP_CLIENT_METADATA_DOCUMENT_SUPPORTED).toBe(true);
+		expect(validateClientMetadataDocument(clientId, redirectUri, metadata)).toEqual({
+			displayName: "Claude (claude.ai)",
+			redirectUris: [redirectUri],
+		});
+	});
+
+	test("rejects a metadata document that changes its identity or callback origin", () => {
+		expect(() =>
+			validateClientMetadataDocument(clientId, redirectUri, {
+				...metadata,
+				client_id: "https://attacker.example/client.json",
+			}),
+		).toThrow(ClientMetadataError);
+		expect(() =>
+			validateClientMetadataDocument(clientId, redirectUri, {
+				...metadata,
+				redirect_uris: ["https://attacker.example/callback"],
+			}),
+		).toThrow(ClientMetadataError);
+	});
+
+	test("accepts Claude Code loopback callbacks with an ephemeral port", () => {
+		const codeClientId = "https://claude.ai/oauth/claude-code-client-metadata";
+		expect(
+			validateClientMetadataDocument(codeClientId, "http://127.0.0.1:45678/callback", {
+				...metadata,
+				client_id: codeClientId,
+				client_name: "Claude Code",
+				redirect_uris: ["http://127.0.0.1/callback", "http://localhost/callback"],
+			}),
+		).toEqual({
+			displayName: "Claude Code (claude.ai)",
+			redirectUris: ["http://127.0.0.1/callback", "http://localhost/callback"],
+		});
 	});
 });
 
