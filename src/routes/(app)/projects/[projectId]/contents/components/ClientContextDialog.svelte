@@ -32,7 +32,6 @@
 	let loading = $state(false);
 	let saving = $state(false);
 	let canEdit = $state(false);
-	let inputSession = $state(0);
 
 	openClientContextDialog = () => {
 		ref?.showModal();
@@ -43,7 +42,6 @@
 		loading = true;
 		deletedFileIds = [];
 		fileSlots = [newFileSlot()];
-		inputSession += 1;
 		try {
 			const response = await fetch(`/api/clients/${clientId}/context`);
 			const result = await response.json();
@@ -123,7 +121,6 @@
 			existingFiles = result.files;
 			deletedFileIds = [];
 			fileSlots = [newFileSlot()];
-			inputSession += 1;
 			toast.success("Contexte du client enregistré", { richColors: true });
 			ref?.close();
 		} catch (error) {
@@ -225,28 +222,26 @@
 
 					{#if canEdit}
 						<div class="NewFiles">
-							{#key inputSession}
-								{#each fileSlots as slot, index (slot.id)}
-									<div class="FileInputRow">
-										<input
-											type="file"
-											class="file-input w-full"
-											accept=".txt,.pdf,.md,text/plain,text/markdown,application/pdf"
-											onchange={(event) => selectFile(index, event)}
-										/>
-										{#if slot.file}
-											<button
-												type="button"
-												class="btn control-size-1 FileRemove"
-												title="Retirer ce fichier"
-												onclick={() => removeNewFile(index)}
-											>
-												<IconTrashRegular class="icon" />
-											</button>
-										{/if}
-									</div>
-								{/each}
-							{/key}
+							{#each fileSlots as slot, index (slot.id)}
+								<div class="FileInputRow">
+									<input
+										type="file"
+										class="file-input w-full"
+										accept=".txt,.pdf,.md,text/plain,text/markdown,application/pdf"
+										onchange={(event) => selectFile(index, event)}
+									/>
+									{#if slot.file}
+										<button
+											type="button"
+											class="btn control-size-1 FileRemove"
+											title="Retirer ce fichier"
+											onclick={() => removeNewFile(index)}
+										>
+											<IconTrashRegular class="icon" />
+										</button>
+									{/if}
+								</div>
+							{/each}
 						</div>
 					{/if}
 				</div>

@@ -183,7 +183,6 @@
 		try {
 			await clearContentChat({ id: content.id, projectId: content.projectId });
 			chat.messages = [];
-			toast.success("Chat effacé", { richColors: true });
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : "Impossible d’effacer le chat.", {
 				richColors: true,
