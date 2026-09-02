@@ -7,7 +7,7 @@ export async function sendContentQuotaWarningEmail(to: string, remaining: number
 	const content = buildContentQuotaWarningEmail(remaining, appUrl);
 
 	await sendEmail({
-		from: "noreply@app.weburst.fr",
+		from: "weburst@app.weburst.fr",
 		to,
 		...content,
 	});

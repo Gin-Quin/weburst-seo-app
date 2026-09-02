@@ -22,7 +22,7 @@ export async function sendClientInvitationNotificationToAdmins(
 	await Promise.all(
 		recipients.map((admin) =>
 			sendEmail({
-				from: { name: "WeBurst", email: "noreply@app.weburst.fr" },
+				from: { name: "WeBurst", email: "weburst@app.weburst.fr" },
 				to: admin.email,
 				...email,
 			}),

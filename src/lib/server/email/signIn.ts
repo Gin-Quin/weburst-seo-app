@@ -8,7 +8,7 @@ export async function sendSignInEmail(
 	const magicLink = `${PUBLIC.PUBLIC_BASE_URL}/login/verify-magic-link?email=${to}&token=${magicLinkToken}`;
 
 	await sendEmail({
-		from: "noreply@app.weburst.fr",
+		from: "weburst@app.weburst.fr",
 		to,
 		subject: "Connecte-toi",
 		html: `

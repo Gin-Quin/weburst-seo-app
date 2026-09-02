@@ -16,7 +16,7 @@ export async function sendInvitationEmail(
 	});
 
 	await sendEmail({
-		from: { name: "WeBurst", email: "noreply@app.weburst.fr" },
+		from: { name: "WeBurst", email: "weburst@app.weburst.fr" },
 		to: invitedUser.email,
 		...email,
 	});
