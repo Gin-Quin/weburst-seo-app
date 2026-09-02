@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { MAX_CHAT_MEMORY_LENGTH } from "$lib/contents/chatMemory";
 	import IconFileRegular from "phosphor-icons-svelte/IconFileRegular.svelte";
 	import IconTrashRegular from "phosphor-icons-svelte/IconTrashRegular.svelte";
 	import { toast } from "svelte-sonner";
@@ -24,6 +25,7 @@
 	} = $props();
 
 	let clientContext = $state("");
+	let clientMemory = $state("");
 	let existingFiles = $state<ExistingFile[]>([]);
 	let deletedFileIds = $state<string[]>([]);
 	let fileSlots = $state<FileSlot[]>([newFileSlot()]);
@@ -46,9 +48,10 @@
 			const response = await fetch(`/api/clients/${clientId}/context`);
 			const result = await response.json();
 			if (!response.ok) throw new Error(result.message || "Le contexte n’a pas pu être chargé.");
-			clientContext = result.context;
-			existingFiles = result.files;
 			canEdit = result.canEdit;
+			clientContext = result.context;
+			clientMemory = canEdit ? (result.chatMemory ?? "") : "";
+			existingFiles = result.files;
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : "Le contexte n’a pas pu être chargé.", {
 				richColors: true,
@@ -103,6 +106,7 @@
 		try {
 			const formData = new FormData();
 			formData.set("context", clientContext);
+			formData.set("chatMemory", clientMemory);
 			formData.set("deletedFileIds", JSON.stringify(deletedFileIds));
 			for (const slot of fileSlots) {
 				if (slot.file) formData.append("files", slot.file);
@@ -115,6 +119,7 @@
 			const result = await response.json();
 			if (!response.ok) throw new Error(result.message || "Le contexte n’a pas pu être enregistré.");
 			clientContext = result.context;
+			clientMemory = result.chatMemory;
 			existingFiles = result.files;
 			deletedFileIds = [];
 			fileSlots = [newFileSlot()];
@@ -167,6 +172,25 @@
 					></textarea>
 					<div class="ContextLength">{clientContext.length.toLocaleString("fr-FR")} / 50&nbsp;000</div>
 				</div>
+
+				{#if canEdit}
+					<div class="field">
+						<label class="field-title" for="client-memory">Mémoire du client</label>
+						<p class="MemoryHint">
+							Informations durables mémorisées par le chat et partagées entre tous les contenus de ce client.
+						</p>
+						<textarea
+							id="client-memory"
+							class="textarea w-full min-h-36"
+							bind:value={clientMemory}
+							placeholder="Ton de marque, audience, terminologie, positionnement…"
+							maxlength={MAX_CHAT_MEMORY_LENGTH}
+						></textarea>
+						<div class="ContextLength">
+							{clientMemory.length.toLocaleString("fr-FR")} / {MAX_CHAT_MEMORY_LENGTH.toLocaleString("fr-FR")}
+						</div>
+					</div>
+				{/if}
 
 				<div class="field">
 					<div class="field-title">Documents</div>
@@ -248,10 +272,11 @@
 	.ClientContextModal { padding: 2rem; max-height: min(52rem, calc(100dvh - 2rem)); overflow-y: auto; }
 	.ClientContextModal > header { padding-bottom: 1.5rem; }
 	h2 { font-size: 2rem; line-height: 1.15; }
-	.FileHint, .ContextLength, .FileSize { color: var(--color-text-light); }
+	.FileHint, .MemoryHint, .ContextLength, .FileSize { color: var(--color-text-light); }
 	.LoadingContext { min-height: 14rem; display: grid; place-items: center; color: var(--color-text-light); }
 	.textarea { border: 1px solid var(--input); border-radius: var(--control-size-3-radius); padding: 1rem 1.25rem; }
 	.ContextLength { margin-top: 0.35rem; text-align: right; font-size: 0.8rem; }
+	.MemoryHint { margin: 0.2rem 0 0.5rem; font-size: 0.9rem; }
 	.FileHint { margin: 0.2rem 0 0.75rem; font-size: 0.9rem; }
 	.ExistingFiles, .NewFiles { display: grid; gap: 0.5rem; width: 100%; }
 	.ExistingFiles { margin-bottom: 0.75rem; }

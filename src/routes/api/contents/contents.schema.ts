@@ -1,4 +1,5 @@
 import * as v from "valibot";
+import { MAX_CHAT_MEMORY_LENGTH } from "$lib/contents/chatMemory";
 
 const Id = v.pipe(v.string(), v.trim(), v.minLength(1));
 const Title = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(240));
@@ -39,6 +40,7 @@ export const UpdateContent = v.object({
 	cluster: v.pipe(v.string(), v.maxLength(20_000)),
 	priority: v.nullable(ContentPriority),
 	brief: v.pipe(v.string(), v.maxLength(50_000)),
+	chatMemory: v.pipe(v.string(), v.maxLength(MAX_CHAT_MEMORY_LENGTH)),
 });
 
 export const SaveDraft = v.object({

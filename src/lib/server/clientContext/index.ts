@@ -1,4 +1,5 @@
 import { and, eq, inArray } from "drizzle-orm";
+import { MAX_CHAT_MEMORY_LENGTH } from "$lib/contents/chatMemory";
 import { db } from "$lib/server/db";
 import { clientContextFiles, clients } from "$lib/server/db/schema";
 import { MAX_CLIENT_CONTEXT_FILES, MAX_CLIENT_CONTEXT_LENGTH } from "./validation";
@@ -28,10 +29,11 @@ const fileInfoSelection = {
 
 export async function getClientContext(clientId: string): Promise<{
 	context: string;
+	chatMemory: string;
 	files: ClientContextFileInfo[];
 } | null> {
 	const [client] = await db
-		.select({ context: clients.context })
+		.select({ context: clients.context, chatMemory: clients.chatMemory })
 		.from(clients)
 		.where(eq(clients.id, clientId))
 		.limit(1);
@@ -42,17 +44,21 @@ export async function getClientContext(clientId: string): Promise<{
 		.from(clientContextFiles)
 		.where(eq(clientContextFiles.clientId, clientId))
 		.orderBy(clientContextFiles.createdAt);
-	return { context: client.context, files };
+	return { context: client.context, chatMemory: client.chatMemory, files };
 }
 
 export async function saveClientContext(input: {
 	clientId: string;
 	context: string;
+	chatMemory: string;
 	deletedFileIds: string[];
 	newFiles: NewClientContextFile[];
-}): Promise<{ context: string; files: ClientContextFileInfo[] }> {
+}): Promise<{ context: string; chatMemory: string; files: ClientContextFileInfo[] }> {
 	if (input.context.length > MAX_CLIENT_CONTEXT_LENGTH) {
 		throw new Error("Le contexte ne peut pas dépasser 50 000 caractères.");
+	}
+	if (input.chatMemory.length > MAX_CHAT_MEMORY_LENGTH) {
+		throw new Error(`La mémoire ne peut pas dépasser ${MAX_CHAT_MEMORY_LENGTH} caractères.`);
 	}
 
 	const uniqueDeletedIds = [...new Set(input.deletedFileIds)];
@@ -69,7 +75,11 @@ export async function saveClientContext(input: {
 	await db.transaction(async (tx) => {
 		const [updated] = await tx
 			.update(clients)
-			.set({ context: input.context, updatedAt: Date.now() })
+			.set({
+				context: input.context,
+				chatMemory: input.chatMemory.trim(),
+				updatedAt: Date.now(),
+			})
 			.where(eq(clients.id, input.clientId))
 			.returning({ id: clients.id });
 		if (!updated) throw new Error("Client introuvable.");

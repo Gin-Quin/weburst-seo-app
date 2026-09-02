@@ -1,4 +1,5 @@
 import { canAccessClient, requireClientAccess } from "$lib/server/auth/authorization";
+import { MAX_CHAT_MEMORY_LENGTH } from "$lib/contents/chatMemory";
 import { getClientContext, saveClientContext } from "$lib/server/clientContext";
 import {
 	extractClientContextFileText,
@@ -25,9 +26,11 @@ export const GET: RequestHandler = async ({ params }) => {
 		await requireClientAccess(user, params.clientId, "view");
 		const result = await getClientContext(params.clientId);
 		if (!result) return json({ message: "Client introuvable." }, { status: 404 });
+		const canEdit = await canAccessClient(user!, params.clientId, "manage");
 		return json({
 			...result,
-			canEdit: await canAccessClient(user!, params.clientId, "manage"),
+			chatMemory: canEdit ? result.chatMemory : undefined,
+			canEdit,
 		});
 	} catch (error) {
 		return handleError(error);
@@ -42,6 +45,11 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		if (typeof context !== "string") throw new Error("Le contexte est invalide.");
 		if (context.length > MAX_CLIENT_CONTEXT_LENGTH) {
 			throw new Error("Le contexte ne peut pas dépasser 50 000 caractères.");
+		}
+		const chatMemory = formData.get("chatMemory");
+		if (typeof chatMemory !== "string") throw new Error("La mémoire est invalide.");
+		if (chatMemory.length > MAX_CHAT_MEMORY_LENGTH) {
+			throw new Error(`La mémoire ne peut pas dépasser ${MAX_CHAT_MEMORY_LENGTH} caractères.`);
 		}
 
 		const deletedFileIds = parseDeletedFileIds(formData.get("deletedFileIds"));
@@ -71,6 +79,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 			await saveClientContext({
 				clientId: params.clientId,
 				context,
+				chatMemory,
 				deletedFileIds,
 				newFiles,
 			}),

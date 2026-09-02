@@ -13,6 +13,7 @@ KillMode=control-group
 KillSignal=SIGTERM
 TimeoutStopSec=75
 Environment=NODE_ENV=production
+Environment=PORT=3000
 Environment=RUN_BACKGROUND_JOBS=true
 Environment=SHUTDOWN_TIMEOUT=60
 StandardOutput=journal

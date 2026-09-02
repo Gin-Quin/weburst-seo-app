@@ -1,0 +1,2 @@
+export const MAX_MEMORY_ENTRY_LENGTH = 2_000;
+export const MAX_CHAT_MEMORY_LENGTH = 12_000;

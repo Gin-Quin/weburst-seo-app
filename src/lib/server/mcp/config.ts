@@ -5,7 +5,7 @@ export const MCP_CLIENT_METADATA_DOCUMENT_SUPPORTED = true;
 
 export function getPublicBaseUrl(requestUrl?: URL): URL {
 	const configured = process.env.PUBLIC_BASE_URL?.trim();
-	const url = new URL(configured || requestUrl?.origin || "http://localhost:5173");
+	const url = new URL(configured || requestUrl?.origin || "http://localhost:3857");
 	url.pathname = "/";
 	url.search = "";
 	url.hash = "";

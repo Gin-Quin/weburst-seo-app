@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from "$app/navigation";
+	import { MAX_CHAT_MEMORY_LENGTH } from "$lib/contents/chatMemory";
 	import { getKeywordClusters } from "../../../../../api/keywords/index.remote";
 	import { createContent, updateContent } from "../../../../../api/contents/contents.remote";
 	import type { Content, ContentPriority } from "$lib/server/db/schema";
@@ -21,7 +22,10 @@
 		openEditContentDialog?: (content: EditableContent) => void;
 	} = $props();
 
-	type EditableContent = Pick<Content, "id" | "title" | "cluster" | "priority" | "brief">;
+	type EditableContent = Pick<
+		Content,
+		"id" | "title" | "cluster" | "priority" | "brief" | "chatMemory"
+	>;
 
 	let editingContentId = $state<string | null>(null);
 	let title = $state("");
@@ -29,6 +33,7 @@
 	let priority = $state<ContentPriority | "">("");
 	let existingUrl = $state("");
 	let brief = $state("");
+	let chatMemory = $state("");
 	let saving = $state(false);
 	let clusterNames = $state<string[]>([]);
 	let loadingClusters = $state(false);
@@ -55,6 +60,7 @@
 		cluster = content.cluster ?? "";
 		priority = content.priority ?? "";
 		brief = content.brief;
+		chatMemory = content.chatMemory;
 		ref?.showModal();
 		void loadClusters();
 	};
@@ -87,6 +93,7 @@
 					cluster,
 					priority: priority || null,
 					brief,
+					chatMemory,
 				});
 				ref?.close();
 				return;
@@ -123,6 +130,7 @@
 		priority = "";
 		existingUrl = "";
 		brief = "";
+		chatMemory = "";
 	}
 
 	function handleCancel(event: Event) {
@@ -239,6 +247,27 @@
 				></textarea>
 			</div>
 
+			{#if isEditing}
+				<div class="field">
+					<label class="field-title" for="content-memory">Mémoire du contenu</label>
+					<p class="MemoryHint">
+						Informations durables mémorisées par le chat uniquement pour ce contenu.
+					</p>
+					<textarea
+						id="content-memory"
+						class="textarea w-full"
+						bind:value={chatMemory}
+						rows="1"
+						placeholder="Audience, angle, décisions éditoriales, contraintes…"
+						maxlength={MAX_CHAT_MEMORY_LENGTH}
+						use:autoGrow={chatMemory}
+					></textarea>
+					<div class="MemoryLength">
+						{chatMemory.length.toLocaleString("fr-FR")} / {MAX_CHAT_MEMORY_LENGTH.toLocaleString("fr-FR")}
+					</div>
+				</div>
+			{/if}
+
 			<footer class="grid grid-cols-2 gap-3 pt-2">
 				{#if importingArticle}
 					<p class="ImportStatus col-span-2" role="status" aria-live="polite">
@@ -274,6 +303,8 @@
 <style>
 	.CreateContentModal {
 		padding: 2rem;
+		max-height: min(52rem, calc(100dvh - 2rem));
+		overflow-y: auto;
 	}
 
 	.CreateContentModal > header {
@@ -290,6 +321,9 @@
 		resize: none;
 		font-size: 1rem;
 	}
+
+	.MemoryHint { margin: 0.15rem 0 0.4rem; color: var(--color-text-light); font-size: 0.9rem; }
+	.MemoryLength { margin-top: 0.35rem; color: var(--color-text-light); text-align: right; font-size: 0.8rem; }
 
 	.PriorityChoices {
 		display: flex;

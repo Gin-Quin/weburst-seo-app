@@ -2,7 +2,7 @@
 	import { getFailedUserMessageId } from "$lib/contents/chatRetry";
 	import type { ContentDetail } from "$lib/server/contents";
 	import { Chat } from "@ai-sdk/svelte";
-	import { DefaultChatTransport, type UIMessage } from "ai";
+	import { DefaultChatTransport, type SourceUrlUIPart, type UIMessage } from "ai";
 	import DOMPurify from "dompurify";
 	import { marked } from "marked";
 	import IconArrowUpRegular from "phosphor-icons-svelte/IconArrowUpRegular.svelte";
@@ -210,10 +210,26 @@
 		}).format(messageTimestamp(message));
 	}
 
+	function messageSources(message: ChatMessage): SourceUrlUIPart[] {
+		return message.parts.filter((part): part is SourceUrlUIPart => part.type === "source-url");
+	}
+
+	function sourceLabel(source: SourceUrlUIPart) {
+		if (source.title) return source.title;
+		try {
+			return new URL(source.url).hostname;
+		} catch {
+			return source.url;
+		}
+	}
+
 	function toolLabel(type: string) {
 		const name = type.replace(/^tool-/, "");
 		return {
+			google_search: "Recherche Google effectuée",
 			getArticleContext: "Contexte de l’article relu",
+			save_memory_content: "Information mémorisée pour ce contenu",
+			save_memory_client: "Information mémorisée pour ce client",
 			write_article: "Proposition d’article prête",
 			replaceArticle: "Article mis à jour",
 			updateBrief: "Brief mis à jour",
@@ -241,6 +257,20 @@
 									<div class="ToolPart">✓ {toolLabel(part.type)}</div>
 								{/if}
 							{/each}
+							{#if message.role === "assistant" && messageSources(message).length > 0}
+								<div class="Sources" aria-label="Sources">
+									<strong>Sources</strong>
+									<ul>
+										{#each messageSources(message) as source (source.sourceId)}
+											<li>
+												<a href={source.url} target="_blank" rel="noopener noreferrer">
+													{sourceLabel(source)}
+												</a>
+											</li>
+										{/each}
+									</ul>
+								</div>
+							{/if}
 						</div>
 						{#if message.role === "user"}
 							<time class="MessageTime" datetime={new Date(messageTimestamp(message)).toISOString()}>{messageDate(message)}</time>
@@ -325,6 +355,10 @@
 	.Markdown :global(a) { color: var(--color-primary); text-decoration: underline; }
 	.Markdown :global(hr) { margin-block: 4px; }
 	.ToolPart { margin-block: 8px; font-size: 0.82rem; color: #176b2a; background: #e9ffee; padding: 0.35rem 0.5rem; border-radius: 0.4rem; }
+	.Sources { margin-top: 0.75rem; padding-top: 0.65rem; border-top: 1px solid var(--color-border); color: var(--color-text-light); font-size: 0.82rem; }
+	.Sources strong { color: var(--color-base-content); }
+	.Sources ul { display: flex; flex-wrap: wrap; gap: 0.35rem 0.75rem; margin: 0.35rem 0 0; padding: 0; list-style: none; }
+	.Sources a { color: var(--color-primary); text-decoration: underline; overflow-wrap: anywhere; }
 	.Typing { align-self: flex-start; background: white; border: 1px solid var(--color-border); border-radius: 1rem; padding: 0.7rem 1rem; display: flex; gap: 0.25rem; }
 	.Typing span { width: 0.45rem; height: 0.45rem; border-radius: 50%; background: #999; animation: pulse 1s infinite alternate; }
 	.Typing span:nth-child(2) { animation-delay: 0.2s; } .Typing span:nth-child(3) { animation-delay: 0.4s; }

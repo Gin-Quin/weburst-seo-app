@@ -30,7 +30,7 @@ bun run turso:migrate:prod
 bun run clickhouse:migrate:prod
 
 # 5. Build, upload, and restart the production application and its API routes.
-bun run deploy:app:prod
+bun run deploy:app
 ```
 
 Once the tests and type checks have passed, steps 3 through 5 can be run in
@@ -62,7 +62,7 @@ After deployment:
 
 ## Current deployment implementation
 
-`deploy:app:prod` builds locally, then `scripts/deploy.ts` uploads `build/` and
+`deploy:app` builds locally, then `scripts/deploy.ts` uploads `build/` and
 `.env.prod` into a timestamped directory under `/root/weburst-releases`. The
 script refuses to deploy when an unmanaged Bun process is running, atomically
 switches `/root/app` to the new release, installs the versioned systemd unit,

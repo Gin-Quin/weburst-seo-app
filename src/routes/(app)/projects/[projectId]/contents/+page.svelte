@@ -22,7 +22,9 @@
 	let archived = $state(false);
 	let openCreateContentDialog = $state<(() => void) | undefined>();
 	let openEditContentDialog = $state<
-		((content: Pick<Content, "id" | "title" | "cluster" | "priority" | "brief">) => void) | undefined
+		((
+			content: Pick<Content, "id" | "title" | "cluster" | "priority" | "brief" | "chatMemory">,
+		) => void) | undefined
 	>();
 	let openClientContextDialog = $state<(() => void) | undefined>();
 	const contentsQuery = $derived(listContents({ projectId, archived }));

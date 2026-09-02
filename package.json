@@ -52,7 +52,7 @@
 		"layerchart": "2.0.0-next.27",
 		"nodemon": "^3.1.10",
 		"phosphor-icons-svelte": "^2.1.0",
-		"svelte": "^5.0.0",
+		"svelte": "5.39.7",
 		"svelte-check": "^4.0.0",
 		"tailwind-merge": "^3.3.1",
 		"tailwind-variants": "^1.0.0",

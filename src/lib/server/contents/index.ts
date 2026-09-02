@@ -196,6 +196,7 @@ export async function updateContent(input: {
 	cluster: string;
 	priority: ContentPriority | null;
 	brief: string;
+	chatMemory: string;
 }): Promise<ContentDetail> {
 	const existing = await getContentRow(input.id, input.projectId);
 	const brief = input.brief.trim();
@@ -206,6 +207,7 @@ export async function updateContent(input: {
 			cluster: emptyToNull(input.cluster),
 			priority: input.priority,
 			brief,
+			chatMemory: input.chatMemory.trim(),
 			updatedAt: Date.now(),
 		})
 		.where(and(eq(contents.id, input.id), eq(contents.projectId, input.projectId)));

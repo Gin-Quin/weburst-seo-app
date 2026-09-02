@@ -4,6 +4,12 @@ import {
 	logContentChatEvent,
 	summarizeChatMessages,
 } from "$lib/server/ai/chatDiagnostics";
+import {
+	appendClientChatMemory,
+	appendContentChatMemory,
+	loadClientChatContext,
+} from "$lib/server/ai/chatMemory";
+import { MAX_MEMORY_ENTRY_LENGTH } from "$lib/contents/chatMemory";
 import { protectToolInputStream } from "$lib/server/ai/protectToolInputStream";
 import { requireProjectAccess } from "$lib/server/auth/authorization";
 import {
@@ -12,6 +18,7 @@ import {
 	saveContentChatMessages,
 	updateContentBrief,
 } from "$lib/server/contents";
+import { db } from "$lib/server/db";
 import {
 	convertToModelMessages,
 	createUIMessageStream,
@@ -79,10 +86,11 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			return new Response("Requête de chat invalide.", { status: 400 });
 		}
 		const user = await getRequestUser();
-		await requireProjectAccess(user, body.projectId, "manage");
+		const project = await requireProjectAccess(user, body.projectId, "manage");
 		if (!user) throw new Error("Unauthorized");
 
 		const content = await getContentById(body.contentId, body.projectId);
+		const clientContext = await loadClientChatContext(db, project.clientId);
 		const google = getGoogleGenerativeAI();
 		if (!google) {
 			logContentChatEvent(
@@ -94,23 +102,72 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 		}
 
 		const tools = {
+			google_search: google.tools.googleSearch({
+				searchTypes: { webSearch: {} },
+			}),
 			getArticleContext: tool({
 				description:
 					"Relire le contenu, le brief et les recommandations SEO les plus récents avant de répondre ou de modifier l’article.",
 				inputSchema: z.object({}),
 				execute: async () => {
 					const latest = await getContentById(body.contentId!, body.projectId!);
+					const latestClientContext = await loadClientChatContext(db, project.clientId);
 					return {
 						title: latest.title,
 						existingUrl: latest.existingUrl,
 						cluster: latest.cluster,
 						brief: latest.brief,
+						contentMemory: latest.chatMemory,
+						clientContext: latestClientContext.context,
+						clientMemory: latestClientContext.memory,
 						contentHtml: latest.contentHtml,
 						contentText: latest.contentText,
 						optimizationStatus: latest.serpmanticsStatus,
 						optimizationError: latest.serpmanticsError,
 						optimizationGuide: latest.serpmanticsGuide,
 						optimizationAnalysis: latest.serpmanticsAnalysis,
+					};
+				},
+			}),
+			save_memory_content: tool({
+				description:
+					"Mémoriser de façon proactive une information durable propre à cet article et utile dans de futures conversations sur ce contenu : audience ou angle spécifique, décision éditoriale, contrainte, préférence ou fait fourni par l’utilisateur. Ne pas enregistrer une consigne temporaire, une information déjà mémorisée ou une connaissance générale trouvée sur le web.",
+				inputSchema: z.object({
+					information: z
+						.string()
+						.trim()
+						.min(1)
+						.max(MAX_MEMORY_ENTRY_LENGTH)
+						.describe("Une information autonome, concise et compréhensible hors conversation"),
+				}),
+				execute: async ({ information }) => ({
+					success: true,
+					memory: await appendContentChatMemory(db, {
+						contentId: body.contentId!,
+						projectId: body.projectId!,
+						information,
+					}),
+				}),
+			}),
+			save_memory_client: tool({
+				description:
+					"Mémoriser de façon proactive une information durable concernant le client dans son ensemble et utile pour plusieurs contenus : activité, offre, audience générale, ton de marque, terminologie, positionnement ou règle éditoriale transverse. Ne pas y enregistrer une information propre au seul article courant, une consigne temporaire ou une connaissance générale trouvée sur le web.",
+				inputSchema: z.object({
+					information: z
+						.string()
+						.trim()
+						.min(1)
+						.max(MAX_MEMORY_ENTRY_LENGTH)
+						.describe("Une information autonome, concise et compréhensible hors conversation"),
+				}),
+				execute: async ({ information }) => {
+					if (!project.clientId) throw new Error("Aucun client n’est associé à ce projet.");
+					return {
+						success: true,
+						memory: await appendClientChatMemory(db, {
+							clientId: project.clientId,
+							information,
+						}),
 					};
 				},
 			}),
@@ -164,6 +221,9 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			contextLengths: {
 				title: content.title.length,
 				brief: content.brief.length,
+				contentMemory: content.chatMemory.length,
+				clientContext: clientContext.context.length,
+				clientMemory: clientContext.memory.length,
 				contentHtml: content.contentHtml.length,
 				contentText: content.contentText.length,
 				optimizationGuide: JSON.stringify(content.serpmanticsGuide ?? null).length,
@@ -174,7 +234,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 
 		const result = streamText({
 			model: google(GOOGLE_CHAT_MODEL),
-			instructions: buildSystemPrompt(content),
+			instructions: buildSystemPrompt(content, clientContext),
 			// A provider or network interruption can leave a partial tool call in the
 			// client history. Ignore it so the next user attempt can still be sent.
 			messages: modelMessages,
@@ -288,6 +348,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			originalMessages: messages,
 			execute: ({ writer }) => {
 				const providerStream = result.toUIMessageStream<ChatMessage>({
+					sendSources: true,
 					messageMetadata: ({ part }) =>
 						part.type === "start" ? { createdAt: Date.now() } : undefined,
 					onError: reportUiStreamError,
@@ -408,10 +469,15 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 	}
 };
 
-function buildSystemPrompt(content: Awaited<ReturnType<typeof getContentById>>): string {
+function buildSystemPrompt(
+	content: Awaited<ReturnType<typeof getContentById>>,
+	clientContext: { context: string; memory: string },
+): string {
 	return `Tu es un assistant éditorial SEO francophone intégré à WeBurst.
 Tu aides l’utilisateur à écrire et optimiser l’article courant. Réponds en Markdown clair et concis.
 N’invente jamais de données issues de l’analyse SEO. Appuie tes conseils sur le contexte ci-dessous.
+Pour toute information externe, récente ou susceptible d’avoir changé, utilise Google Search et appuie ta réponse sur les sources trouvées.
+Quand l’utilisateur fournit une information durable qui sera utile plus tard, mémorise-la de façon proactive. Utilise save_memory_content si elle concerne uniquement cet article, et save_memory_client si elle s’applique au client et à plusieurs de ses contenus. Ne mémorise pas les demandes ponctuelles, les informations déjà présentes dans la mémoire, ni les faits généraux issus de recherches web.
 Avant une modification importante, relis le contexte avec getArticleContext si une conversation précédente a pu le changer.
 Quand l’utilisateur te demande d’appliquer, réécrire, créer ou optimiser le texte, utilise write_article au lieu de seulement proposer le texte dans le chat.
 Transmets toujours l’article complet dans le champ content, en Markdown valide. Pour toute donnée tabulaire ou comparaison, utilise impérativement la syntaxe de tableau Markdown avec en-têtes ; n’utilise jamais de tableau ASCII dans un bloc de code. Ne produis jamais de diagramme, organigramme ou autre dessin ASCII. Exprime les relations et les enchaînements avec des titres, des listes ordonnées ou à puces et du texte explicatif afin que le résultat reste lisible, responsive et éditable. Préserve la structure, les images et les informations utiles, et n’ajoute pas de faux faits. L’utilisateur validera la proposition avant qu’elle soit appliquée.
@@ -420,6 +486,15 @@ CONTEXTE COMPLET ACTUEL
 Titre : ${content.title}
 URL existante : ${content.existingUrl ?? "aucune"}
 Cluster : ${content.cluster ?? "aucun"}
+Informations sur le client :
+${clientContext.context || "(vide)"}
+
+Mémoire partagée du client :
+${clientContext.memory || "(vide)"}
+
+Mémoire propre à ce contenu :
+${content.chatMemory || "(vide)"}
+
 Brief :
 ${content.brief || "(vide)"}
 

@@ -137,6 +137,7 @@ export const clients = sqliteTable("clients", {
 	id: text("id").primaryKey(),
 	name: text("name").notNull(),
 	context: text("context").notNull().default(""),
+	chatMemory: text("chat_memory").notNull().default(""),
 	createdAt: integer("created_at")
 		.notNull()
 		.$defaultFn(() => Date.now()),
@@ -208,6 +209,7 @@ export const contents = sqliteTable(
 		priority: text("priority").$type<ContentPriority>(),
 		existingUrl: text("existing_url"),
 		brief: text("brief").notNull().default(""),
+		chatMemory: text("chat_memory").notNull().default(""),
 		contentHtml: text("content_html").notNull().default(""),
 		contentText: text("content_text").notNull().default(""),
 		contentJson: text("content_json")
