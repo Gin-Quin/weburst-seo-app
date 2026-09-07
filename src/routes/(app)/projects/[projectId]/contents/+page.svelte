@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ContentStatusSelect from "./components/ContentStatusSelect.svelte";
 	import TypologiesDialog from "./components/TypologiesDialog.svelte";
 	import { listTypologies } from "../../../../api/contents/typologies.remote";
 	import { goto } from "$app/navigation";
@@ -33,11 +34,6 @@
 	let openClientContextDialog = $state<(() => void) | undefined>();
 	const contentsQuery = $derived(listContents({ projectId, archived }));
 
-	const statusLabels: Record<ContentStatus, string> = {
-		new: "Nouveau",
-		in_progress: "En cours",
-		done: "Fait",
-	};
 	const priorityLabels: Record<ContentPriority, string> = {
 		high: "Haute",
 		moderate: "Modérée",
@@ -150,7 +146,7 @@
 								<td>
 									<span class="NeutralBadge">{content.cluster || "Pas de cluster lié"}</span>
 								</td>
-								<td><span class="StatusBadge status-{content.status}">{statusLabels[content.status]}</span></td>
+								<td><ContentStatusSelect {projectId} id={content.id} value={content.status} /></td>
 								<td>
 									{#if content.priority}
 										<span class="PriorityBadge priority-{content.priority}">{priorityLabels[content.priority]}</span>

@@ -1,3 +1,4 @@
+import { statusAfterContentEdit } from "./status";
 import { getProjectTypology } from "./typologies";
 import {
 	contentHtmlToText,
@@ -173,7 +174,7 @@ export async function saveContentDraft(input: {
 			contentHtml,
 			contentText: contentHtmlToText(contentHtml),
 			contentJson,
-			status: "in_progress",
+			status: statusAfterContentEdit,
 			updatedAt: Date.now(),
 		})
 		.where(eq(contents.id, input.id));
@@ -430,7 +431,7 @@ export async function restoreContentVersion(input: {
 			score: version.score,
 			serpmanticsGuideJson: version.serpmanticsGuideJson,
 			serpmanticsAnalysisJson: version.serpmanticsAnalysisJson,
-			status: "in_progress",
+			status: statusAfterContentEdit,
 			updatedAt: Date.now(),
 		})
 		.where(eq(contents.id, input.contentId));
@@ -460,7 +461,7 @@ export async function replaceContentFromChat(input: {
 			contentHtml: html,
 			contentText: contentHtmlToText(html),
 			contentJson: current.contentJson,
-			status: "in_progress",
+			status: statusAfterContentEdit,
 			updatedAt: Date.now(),
 		})
 		.where(eq(contents.id, input.id));

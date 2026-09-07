@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ContentStatusSelect from "./ContentStatusSelect.svelte";
 	import { goto } from "$app/navigation";
 	import type { ContentDetail, ContentVersionDetail } from "$lib/server/contents";
 	import IconArrowLeftRegular from "phosphor-icons-svelte/IconArrowLeftRegular.svelte";
@@ -200,7 +201,10 @@
 	<section class="ArticleColumn">
 		<div class="ArticleTopbar">
 			<button class="BackButton control-size-1" onclick={() => void goBack()}><IconArrowLeftRegular class="icon" /> Contenus</button>
-			<div class="SaveState"><IconFloppyDiskRegular class="icon" /> {savedLabel()}</div>
+			<div class="row gap-3 items-center">
+				<ContentStatusSelect projectId={content.projectId} id={content.id} value={content.status} disabled={Boolean(previewedVersion)} beforeChange={saveNow} onChanged={(status) => { content.status = status; }} />
+				<div class="SaveState"><IconFloppyDiskRegular class="icon" /> {savedLabel()}</div>
+			</div>
 		</div>
 		{#if previewedVersion}
 			<div class="PreviewBar">Vous consultez la version {previewedVersion.version} en lecture seule.<button onclick={returnToCurrent}>Revenir à la version actuelle</button></div>

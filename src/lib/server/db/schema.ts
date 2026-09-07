@@ -194,7 +194,7 @@ export const projects = sqliteTable(
 export type Project = typeof projects.$inferSelect;
 
 export type ContentPriority = "high" | "moderate" | "low";
-export type ContentStatus = "new" | "in_progress" | "done";
+export type ContentStatus = "new" | "in_progress" | "done" | "published";
 export type SerpmanticsStatus = "pending" | "ready" | "failed";
 
 export const contentTypologies = sqliteTable("content_typologies", {

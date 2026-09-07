@@ -15,6 +15,7 @@ export const ContentStatus = v.union([
 	v.literal("new"),
 	v.literal("in_progress"),
 	v.literal("done"),
+	v.literal("published"),
 ]);
 
 export const ListContents = v.object({

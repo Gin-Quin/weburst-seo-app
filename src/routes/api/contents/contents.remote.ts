@@ -105,7 +105,10 @@ export const updateBrief = command(UpdateBrief, async (input) => {
 export const updateStatus = command(SetStatus, async (input) => {
 	await requireProjectAccess(await getRequestUser(), input.projectId, "manage");
 	await setContentStatus(input);
-	await listContents({ projectId: input.projectId, archived: false }).refresh();
+	await Promise.all([
+		listContents({ projectId: input.projectId, archived: false }).refresh(),
+		listContents({ projectId: input.projectId, archived: true }).refresh(),
+	]);
 });
 
 export const archiveContent = command(SetArchived, async (input) => {
