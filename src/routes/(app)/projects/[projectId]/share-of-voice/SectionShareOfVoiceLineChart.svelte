@@ -8,20 +8,14 @@
 		getShareOfVoiceSnapshot,
 	} from "$lib/charts/getShareOfVoiceSnapshot";
 	import { getUniqueFormattedTicks } from "$lib/charts/getUniqueFormattedTicks";
-	import { locale } from "$lib/i18n/locale.svelte";
+	import { defineContent, locale } from "$lib/i18n/locale.svelte";
 	import { formatPercent } from "$lib/numbers/formatPercent";
 	import type { ClickhouseTable } from "$lib/server/clickhouse/migrations";
 	import { context } from "$lib/stores/context.svelte";
 	import { scaleUtc } from "d3-scale";
 	import { curveLinear } from "d3-shape";
-	import {
-		Area,
-		AreaChart,
-		ChartClipPath,
-		LinearGradient,
-		type SeriesData,
-	} from "layerchart";
-	import { cubicInOut } from "svelte/easing";
+	import { LineChart, type SeriesData } from "layerchart";
+	import { untrack } from "svelte";
 	import type { SvelteSet } from "svelte/reactivity";
 	import { getAllAggregatedAnalysisResults } from "../../../../api/keywords/index.remote";
 	import ShareOfVoiceSnapshotBarChart from "./ShareOfVoiceSnapshotBarChart.svelte";
@@ -31,13 +25,23 @@
 	let {
 		visibleDomains,
 		client,
+		clusters = [],
 	}: {
 		visibleDomains: SvelteSet<string>;
 		client: ClickhouseTable.AggregatedKeywordAnalysisData;
+		clusters?: Array<{ name: string }>;
 	} = $props();
 
-	const query = getAllAggregatedAnalysisResults({
+	const content = defineContent({ en: { clusters: "Filter clusters", all: "All clusters", empty: "No analysis available." }, fr: { clusters: "Filtrer les clusters", all: "Tous les clusters", empty: "Aucune analyse disponible." } });
+	let selectedClusters = $state<string[]>([]);
+	const query = $derived(getAllAggregatedAnalysisResults({
 		projectId: context.project!.id,
+		...(selectedClusters.length ? { clusterNames: [...selectedClusters].sort() } : {}),
+	}));
+	$effect(() => {
+		client.createdAt;
+		const currentQuery = query;
+		untrack(() => { void currentQuery.refresh(); });
 	});
 
 	function formatDate(date: Date): string {
@@ -82,6 +86,17 @@
 	}
 </script>
 
+{#if clusters.length}
+	<details class="dropdown mb-2">
+		<summary class="btn control-size-1">{$content.clusters} · {selectedClusters.length || $content.all}</summary>
+		<div class="dropdown-content bg-base-100 border border-border rounded-lg p-3 w-72 max-h-64 overflow-auto z-20 shadow-lg">
+			<button class="btn control-size-1 mb-2" onclick={() => selectedClusters = []}>{$content.all}</button>
+			{#each clusters as cluster (cluster.name)}
+				<label class="flex items-center gap-2 py-1"><input class="checkbox checkbox-sm" type="checkbox" value={cluster.name} bind:group={selectedClusters} />{cluster.name}</label>
+			{/each}
+		</div>
+	</details>
+{/if}
 <div class="Graph w-full min-h-0 grow">
 	{#await query}
 		<Loader />
@@ -90,7 +105,9 @@
 			data,
 			visibleDomains: new Set([client.domain, ...visibleDomains]),
 		})}
-		{#if countShareOfVoiceAnalyses(data) === 1}
+		{#if !data.length}
+			<p class="text-light">{$content.empty}</p>
+		{:else if countShareOfVoiceAnalyses(data) === 1}
 			<ShareOfVoiceSnapshotBarChart
 				data={getShareOfVoiceSnapshot({
 					data,
@@ -100,21 +117,17 @@
 			/>
 		{:else}
 			<Chart.Container config={chartConfig} class="h-full">
-				<AreaChart
+				<LineChart
 					data={chartData}
 					x="date"
 					xScale={scaleUtc()}
 					yPadding={[0, 0]}
-					seriesLayout="stack"
+					seriesLayout="overlap"
+					yDomain={[0, 100]}
 					series={chartSeries}
 					points={{ r: 3 }}
 					props={{
-						area: {
-							curve: curveLinear,
-							"fill-opacity": 0.4,
-							line: { class: "stroke-1" },
-							motion: "tween",
-						},
+						spline: { curve: curveLinear, class: "stroke-2" },
 						xAxis: {
 							ticks: (scale) => getUniqueFormattedTicks(scale, formatDate),
 							format: formatDate,
@@ -130,30 +143,10 @@
 						/>
 					{/snippet}
 
-					{#snippet marks({ series, getAreaProps })}
-						<ChartClipPath
-							initialWidth={0}
-							motion={{
-								width: { type: "tween", duration: 1000, easing: cubicInOut },
-							}}
-						>
-							{#each series as s, i (s.key)}
-								<LinearGradient
-									stops={[
-										s.color ?? "",
-										"color-mix(in lch, " + s.color + " 10%, transparent)",
-									]}
-									vertical
-								>
-									{#snippet children({ gradient })}
-										<Area {...getAreaProps(s, i)} fill={gradient} />
-									{/snippet}
-								</LinearGradient>
-							{/each}
-						</ChartClipPath>
-					{/snippet}
-				</AreaChart>
+				</LineChart>
 			</Chart.Container>
 		{/if}
+	{:catch error}
+		<p class="text-error">{String(error)}</p>
 	{/await}
 </div>

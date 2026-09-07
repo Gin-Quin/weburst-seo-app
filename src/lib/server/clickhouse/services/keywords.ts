@@ -1,3 +1,4 @@
+import { getClusterHistory, type ClusterHistoryRow } from "$lib/keywords/getClusterHistory";
 import { getKeywordCountChanges, type KeywordCountChange } from "$lib/keywords/getKeywordCountChanges";
 import { env } from "$env/dynamic/private";
 import {
@@ -1417,10 +1418,12 @@ export namespace KeywordsService {
 		projectId,
 		domain,
 		domainLimit,
+		clusterNames,
 	}: {
 		projectId: string;
 		domain?: string;
 		domainLimit?: number;
+		clusterNames?: string[];
 	}): Promise<
 		Array<
 			Pick<ClickhouseTable.AggregatedKeywordAnalysisData, "createdAt" | "domain" | "volume"> & {
@@ -1435,6 +1438,28 @@ export namespace KeywordsService {
 		if (allAnalysis.length === 0) return [];
 
 		const analysisIds = allAnalysis.map((analysis) => analysis.id);
+		if (clusterNames?.length) {
+			const response = await clickhouse.query({
+				query: `SELECT DISTINCT responses.analysisId AS analysisId, responses.keyword AS keyword,
+					keywords.volume AS keywordVolume, responses.domain AS domain,
+					responses.position AS position, responses.type AS type
+					FROM keywordAnalysisResponses AS responses
+					INNER JOIN keywordAnalysis AS analysis ON toString(analysis.id) = responses.analysisId
+					INNER JOIN keywords ON keywords.setId = analysis.setId AND keywords.name = responses.keyword
+					WHERE analysis.id IN {analysisIds:Array(UUID)} AND responses.position <= 10
+					AND trim(keywords.clusters) IN {clusterNames:Array(String)}`,
+				query_params: { analysisIds, clusterNames }, format: "CSV",
+			});
+			const rows: ClusterHistoryRow[] = [];
+			for await (const batch of response.stream()) {
+				rows.push(...parseClickhouseCsvRows(batch, {
+					analysisId: "string", keyword: "string", keywordVolume: "number",
+					domain: "string", position: "number", type: "string",
+				}));
+			}
+			return getClusterHistory(allAnalysis, rows, clientDomain);
+		}
+
 		const latestAnalysisId = allAnalysis[0]!.id;
 		const response = await clickhouse.query({
 			query: `

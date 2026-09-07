@@ -99,7 +99,7 @@
 
 	<main class="col justify-stretch w-full grow gap-1">
 		{#if chartType == "line"}
-			<SectionShareOfVoiceLineChart {visibleDomains} {client} />
+			<SectionShareOfVoiceLineChart {visibleDomains} {client} {clusters} />
 		{:else if chartType == "pie"}
 			<SectionShareOfVoicePieChart
 				{data}

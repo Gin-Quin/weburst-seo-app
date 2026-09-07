@@ -60,12 +60,14 @@ export const getAnalysisResultsWithTrend = query(
 export const getAllAggregatedAnalysisResults = query(
 	v.object({
 		projectId: v.string(),
+		clusterNames: v.optional(v.pipe(v.array(v.pipe(v.string(), v.maxLength(20_000))), v.maxLength(50))),
 	}),
-	async ({ projectId }) => {
+	async ({ projectId, clusterNames }) => {
 		await requireProjectAccess(await getRequestUser(), projectId, "view");
 		return await KeywordsService.getAllAggregatedAnalysisResults({
 			projectId,
 			domainLimit: 100,
+			clusterNames,
 		});
 	},
 );
