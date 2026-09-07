@@ -1,4 +1,6 @@
 <script lang="ts">
+	import TypologiesDialog from "./components/TypologiesDialog.svelte";
+	import { listTypologies } from "../../../../api/contents/typologies.remote";
 	import { goto } from "$app/navigation";
 	import { page } from "$app/state";
 	import Loader from "$lib/components/Loader.svelte";
@@ -20,10 +22,12 @@
 
 	const projectId = $derived(page.params.projectId!);
 	let archived = $state(false);
+	let openTypologies = $state<(() => void) | undefined>();
+	const typologiesQuery = $derived(listTypologies({ projectId }));
 	let openCreateContentDialog = $state<(() => void) | undefined>();
 	let openEditContentDialog = $state<
 		((
-			content: Pick<Content, "id" | "title" | "cluster" | "priority" | "brief" | "chatMemory">,
+			content: Pick<Content, "id" | "title" | "cluster" | "priority" | "brief" | "chatMemory" | "typologyId">,
 		) => void) | undefined
 	>();
 	let openClientContextDialog = $state<(() => void) | undefined>();
@@ -80,6 +84,7 @@
 
 <svelte:head><title>Contenus</title></svelte:head>
 
+<TypologiesDialog {projectId} bind:open={openTypologies} />
 <CreateContentDialog {projectId} bind:openCreateContentDialog bind:openEditContentDialog />
 {#if context.project?.clientId}
 	<ClientContextDialog clientId={context.project.clientId} bind:openClientContextDialog />
@@ -89,6 +94,9 @@
 	<header class="ContentsHeader">
 		<h1>Voici vos <span>contenus</span>.</h1>
 		<div class="ContentsActions">
+			{#if context.user?.role !== "client"}
+				<button class="btn control-size-2" disabled={!context.project?.clientId} onclick={() => openTypologies?.()}>Typologies</button>
+			{/if}
 			<button
 				class="btn control-size-2"
 				disabled={!context.project?.clientId}
@@ -138,7 +146,7 @@
 								<td class="ContentName">{content.title}</td>
 								<td>{formatDate(content.updatedAt)}</td>
 								<td>{formatDate(content.createdAt)}</td>
-								<td><span class="NeutralBadge">—</span></td>
+								<td><span class="NeutralBadge">{typologiesQuery.current?.find((item) => item.id === content.typologyId)?.name ?? "—"}</span></td>
 								<td>
 									<span class="NeutralBadge">{content.cluster || "Pas de cluster lié"}</span>
 								</td>

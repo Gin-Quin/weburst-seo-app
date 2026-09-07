@@ -1,3 +1,4 @@
+import { getProjectTypology } from "./typologies";
 import {
 	contentHtmlToText,
 	createInitialArticleHtml,
@@ -46,6 +47,7 @@ export type CreateContentInput = {
 	projectId: string;
 	title: string;
 	cluster?: string;
+	typologyId?: string | null;
 	priority?: ContentPriority;
 	existingUrl?: string;
 	brief: string;
@@ -81,6 +83,7 @@ export async function createContent(
 	options: { maxContents?: number } = {},
 ): Promise<ContentDetail> {
 	const id = createId();
+	await getProjectTypology(db, input.projectId, input.typologyId);
 	if (options.maxContents !== undefined) {
 		const [row] = await db
 			.select({ value: count() })
@@ -112,6 +115,7 @@ export async function createContent(
 			projectId: input.projectId,
 			title: input.title.trim(),
 			cluster: emptyToNull(input.cluster),
+			typologyId: input.typologyId,
 			priority: input.priority,
 			existingUrl,
 			brief: input.brief.trim(),
@@ -194,17 +198,20 @@ export async function updateContent(input: {
 	projectId: string;
 	title: string;
 	cluster: string;
+	typologyId?: string | null;
 	priority: ContentPriority | null;
 	brief: string;
 	chatMemory: string;
 }): Promise<ContentDetail> {
 	const existing = await getContentRow(input.id, input.projectId);
+	await getProjectTypology(db, input.projectId, input.typologyId);
 	const brief = input.brief.trim();
 	await db
 		.update(contents)
 		.set({
 			title: input.title.trim(),
 			cluster: emptyToNull(input.cluster),
+			typologyId: input.typologyId,
 			priority: input.priority,
 			brief,
 			chatMemory: input.chatMemory.trim(),

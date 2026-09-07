@@ -1,3 +1,4 @@
+import { getProjectTypology } from "$lib/server/contents/typologies";
 import { getGoogleGenerativeAI, GOOGLE_CHAT_MODEL } from "$lib/server/ai/google";
 import {
 	describeChatError,
@@ -91,6 +92,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 
 		const content = await getContentById(body.contentId, body.projectId);
 		const clientContext = await loadClientChatContext(db, project.clientId);
+		const typology = await getProjectTypology(db, body.projectId!, content.typologyId);
 		const google = getGoogleGenerativeAI();
 		if (!google) {
 			logContentChatEvent(
@@ -117,6 +119,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 						existingUrl: latest.existingUrl,
 						cluster: latest.cluster,
 						brief: latest.brief,
+						typology: await getProjectTypology(db, body.projectId!, latest.typologyId),
 						contentMemory: latest.chatMemory,
 						clientContext: latestClientContext.context,
 						clientMemory: latestClientContext.memory,
@@ -234,7 +237,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 
 		const result = streamText({
 			model: google(GOOGLE_CHAT_MODEL),
-			instructions: buildSystemPrompt(content, clientContext),
+			instructions: buildSystemPrompt(content, clientContext, typology),
 			// A provider or network interruption can leave a partial tool call in the
 			// client history. Ignore it so the next user attempt can still be sent.
 			messages: modelMessages,
@@ -472,6 +475,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 function buildSystemPrompt(
 	content: Awaited<ReturnType<typeof getContentById>>,
 	clientContext: { context: string; memory: string },
+	typology: { name: string; instructions: string } | null,
 ): string {
 	return `Tu es un assistant éditorial SEO francophone intégré à WeBurst.
 Tu aides l’utilisateur à écrire et optimiser l’article courant. Réponds en Markdown clair et concis.
@@ -486,6 +490,9 @@ CONTEXTE COMPLET ACTUEL
 Titre : ${content.title}
 URL existante : ${content.existingUrl ?? "aucune"}
 Cluster : ${content.cluster ?? "aucun"}
+Typologie éditoriale (base de rédaction pour ce client) :
+${typology ? `${typology.name}\n${typology.instructions}` : "aucune"}
+
 Informations sur le client :
 ${clientContext.context || "(vide)"}
 

@@ -1,3 +1,5 @@
+import { db } from "$lib/server/db";
+import { getProjectTypology } from "$lib/server/contents/typologies";
 import { sanitizeContentHtml } from "$lib/contents/articleHtml";
 import { getGoogleGenerativeAI, GOOGLE_CHAT_MODEL } from "$lib/server/ai/google";
 import { requireProjectAccess } from "$lib/server/auth/authorization";
@@ -23,6 +25,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		const input = parsed.data;
 		await requireProjectAccess(await getRequestUser(), input.projectId, "manage");
 		const content = await getContentById(input.contentId, input.projectId);
+		const typology = await getProjectTypology(db, input.projectId, content.typologyId);
 		const google = getGoogleGenerativeAI();
 		if (!google) return new Response("GEMINI_API_KEY n’est pas configurée.", { status: 503 });
 
@@ -59,6 +62,7 @@ ${input.fragmentHtml}
 
 CONTEXTE ÉDITORIAL
 Titre : ${content.title}
+Typologie : ${typology ? `${typology.name}\n${typology.instructions}` : "aucune"}
 Brief : ${content.brief || "(vide)"}
 Guide SEO : ${JSON.stringify(content.serpmanticsGuide ?? null)}`,
 		});

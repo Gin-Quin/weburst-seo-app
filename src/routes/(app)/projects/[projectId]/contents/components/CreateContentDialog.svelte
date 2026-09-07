@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { listTypologies } from "../../../../../api/contents/typologies.remote";
 	import { goto } from "$app/navigation";
 	import { MAX_CHAT_MEMORY_LENGTH } from "$lib/contents/chatMemory";
 	import { getKeywordClusters } from "../../../../../api/keywords/index.remote";
@@ -24,12 +25,14 @@
 
 	type EditableContent = Pick<
 		Content,
-		"id" | "title" | "cluster" | "priority" | "brief" | "chatMemory"
+		"id" | "title" | "cluster" | "priority" | "brief" | "chatMemory" | "typologyId"
 	>;
 
 	let editingContentId = $state<string | null>(null);
 	let title = $state("");
 	let cluster = $state("");
+	let typologyId = $state("");
+	const typologiesQuery = $derived(listTypologies({ projectId }));
 	let priority = $state<ContentPriority | "">("");
 	let existingUrl = $state("");
 	let brief = $state("");
@@ -58,6 +61,7 @@
 		editingContentId = content.id;
 		title = content.title;
 		cluster = content.cluster ?? "";
+		typologyId = content.typologyId ?? "";
 		priority = content.priority ?? "";
 		brief = content.brief;
 		chatMemory = content.chatMemory;
@@ -91,6 +95,7 @@
 					id: editingContentId,
 					title,
 					cluster,
+					typologyId: typologyId || null,
 					priority: priority || null,
 					brief,
 					chatMemory,
@@ -103,6 +108,7 @@
 				projectId,
 				title,
 				cluster: cluster || undefined,
+				typologyId: typologyId || null,
 				priority: priority || undefined,
 				existingUrl: existingUrl || undefined,
 				brief,
@@ -127,6 +133,7 @@
 		editingContentId = null;
 		title = "";
 		cluster = "";
+		typologyId = "";
 		priority = "";
 		existingUrl = "";
 		brief = "";
@@ -196,6 +203,14 @@
 					</label>
 				</div>
 			{/if}
+
+			<label class="field">Typologie
+				<select class="select w-full" bind:value={typologyId} disabled={!typologiesQuery.ready}>
+					<option value="">Aucune typologie</option>
+					{#each typologiesQuery.current ?? [] as item (item.id)}<option value={item.id}>{item.name}</option>{/each}
+				</select>
+				{#if typologiesQuery.error}<span class="text-error">Chargement des typologies impossible.</span>{/if}
+			</label>
 
 			<fieldset class="field PriorityField">
 				<legend class="field-title">Assigner une priorité</legend>

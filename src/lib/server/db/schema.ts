@@ -197,6 +197,14 @@ export type ContentPriority = "high" | "moderate" | "low";
 export type ContentStatus = "new" | "in_progress" | "done";
 export type SerpmanticsStatus = "pending" | "ready" | "failed";
 
+export const contentTypologies = sqliteTable("content_typologies", {
+	id: text("id").primaryKey(),
+	clientId: text("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+	name: text("name").notNull(),
+	instructions: text("instructions").notNull().default(""),
+}, (table) => [index("content_typologies_client_idx").on(table.clientId)]);
+export type ContentTypology = typeof contentTypologies.$inferSelect;
+
 export const contents = sqliteTable(
 	"contents",
 	{
@@ -206,6 +214,7 @@ export const contents = sqliteTable(
 			.references(() => projects.id, { onDelete: "cascade" }),
 		title: text("title").notNull(),
 		cluster: text("cluster"),
+		typologyId: text("typology_id").references(() => contentTypologies.id, { onDelete: "set null" }),
 		priority: text("priority").$type<ContentPriority>(),
 		existingUrl: text("existing_url"),
 		brief: text("brief").notNull().default(""),
