@@ -1,3 +1,4 @@
+import { getSearchVolumeChange } from "$lib/keywords/getSearchVolumeChange";
 import { getClusterHistory, type ClusterHistoryRow } from "$lib/keywords/getClusterHistory";
 import { getKeywordCountChanges, type KeywordCountChange } from "$lib/keywords/getKeywordCountChanges";
 import { env } from "$env/dynamic/private";
@@ -57,6 +58,7 @@ export type KeywordAnalysisStatus = {
 
 export type AggregatedKeywordAnalysis = {
 	keywordCountChanges?: Record<string, KeywordCountChange>;
+	searchVolumeChange?: ReturnType<typeof getSearchVolumeChange>;
 	previousAnalysisAt?: string;
 	totalVolume: number;
 	totalTraffic: number;
@@ -1314,6 +1316,8 @@ export namespace KeywordsService {
 		const previousData = previousAnalysis
 			? await getAggregatedAnalysisResults({ analysisId: previousAnalysis.id })
 			: null;
+		const previousMetadata = previousAnalysis ? await getAnalysisMetadata({ analysisId: previousAnalysis.id }) : null;
+		const previousKeywords = previousMetadata ? await getKeywords({ setId: previousMetadata.setId }) : null;
 		const totalTraffic = storedData.reduce((total, item) => total + item.volume, 0);
 		const data = applyShareOfVoiceTrends(
 			storedData,
@@ -1323,6 +1327,7 @@ export namespace KeywordsService {
 		);
 
 		return {
+			searchVolumeChange: previousKeywords ? getSearchVolumeChange(totalVolume, getTotalVolume(previousKeywords)) : undefined,
 			keywordCountChanges: previousData ? getKeywordCountChanges(storedData, previousData) : undefined,
 			previousAnalysisAt: previousData ? previousAnalysis?.createdAt : undefined,
 			keywordCount: keywords.size,

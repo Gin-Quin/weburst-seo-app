@@ -1,6 +1,6 @@
 <script lang="ts">
 	import CountChange from "$lib/components/CountChange.svelte";
-	import Trend from "$lib/components/Trend.svelte";
+	import { formatPercent } from "$lib/numbers/formatPercent";
 	import { defineContent, locale } from "$lib/i18n/locale.svelte";
 	import type {
 		AggregatedKeywordAnalysis,
@@ -40,6 +40,7 @@
 	} = $props();
 
 	const { totalVolume, keywordCount } = $derived(analysisResultsWithTrend);
+	const volumeChange = $derived(analysisResultsWithTrend.searchVolumeChange);
 	const changes = $derived(analysisResultsWithTrend.keywordCountChanges?.[client.domain]);
 	const changeLabel = $derived(analysisResultsWithTrend.previousAnalysisAt
 		? `${$content.changeSince} ${new Date(analysisResultsWithTrend.previousAnalysisAt).toLocaleDateString($locale)}`
@@ -67,7 +68,13 @@
 					<span class="text-xl font-bold">
 						{totalVolume.toLocaleString("fr-FR")}
 					</span>
-					<Trend trend={client.trend} />
+					{#if volumeChange?.relative !== undefined}
+						<span class="badge text-xs" class:badge-success={volumeChange.relative > 0} class:badge-warning={volumeChange.relative < 0} title={changeLabel}>
+							{volumeChange.relative > 0 ? "+" : ""}{formatPercent(volumeChange.relative)}
+						</span>
+					{:else}
+						<CountChange value={volumeChange?.absolute} label={changeLabel} />
+					{/if}
 				</div>
 			</div>
 
@@ -75,7 +82,7 @@
 			<div class="w-full bg-gray-100 rounded-full h-2">
 				<div
 					class="bg-primary h-2 rounded-full"
-					style:width="{(client.volume / totalVolume) * 100}%"
+					style:width="{totalVolume > 0 ? Math.min(100, (client.volume / totalVolume) * 100) : 0}%"
 				></div>
 			</div>
 		</div>
