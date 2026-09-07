@@ -5,6 +5,7 @@ export type ClusterBarChartData = {
 	totalVolume: number;
 	clientVolume: number;
 	comparisonVolume: number;
+	comparisonDomain?: string;
 	clientShare: number;
 	comparisonShare: number;
 };
@@ -30,13 +31,11 @@ export function getClusterBarChartData({
 		data: clusters.map((cluster) => {
 			const clientVolume =
 				cluster.domains.find(({ domain }) => domain === clientDomain)?.volume ?? 0;
-			const comparisonVolume = cluster.domains.reduce((total, domain) => {
-				const isCompetitor = domain.domain !== clientDomain;
-				const isIncluded =
-					selectedCompetitors.size === 0 || selectedCompetitors.has(domain.domain);
-
-				return isCompetitor && isIncluded ? total + domain.volume : total;
-			}, 0);
+			const strongestCompetitor = cluster.domains
+				.filter(({ domain }) => domain !== clientDomain &&
+					(selectedCompetitors.size === 0 || selectedCompetitors.has(domain)))
+				.sort((a, b) => b.volume - a.volume || a.domain.localeCompare(b.domain))[0];
+			const comparisonVolume = strongestCompetitor?.volume ?? 0;
 			const shareDivisor = cluster.totalTraffic || 1;
 
 			return {
@@ -44,6 +43,7 @@ export function getClusterBarChartData({
 				totalVolume: cluster.totalVolume,
 				clientVolume,
 				comparisonVolume,
+				comparisonDomain: strongestCompetitor?.domain,
 				clientShare: (clientVolume / shareDivisor) * 100,
 				comparisonShare: (comparisonVolume / shareDivisor) * 100,
 			};

@@ -28,7 +28,7 @@ describe("getClusterBarChartData", () => {
 		expect(result.data[0]?.comparisonShare).toBeCloseTo(250 / 7.5);
 	});
 
-	test("compares the client with the sum of the selected competitors", () => {
+	test("compares the client with the strongest selected competitor in each cluster", () => {
 		const result = getClusterBarChartData({
 			clusters,
 			clientDomain: "client.test",
@@ -37,7 +37,7 @@ describe("getClusterBarChartData", () => {
 
 		expect(result.comparisonDomain).toBeUndefined();
 		expect(result.data[0]?.clientShare).toBeCloseTo(400 / 7.5);
-		expect(result.data[0]?.comparisonShare).toBeCloseTo(350 / 7.5);
+		expect(result.data[0]?.comparisonShare).toBeCloseTo(250 / 7.5);
 	});
 
 	test("excludes competitors that are not selected", () => {
@@ -55,7 +55,7 @@ describe("getClusterBarChartData", () => {
 			selectedDomains: ["client.test", "first.test", "second.test"],
 		});
 
-		expect(result.data[0]?.comparisonVolume).toBe(350);
+		expect(result.data[0]?.comparisonVolume).toBe(250);
 	});
 
 	test("uses all competitors when none is selected", () => {
@@ -65,6 +65,16 @@ describe("getClusterBarChartData", () => {
 			selectedDomains: ["client.test"],
 		});
 
-		expect(result.data[0]?.comparisonVolume).toBe(350);
+		expect(result.data[0]?.comparisonVolume).toBe(250);
 	});
 });
+
+ test("selects a different leader for each cluster and handles empty clusters", () => {
+ const result = getClusterBarChartData({ clientDomain: "client.test", selectedDomains: [], clusters: [
+ ...clusters,
+ { ...clusters[0]!, name: "Content", domains: [{ domain: "second.test", volume: 500 }] },
+ { ...clusters[0]!, name: "Empty", totalTraffic: 0, domains: [] },
+ ] });
+ expect(result.data.map((row) => row.comparisonDomain)).toEqual(["first.test", "second.test", undefined]);
+ expect(result.data[2]?.comparisonShare).toBe(0);
+ });

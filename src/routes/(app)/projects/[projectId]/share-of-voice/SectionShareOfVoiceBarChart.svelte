@@ -14,15 +14,17 @@
 
 	const content = defineContent({
 		en: {
-			competitors: "Competitors",
+			competitors: "Strongest competitor",
 			clusterShare: "Share of voice per cluster (%)",
-			globalVolume: "Global volume",
+			globalVolume: "Monthly searches",
+			traffic: "Estimated visits",
 			chartLabel: "Latest share of voice analysis by keyword cluster",
 		},
 		fr: {
-			competitors: "Concurrents",
+			competitors: "Meilleur concurrent",
 			clusterShare: "Part de voix par cluster (en %)",
-			globalVolume: "Volume global",
+			globalVolume: "Recherches mensuelles",
+			traffic: "Visites estimées",
 			chartLabel: "Dernière analyse de part de voix par cluster",
 		},
 	});
@@ -38,8 +40,8 @@
 	} = $props();
 
 	const LEFT = 58;
-	const RIGHT = 24;
-	const TOP = 8;
+	const RIGHT = 72;
+	const TOP = 18;
 	const BOTTOM_GUTTER = 36;
 	const DEFAULT_HEIGHT = 326;
 	let graphWidth = $state(0);
@@ -75,6 +77,7 @@
 		);
 		return Math.ceil(highestShare / 25) * 25;
 	});
+	const volumeMax = $derived(Math.max(1, ...chartResult.data.map((item) => item.totalVolume)));
 	const shareTicks = $derived(
 		Array.from({ length: 5 }, (_, index) => (shareMax / 4) * index),
 	);
@@ -114,7 +117,7 @@
 			centerX: firstX + index * slotWidth + slotWidth / 2,
 			backgroundX,
 			backgroundWidth,
-			backgroundY: TOP,
+			backgroundY: bottom - (item.totalVolume / volumeMax) * plotHeight,
 			barWidth,
 			clientX: backgroundX,
 			clientY,
@@ -155,6 +158,9 @@
 			<text class="AxisTick" x={LEFT - 10} y={y + 4} text-anchor="end">
 				{formatShareTick(tick)}
 			</text>
+			<text class="AxisTick" x={chartWidth - RIGHT + 10} y={y + 4} text-anchor="start">
+				{formatVolume(tick / shareMax * volumeMax)}
+			</text>
 		{/each}
 
 		<text
@@ -165,6 +171,10 @@
 			transform={`rotate(-90 18 ${(TOP + bottom) / 2})`}
 		>
 			{$content.clusterShare}
+		</text>
+		<text class="AxisTitle" x={chartWidth - 12} y={(TOP + bottom) / 2}
+			text-anchor="middle" transform={`rotate(90 ${chartWidth - 12} ${(TOP + bottom) / 2})`}>
+			{$content.globalVolume}
 		</text>
 		{#each chartResult.data as item, index (item.name)}
 			{@const geometry = getGeometry(item, index)}
@@ -177,7 +187,7 @@
 				height={bottom - geometry.backgroundY}
 				rx="9"
 			>
-				<title>{item.name} — {$content.globalVolume}: {formatVolume(item.totalVolume)}</title>
+				<title>{item.name} — {$content.globalVolume}: {item.totalVolume.toLocaleString($locale)}</title>
 			</rect>
 			<rect
 				class="ClientBar"
@@ -187,7 +197,7 @@
 				height={geometry.clientHeight}
 				rx="5"
 			>
-				<title>{item.name} — {client.domain}: {formatPercent(item.clientShare / 100)}</title>
+				<title>{item.name} — {client.domain}: {formatPercent(item.clientShare / 100)} — {$content.traffic}: {item.clientVolume.toLocaleString($locale)} — {$content.globalVolume}: {item.totalVolume.toLocaleString($locale)}</title>
 			</rect>
 			<rect
 				class="ComparisonBar"
@@ -197,7 +207,7 @@
 				height={geometry.comparisonHeight}
 				rx="5"
 			>
-				<title>{item.name} — {comparisonLabel}: {formatPercent(item.comparisonShare / 100)}</title>
+				<title>{item.name} — {item.comparisonDomain ?? $content.competitors}: {formatPercent(item.comparisonShare / 100)} — {$content.traffic}: {item.comparisonVolume.toLocaleString($locale)} — {$content.globalVolume}: {item.totalVolume.toLocaleString($locale)}</title>
 			</rect>
 
 			{#if geometry.clientHeight > 34}
