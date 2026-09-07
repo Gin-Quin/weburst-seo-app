@@ -1,3 +1,4 @@
+import { getClientWritingExamples, formatWritingExamples } from "$lib/server/contents/writingExamples";
 import { db } from "$lib/server/db";
 import { getProjectTypology } from "$lib/server/contents/typologies";
 import { sanitizeContentHtml } from "$lib/contents/articleHtml";
@@ -26,6 +27,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		await requireProjectAccess(await getRequestUser(), input.projectId, "manage");
 		const content = await getContentById(input.contentId, input.projectId);
 		const typology = await getProjectTypology(db, input.projectId, content.typologyId);
+		const writingExamples = await getClientWritingExamples(db, { projectId: input.projectId, contentId: content.id, typologyId: content.typologyId });
 		const google = getGoogleGenerativeAI();
 		if (!google) return new Response("GEMINI_API_KEY n’est pas configurée.", { status: 503 });
 
@@ -64,7 +66,10 @@ CONTEXTE ÉDITORIAL
 Titre : ${content.title}
 Typologie : ${typology ? `${typology.name}\n${typology.instructions}` : "aucune"}
 Brief : ${content.brief || "(vide)"}
-Guide SEO : ${JSON.stringify(content.serpmanticsGuide ?? null)}`,
+Guide SEO : ${JSON.stringify(content.serpmanticsGuide ?? null)}
+
+EXEMPLES D’ÉCRITURE DU CLIENT
+${formatWritingExamples(writingExamples)}`,
 		});
 
 		const html = sanitizeContentHtml(result.output.html);

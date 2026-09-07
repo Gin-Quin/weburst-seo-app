@@ -1,3 +1,4 @@
+import { getClientWritingExamples, formatWritingExamples } from "$lib/server/contents/writingExamples";
 import { getProjectTypology } from "$lib/server/contents/typologies";
 import { getGoogleGenerativeAI, GOOGLE_CHAT_MODEL } from "$lib/server/ai/google";
 import {
@@ -93,6 +94,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 		const content = await getContentById(body.contentId, body.projectId);
 		const clientContext = await loadClientChatContext(db, project.clientId);
 		const typology = await getProjectTypology(db, body.projectId!, content.typologyId);
+		const writingExamples = await getClientWritingExamples(db, { projectId: body.projectId, contentId: content.id, typologyId: content.typologyId });
 		const google = getGoogleGenerativeAI();
 		if (!google) {
 			logContentChatEvent(
@@ -120,6 +122,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 						cluster: latest.cluster,
 						brief: latest.brief,
 						typology: await getProjectTypology(db, body.projectId!, latest.typologyId),
+						writingExamples: await getClientWritingExamples(db, { projectId: body.projectId!, contentId: latest.id, typologyId: latest.typologyId }),
 						contentMemory: latest.chatMemory,
 						clientContext: latestClientContext.context,
 						clientMemory: latestClientContext.memory,
@@ -237,7 +240,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 
 		const result = streamText({
 			model: google(GOOGLE_CHAT_MODEL),
-			instructions: buildSystemPrompt(content, clientContext, typology),
+			instructions: buildSystemPrompt(content, clientContext, typology, formatWritingExamples(writingExamples)),
 			// A provider or network interruption can leave a partial tool call in the
 			// client history. Ignore it so the next user attempt can still be sent.
 			messages: modelMessages,
@@ -476,6 +479,7 @@ function buildSystemPrompt(
 	content: Awaited<ReturnType<typeof getContentById>>,
 	clientContext: { context: string; memory: string },
 	typology: { name: string; instructions: string } | null,
+	writingExamples: string,
 ): string {
 	return `Tu es un assistant éditorial SEO francophone intégré à WeBurst.
 Tu aides l’utilisateur à écrire et optimiser l’article courant. Réponds en Markdown clair et concis.
@@ -498,6 +502,9 @@ ${clientContext.context || "(vide)"}
 
 Mémoire partagée du client :
 ${clientContext.memory || "(vide)"}
+
+EXEMPLES D’ÉCRITURE DU CLIENT :
+${writingExamples}
 
 Mémoire propre à ce contenu :
 ${content.chatMemory || "(vide)"}
