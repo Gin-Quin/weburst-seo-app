@@ -10,7 +10,7 @@ import { AddKeywords } from "../keywords.schema";
 
 export const addKeywords = command(AddKeywords, async ({ projectId, keywords, mode }) => {
 	await requireProjectAccess(await getRequestUser(), projectId, "manage_keywords");
-	await KeywordsService.addKeywords(projectId, keywords, mode);
+	return await KeywordsService.addKeywords(projectId, keywords, mode);
 });
 
 export const hasKeywords = query(
@@ -24,10 +24,11 @@ export const hasKeywords = query(
 export const startKeywordAnalysis = command(
 	v.object({
 		projectId: v.string(),
+		setId: v.optional(v.pipe(v.string(), v.uuid())),
 	}),
-	async ({ projectId }) => {
+	async ({ projectId, setId }) => {
 		await requireProjectAccess(await getRequestUser(), projectId, "manage_keywords");
-		await KeywordsService.startKeywordAnalysis(projectId);
+		await KeywordsService.startKeywordAnalysis(projectId, { setId });
 	},
 );
 

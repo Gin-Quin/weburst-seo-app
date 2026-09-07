@@ -122,8 +122,9 @@
 
 		loading = true;
 		try {
-			await addKeywords({
-				projectId: context.project!.id,
+			const projectId = context.project!.id;
+			const setId = await addKeywords({
+				projectId,
 				keywords,
 				mode,
 			});
@@ -137,7 +138,8 @@
 				color: "primary",
 				then: () => {
 					startNewAnalysis({
-						projectId: context.project!.id,
+						projectId,
+						setId,
 						then: afterAnalysis,
 					});
 				},

@@ -1,5 +1,4 @@
 import { defineContent } from "$lib/i18n/locale.svelte";
-import { context } from "$lib/stores/context.svelte";
 import { toast } from "svelte-sonner";
 import { get } from "svelte/store";
 import { startKeywordAnalysis } from "../../../api/keywords/index.remote";
@@ -17,10 +16,11 @@ const content = defineContent({
 	},
 });
 
-export const startNewAnalysis = ({ projectId, then }: { projectId: string; then?: () => void }) => {
+export const startNewAnalysis = ({ projectId, setId, then }: { projectId: string; setId?: string; then?: () => void }) => {
 	toast.info(get(content).analysisStarting);
 	startKeywordAnalysis({
-		projectId: context.project!.id,
+		projectId,
+		setId,
 	})
 		.then(() => {
 			toast.success(get(content).analysisStartedSuccess, {

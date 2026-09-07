@@ -24,6 +24,7 @@ import {
 	type SchedulableProject,
 } from "./analysisScheduler";
 import { getReadySerpTasks } from "./getReadySerpTasks";
+import { persistKeywordSet } from "./persistKeywordSet";
 import { selectLatestAnalysisPerDay } from "./selectLatestAnalysisPerDay";
 import { applyShareOfVoiceTrends, selectTrendReferenceAnalysis } from "./shareOfVoiceTrend";
 
@@ -249,7 +250,7 @@ export namespace KeywordsService {
 		projectId: string,
 		keywords: Array<KeywordTuple>,
 		mode: "replace" | "append" = "replace",
-	): Promise<void> {
+	): Promise<string> {
 		if (keywords.length === 0) {
 			throw new Error("Cannot create an empty keyword set");
 		}
@@ -276,28 +277,17 @@ export namespace KeywordsService {
 				{ name, volume, clusters: clusters.trim() },
 			]),
 		);
+
+		await persistKeywordSet(
+			{ projectId, setId, keywords: [...keywordDetails.values()] },
+			(batch) => clickhouse.insert(batch),
+		);
 		keywordDetailsBySetId.set(setId, keywordDetails);
 		keywordsBySetId.set(
 			setId,
 			new Map([...keywordDetails].map(([name, keyword]) => [name, keyword.volume])),
 		);
-
-		await clickhouse.insert({
-			table: "keywordSets",
-			values: [{ id: setId, projectId }],
-			format: "JSON",
-		});
-
-		await clickhouse.insert({
-			table: "keywords",
-			values: [...keywordDetails.values()].map(({ name, volume, clusters }) => ({
-				setId,
-				name,
-				volume,
-				clusters,
-			})),
-			format: "JSON",
-		});
+		return setId;
 	}
 
 	/** Return all persisted keyword fields for a specific set. */
@@ -471,11 +461,11 @@ export namespace KeywordsService {
 	 * Start keyword analysis for a project.
 	 * @param projectId - The ID of the project.
 	 */
-	export function startKeywordAnalysis(projectId: string, { priority = 2 } = {}): Promise<"ok"> {
+	export function startKeywordAnalysis(projectId: string, { priority = 2, setId }: { priority?: number; setId?: string } = {}): Promise<"ok"> {
 		const previousStart = analysisStartLocks.get(projectId) ?? Promise.resolve("ok" as const);
 		const currentStart = previousStart
 			.catch(() => "ok" as const)
-			.then(() => startKeywordAnalysisUnlocked(projectId, { priority }));
+			.then(() => startKeywordAnalysisUnlocked(projectId, { priority, setId }));
 
 		analysisStartLocks.set(projectId, currentStart);
 		const clearStartLock = () => {
@@ -490,7 +480,7 @@ export namespace KeywordsService {
 
 	async function startKeywordAnalysisUnlocked(
 		projectId: string,
-		{ priority }: { priority: number },
+		{ priority, setId: requestedSetId }: { priority: number; setId?: string },
 	): Promise<"ok"> {
 		const pendingAnalysisId = await getProjectPendingAnalysisId(projectId);
 		if (pendingAnalysisId) {
@@ -500,7 +490,15 @@ export namespace KeywordsService {
 			return "ok";
 		}
 
-		const setId = await getCurrentKeywordSet(projectId);
+		if (requestedSetId) {
+			const result = await getClickhouseClient().query({
+				query: "SELECT id FROM keywordSets WHERE id = {setId:UUID} AND projectId = {projectId:String} LIMIT 1",
+				query_params: { setId: requestedSetId, projectId },
+				format: "JSON",
+			});
+			if (!(await result.json()).data.length) throw new Error("Keyword set does not belong to this project");
+		}
+		const setId = requestedSetId ?? await getCurrentKeywordSet(projectId);
 		if (!setId) {
 			throw new Error(`No keyword set found for project ${projectId}`);
 		}
