@@ -24,7 +24,7 @@
 	}
 </script>
 
-<select class="select control-size-1 w-auto" aria-label="Statut de l’article" {value}
+<select class="select control-size-1 w-auto min-w-28" aria-label="Statut de l’article" {value}
 	disabled={disabled || saving || context.user?.role === "client"}
 	onclick={(event) => event.stopPropagation()} onchange={change}>
 	{#each Object.entries(contentStatusLabels) as [status, label] (status)}

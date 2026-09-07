@@ -604,6 +604,7 @@
 
 <style>
 	.EditorShell {
+		min-width: 0;
 		flex: 1;
 		display: flex;
 		flex-direction: column;
@@ -612,6 +613,8 @@
 	}
 
 	.EditorToolbar {
+		flex-wrap: wrap;
+		min-width: 0;
 		position: sticky;
 		top: var(--content-editor-topbar-height, 3.25rem);
 		z-index: 5;
@@ -627,6 +630,7 @@
 	}
 
 	.ToolbarButton {
+		flex-shrink: 0;
 		width: 2.25rem;
 		height: 2.25rem;
 		border-radius: 0.5rem;
@@ -651,12 +655,16 @@
 		color: var(--color-base-content);
 	}
 	.EditorSurface {
+		min-width: 0;
 		flex: 1;
 		display: flex;
 		padding: 1.5rem 0.5rem 6rem;
 	}
 
 	.EditorSurface :global(.ProseMirror) {
+		min-width: 0;
+		max-width: 100%;
+		overflow-wrap: anywhere;
 		flex: 1;
 		min-height: 0;
 		outline: none;
@@ -671,8 +679,8 @@
 		border-radius: 0.2rem;
 	}
 
-	.EditorSurface :global(.ProseMirror h1) { font-size: 2.55rem; line-height: 1.15; font-weight: 750; margin: 0.75rem 0 1rem; }
-	.EditorSurface :global(.ProseMirror h2) { font-size: 2rem; line-height: 1.2; font-weight: 720; margin: 2rem 0 0.75rem; }
+	.EditorSurface :global(.ProseMirror h1) { font-size: clamp(1.75rem, 3vw, 2.55rem); line-height: 1.15; font-weight: 750; margin: 0.75rem 0 1rem; }
+	.EditorSurface :global(.ProseMirror h2) { font-size: clamp(1.4rem, 2.5vw, 2rem); line-height: 1.2; font-weight: 720; margin: 2rem 0 0.75rem; }
 	.EditorSurface :global(.ProseMirror h3) { font-size: 1.5rem; line-height: 1.25; font-weight: 700; margin: 1.5rem 0 0.5rem; }
 	.EditorSurface :global(.ProseMirror p) { margin: 0.75rem 0; }
 	.EditorSurface :global(.ProseMirror ul),
@@ -681,7 +689,7 @@
 	.EditorSurface :global(.ProseMirror ol) { list-style: decimal; }
 	.EditorSurface :global(.ProseMirror blockquote) { border-left: 3px solid var(--color-primary); padding-left: 1rem; color: var(--color-text-light); }
 	.EditorSurface :global(.ProseMirror hr) { margin-block: 2rem; border-color: var(--color-gray-300); }
-	.EditorSurface :global(.ProseMirror pre) { margin: 1rem 0; padding: 1rem; border-radius: 0.65rem; background: #17141d; color: white; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+	.EditorSurface :global(.ProseMirror pre) { max-width: 100%; overflow-x: auto; margin: 1rem 0; padding: 1rem; border-radius: 0.65rem; background: #17141d; color: white; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 	.EditorSurface :global(.ProseMirror code) { padding: 0.1rem 0.3rem; border-radius: 0.3rem; background: #f1eef7; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 	.EditorSurface :global(.ProseMirror pre code) { padding: 0; background: transparent; }
 	.EditorSurface :global(.ProseMirror table) { width: 100%; margin: 1.25rem 0; border-collapse: collapse; table-layout: fixed; }
