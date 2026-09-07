@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import {
-	analyzeOptimizationContent,
+	analyzeOptimizationMetrics,
 	getOptimizationScoreTone,
 	getOptimizationState,
 } from "./optimization";
@@ -21,7 +21,7 @@ test("getOptimizationScoreTone applies the optimization score thresholds", () =>
 	expect(getOptimizationScoreTone(120)).toBe("good");
 });
 
-test("analyzeOptimizationContent updates structure, occurrences, and score locally", () => {
+test("analyzeOptimizationMetrics updates structure and occurrences locally", () => {
 	const guide = {
 		guide: {
 			add: [
@@ -33,7 +33,7 @@ test("analyzeOptimizationContent updates structure, occurrences, and score local
 	} as SerpmanticsGuide;
 
 	expect(
-		analyzeOptimizationContent(
+		analyzeOptimizationMetrics(
 			{
 				html: '<h1>Porte de garage</h1><p>Une porte de garage sûre.</p><a href="/">Lien</a><ul><li>Solide</li></ul>',
 				text: "Porte de garage\n\nUne porte de garage sûre. Lien Solide",
@@ -56,33 +56,18 @@ test("analyzeOptimizationContent updates structure, occurrences, and score local
 			sécurité: 0,
 			fragile: 0,
 		},
-		score: 50,
 	});
 });
 
-test("analyzeOptimizationContent matches accents and punctuation as word boundaries", () => {
+test("analyzeOptimizationMetrics matches accents and punctuation as word boundaries", () => {
 	const guide = {
 		guide: { add: [{ expression: "sécurité", from: 2, to: 3 }] },
 	} as SerpmanticsGuide;
 
-	const result = analyzeOptimizationContent(
+	const result = analyzeOptimizationMetrics(
 		{ html: "<p>Sécurité, securite et sécurités.</p>", text: "Sécurité, securite et sécurités." },
 		guide,
 	);
 
 	expect(result.expressions.sécurité).toBe(2);
-	expect(result.score).toBe(100);
-});
-
-test("analyzeOptimizationContent uses the full 120-point score scale", () => {
-	const guide = {
-		guide: { add: [{ expression: "garage", from: 1, to: 2 }] },
-	} as SerpmanticsGuide;
-
-	const result = analyzeOptimizationContent(
-		{ html: "<p>Garage garage</p>", text: "Garage garage" },
-		guide,
-	);
-
-	expect(result.score).toBe(120);
 });

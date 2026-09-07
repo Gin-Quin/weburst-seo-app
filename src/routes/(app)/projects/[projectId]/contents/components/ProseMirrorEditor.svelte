@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { convertAsciiTablesInHtml } from "$lib/contents/articleHtml";
 	import { setListType } from "$lib/contents/editorLists";
-	import type { SerpmanticsGuide } from "$lib/server/serpmantics";
 	import {
 		autoUpdate,
 		computePosition,
@@ -44,7 +43,6 @@
 		html,
 		projectId,
 		contentId,
-		guide,
 		readOnly = false,
 		onChange,
 		setEditorContent = $bindable(),
@@ -52,7 +50,6 @@
 		html: string;
 		projectId: string;
 		contentId: string;
-		guide: SerpmanticsGuide | null;
 		readOnly?: boolean;
 		onChange?: (value: { html: string; json: string; text: string }) => void;
 		setEditorContent?: (html: string) => EditorContent | undefined;
@@ -597,8 +594,6 @@
 	<ArticleChangesDialog
 		currentHtml={rewriteProposal.currentHtml}
 		proposedHtml={rewriteProposal.proposedHtml}
-		{guide}
-		showScores={false}
 		cancelLabel="Refuser les modifications"
 		acceptLabel="Appliquer les modifications"
 		accepting={acceptingRewrite}

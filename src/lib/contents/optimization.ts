@@ -12,10 +12,12 @@ export type OptimizationContent = {
 	text: string;
 };
 
-export function analyzeOptimizationContent(
+export type OptimizationMetrics = Omit<SerpmanticsContentAnalysis, "score">;
+
+export function analyzeOptimizationMetrics(
 	content: OptimizationContent,
 	guide: SerpmanticsGuide | null,
-): SerpmanticsContentAnalysis {
+): OptimizationMetrics {
 	const words = tokenize(content.text);
 	const expressions = Object.fromEntries(
 		[...(guide?.guide?.add ?? []), ...(guide?.guide?.avoid ?? [])].map(({ expression }) => [
@@ -36,7 +38,6 @@ export function analyzeOptimizationContent(
 			lists: countTags(content.html, "ul|ol"),
 		},
 		expressions,
-		score: getLocalOptimizationScore(guide, expressions),
 	};
 }
 
@@ -58,7 +59,7 @@ export function getOptimizationScoreTone(score: number): OptimizationScoreTone {
 
 export function getStructureMetrics(
 	guide: SerpmanticsGuide | null,
-	analysis: SerpmanticsContentAnalysis | null,
+	analysis: OptimizationMetrics | SerpmanticsContentAnalysis | null,
 ) {
 	const structure = analysis?.structure;
 	const ranges = guide?.guide?.structure;
@@ -115,32 +116,4 @@ function countExpression(words: string[], expression: string): number {
 
 function countTags(html: string, tagPattern: string): number {
 	return html.match(new RegExp(`<(?:${tagPattern})(?:\\s|/?>)`, "gi"))?.length ?? 0;
-}
-
-function getLocalOptimizationScore(
-	guide: SerpmanticsGuide | null,
-	expressions: Record<string, number>,
-): number {
-	const recommendations = (guide?.guide?.add ?? []).filter(
-		(expression) => expression.from != null && expression.from > 0,
-	);
-	if (recommendations.length === 0) return 0;
-
-	const total = recommendations.reduce((sum, expression) => {
-		const occurrence = expressions[expression.expression] ?? 0;
-		const minimum = expression.from!;
-		const maximum = expression.to ?? minimum;
-		if (occurrence < minimum) return sum + occurrence / minimum;
-		if (occurrence <= maximum) {
-			const recommendedSpan = maximum - minimum;
-			return (
-				sum + (recommendedSpan === 0 ? 1 : 1 + ((occurrence - minimum) / recommendedSpan) * 0.2)
-			);
-		}
-
-		const overflow = occurrence - maximum;
-		return sum + Math.max(0, 1.2 - overflow / Math.max(maximum, 1));
-	}, 0);
-
-	return Math.round((total / recommendations.length) * 100);
 }

@@ -210,7 +210,6 @@
 				html={draftHtml}
 				projectId={content.projectId}
 				contentId={content.id}
-				guide={content.serpmanticsGuide}
 				readOnly={Boolean(previewedVersion)}
 				onChange={editorChanged}
 				bind:setEditorContent

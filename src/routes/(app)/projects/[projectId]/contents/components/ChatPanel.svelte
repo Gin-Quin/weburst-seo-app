@@ -323,7 +323,6 @@
 	<ArticleChangesDialog
 		currentHtml={articleProposal.currentHtml}
 		proposedMarkdown={articleProposal.markdown}
-		guide={content.serpmanticsGuide}
 		accepting={acceptingProposal}
 		onAccept={acceptProposal}
 		onCancel={cancelProposal}

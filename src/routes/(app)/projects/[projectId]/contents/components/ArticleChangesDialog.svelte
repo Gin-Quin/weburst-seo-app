@@ -6,9 +6,6 @@
 		type TextDiffSegment,
 	} from "$lib/contents/articleDiff";
 	import { convertAsciiTablesInHtml } from "$lib/contents/articleHtml";
-	import { analyzeOptimizationContent } from "$lib/contents/optimization";
-	import OptimizationScore from "$lib/components/OptimizationScore.svelte";
-	import type { SerpmanticsGuide } from "$lib/server/serpmantics";
 	import DOMPurify from "dompurify";
 	import { marked } from "marked";
 	import IconXRegular from "phosphor-icons-svelte/IconXRegular.svelte";
@@ -17,9 +14,7 @@
 		currentHtml,
 		proposedMarkdown = "",
 		proposedHtml,
-		guide,
 		accepting = false,
-		showScores = true,
 		cancelLabel = "Annuler les propositions",
 		acceptLabel = "Accepter l’article",
 		onAccept,
@@ -28,18 +23,14 @@
 		currentHtml: string;
 		proposedMarkdown?: string;
 		proposedHtml?: string;
-		guide: SerpmanticsGuide | null;
 		accepting?: boolean;
-		showScores?: boolean;
 		cancelLabel?: string;
 		acceptLabel?: string;
 		onAccept: (html: string) => void | Promise<void>;
 		onCancel: () => void;
 	} = $props();
 
-	const comparison = $derived.by(() =>
-		buildComparison(currentHtml, proposedHtml, proposedMarkdown, guide),
-	);
+	const comparison = $derived.by(() => buildComparison(currentHtml, proposedHtml, proposedMarkdown));
 
 	type ArticleBlock = { html: string; text: string };
 
@@ -47,7 +38,6 @@
 		beforeHtml: string,
 		afterHtmlValue: string | undefined,
 		markdown: string,
-		serpmanticsGuide: SerpmanticsGuide | null,
 	) {
 		const afterHtml = DOMPurify.sanitize(
 			afterHtmlValue ??
@@ -65,14 +55,6 @@
 			afterHtml,
 			beforeDiffHtml: renderBlocks(beforeBlocks, afterBlocks, states.before, pairs.before, "removed"),
 			afterDiffHtml: renderBlocks(afterBlocks, beforeBlocks, states.after, pairs.after, "added"),
-			beforeScore: analyzeOptimizationContent(
-				{ html: beforeHtml, text: htmlToText(beforeHtml) },
-				serpmanticsGuide,
-			).score,
-			afterScore: analyzeOptimizationContent(
-				{ html: afterHtml, text: htmlToText(afterHtml) },
-				serpmanticsGuide,
-			).score,
 		};
 	}
 
@@ -197,11 +179,6 @@
 		return document.body.innerHTML;
 	}
 
-	function htmlToText(html: string) {
-		const document = new DOMParser().parseFromString(html, "text/html");
-		return document.body.textContent?.replace(/\s+/g, " ").trim() ?? "";
-	}
-
 	function handleBackdrop(event: MouseEvent) {
 		if (!accepting && event.target === event.currentTarget) onCancel();
 	}
@@ -221,11 +198,9 @@
 		<div class="ComparisonHeadings">
 			<div>
 				<strong>Version actuelle</strong>
-				{#if showScores}<OptimizationScore score={comparison.beforeScore} size="regular" />{/if}
 			</div>
 			<div>
 				<strong>Nouvelle version</strong>
-				{#if showScores}<OptimizationScore score={comparison.afterScore} size="regular" />{/if}
 			</div>
 		</div>
 

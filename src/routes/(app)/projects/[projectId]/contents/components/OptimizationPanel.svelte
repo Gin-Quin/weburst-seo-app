@@ -1,7 +1,7 @@
 <script lang="ts">
 	import OptimizationScore from "$lib/components/OptimizationScore.svelte";
 	import {
-		analyzeOptimizationContent,
+		analyzeOptimizationMetrics,
 		getOptimizationState,
 		getStructureMetrics,
 		type OptimizationContent,
@@ -32,7 +32,7 @@
 	let pollTimeout: ReturnType<typeof setTimeout> | undefined;
 	const analysis = $derived(
 		draft
-			? analyzeOptimizationContent(draft, content.serpmanticsGuide)
+			? analyzeOptimizationMetrics(draft, content.serpmanticsGuide)
 			: content.serpmanticsAnalysis,
 	);
 	const metrics = $derived(
@@ -42,7 +42,7 @@
 	const avoidExpressions = $derived(
 		content.serpmanticsGuide?.guide?.avoid ?? [],
 	);
-	const score = $derived(Math.round(analysis?.score ?? content.score ?? 0));
+	const score = $derived(Math.round(content.serpmanticsAnalysis?.score ?? content.score ?? 0));
 
 	onMount(() => {
 		void refresh();
@@ -146,14 +146,19 @@
 			>
 				<IconSparkleRegular class="icon" /> Optimiser via IA
 			</button>
-		</header>
-		<div class="ScoreIntro">
-			<OptimizationScore
-				{score}
-				variant="card"
-				caption={score >= 50 ? "Bon" : "À améliorer"}
-			/>
-			<p>
+			</header>
+			<div class="ScoreIntro">
+				<div class="ScoreStatus" class:recalculating={refreshing}>
+					<OptimizationScore
+						{score}
+						variant="card"
+						caption={score >= 50 ? "Bon" : "À améliorer"}
+					/>
+					{#if refreshing}
+						<small class="ScoreRecalculation" role="status">Recalcul du score...</small>
+					{/if}
+				</div>
+				<p>
 				<strong
 					>{score >= 50
 						? "Votre texte est meilleur que 50% des pages de la 1ère page de Google."
@@ -355,13 +360,45 @@
 	}
 	.ScoreIntro {
 		display: flex;
-		align-items: center;
+		align-items: flex-start;
 		gap: 0.9rem;
+	}
+	.ScoreStatus {
+		flex: 0 0 4.5rem;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.35rem;
+	}
+	.ScoreStatus.recalculating :global(.OptimizationScore) {
+		animation: score-recalculation 2.4s ease-in-out infinite;
+	}
+	.ScoreRecalculation {
+		color: var(--color-text-light);
+		font-size: 0.7rem;
+		line-height: 1.15;
+		text-align: center;
+		white-space: nowrap;
 	}
 	.ScoreIntro p {
 		flex: 1;
 		font-size: 1rem;
 		line-height: 1.3;
+	}
+	@keyframes score-recalculation {
+		0%,
+		100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0.4;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.ScoreStatus.recalculating :global(.OptimizationScore) {
+			animation: none;
+			opacity: 0.7;
+		}
 	}
 	.ScoreGauge {
 		display: flex;
