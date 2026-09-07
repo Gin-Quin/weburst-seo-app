@@ -1,3 +1,4 @@
+import { ensureClientHistory } from "$lib/charts/ensureClientHistory";
 import { getSearchVolumeChange } from "$lib/keywords/getSearchVolumeChange";
 import { getClusterHistory, type ClusterHistoryRow } from "$lib/keywords/getClusterHistory";
 import { getKeywordCountChanges, type KeywordCountChange } from "$lib/keywords/getKeywordCountChanges";
@@ -1326,6 +1327,8 @@ export namespace KeywordsService {
 			lastMonth?.totalVolume ?? 0,
 		);
 
+		const project = await db.query.projects.findFirst({ where: eq(projects.id, projectId) });
+		const clientDomain = extractHost(project?.domain ?? "");
 		return {
 			searchVolumeChange: previousKeywords ? getSearchVolumeChange(totalVolume, getTotalVolume(previousKeywords)) : undefined,
 			keywordCountChanges: previousData ? getKeywordCountChanges(storedData, previousData) : undefined,
@@ -1334,7 +1337,7 @@ export namespace KeywordsService {
 			totalVolume,
 			totalTraffic,
 			clusters,
-			data: data.slice(0, 100),
+			data: [...data.slice(0, 100), ...data.slice(100).filter((row) => row.domain === clientDomain)],
 		};
 	}
 
@@ -1523,7 +1526,7 @@ export namespace KeywordsService {
 			);
 		}
 
-		return data;
+		return domain ? data : ensureClientHistory(data, allAnalysis, clientDomain);
 	}
 
 	/**
