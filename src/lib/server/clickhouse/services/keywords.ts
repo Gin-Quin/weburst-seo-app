@@ -1,3 +1,4 @@
+import { getKeywordCountChanges, type KeywordCountChange } from "$lib/keywords/getKeywordCountChanges";
 import { env } from "$env/dynamic/private";
 import {
 	getKeywordClusterSummaries,
@@ -54,6 +55,8 @@ export type KeywordAnalysisStatus = {
 };
 
 export type AggregatedKeywordAnalysis = {
+	keywordCountChanges?: Record<string, KeywordCountChange>;
+	previousAnalysisAt?: string;
 	totalVolume: number;
 	totalTraffic: number;
 	keywordCount: number;
@@ -1304,6 +1307,12 @@ export namespace KeywordsService {
 			}),
 		]);
 		if (!storedData) return null;
+		const previousAnalysis = (await getAllProjectAnalysis(projectId))
+			.filter((item) => item.createdAt < analysis.createdAt)
+			.sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+		const previousData = previousAnalysis
+			? await getAggregatedAnalysisResults({ analysisId: previousAnalysis.id })
+			: null;
 		const totalTraffic = storedData.reduce((total, item) => total + item.volume, 0);
 		const data = applyShareOfVoiceTrends(
 			storedData,
@@ -1313,6 +1322,8 @@ export namespace KeywordsService {
 		);
 
 		return {
+			keywordCountChanges: previousData ? getKeywordCountChanges(storedData, previousData) : undefined,
+			previousAnalysisAt: previousData ? previousAnalysis?.createdAt : undefined,
 			keywordCount: keywords.size,
 			totalVolume,
 			totalTraffic,

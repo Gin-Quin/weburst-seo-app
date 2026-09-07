@@ -1,6 +1,7 @@
 <script lang="ts">
+	import CountChange from "$lib/components/CountChange.svelte";
 	import Trend from "$lib/components/Trend.svelte";
-	import { defineContent } from "$lib/i18n/locale.svelte";
+	import { defineContent, locale } from "$lib/i18n/locale.svelte";
 	import type {
 		AggregatedKeywordAnalysis,
 		AggregatedKeywordAnalysisData,
@@ -14,6 +15,8 @@
 			targetedKeywordsLabel: "Number of targeted keywords",
 			positionnedKeywordsTitle: "Positionned keywords",
 			top3KeywordsTitle: "Top 3 keywords",
+			changeSince: "Change since",
+			noPrevious: "No previous analysis",
 		},
 		fr: {
 			title: "Potentiel SEO",
@@ -23,6 +26,8 @@
 			targetedKeywordsLabel: "Nombre de mots clés ciblés",
 			positionnedKeywordsTitle: "Mots-clés positionnés",
 			top3KeywordsTitle: "Mots-clés en top 3",
+			changeSince: "Évolution depuis le",
+			noPrevious: "Aucune analyse précédente",
 		},
 	});
 
@@ -35,6 +40,10 @@
 	} = $props();
 
 	const { totalVolume, keywordCount } = $derived(analysisResultsWithTrend);
+	const changes = $derived(analysisResultsWithTrend.keywordCountChanges?.[client.domain]);
+	const changeLabel = $derived(analysisResultsWithTrend.previousAnalysisAt
+		? `${$content.changeSince} ${new Date(analysisResultsWithTrend.previousAnalysisAt).toLocaleDateString($locale)}`
+		: $content.noPrevious);
 </script>
 
 <div class="card">
@@ -79,16 +88,17 @@
 			</div>
 			<div class="center justify-between">
 				<span class="">{$content.positionnedKeywordsTitle}</span>
-				<span class="text-xl">
-					{client.positionnedKeywordCount}
+				<span class="row items-center gap-2"><span class="text-xl">{client.positionnedKeywordCount}</span>
+					<CountChange value={analysisResultsWithTrend.previousAnalysisAt ? changes?.positioned ?? 0 : undefined} label={changeLabel} />
 				</span>
 			</div>
 			<div class="center justify-between">
 				<span class="">{$content.top3KeywordsTitle}</span>
-				<span class="text-xl">
-					{client.topThreeKeywordCount}
+				<span class="row items-center gap-2"><span class="text-xl">{client.topThreeKeywordCount}</span>
+					<CountChange value={analysisResultsWithTrend.previousAnalysisAt ? changes?.topThree ?? 0 : undefined} label={changeLabel} />
 				</span>
 			</div>
+			<p class="text-xs text-light font-normal">{changeLabel}</p>
 		</div>
 	</main>
 </div>
