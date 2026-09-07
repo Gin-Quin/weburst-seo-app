@@ -110,7 +110,6 @@
 		{:else if chartType == "bar"}
 			<SectionShareOfVoiceBarChart
 				analysisResults={analysisResultsWithTrend}
-				{visibleDomains}
 				{client}
 			/>
 		{/if}

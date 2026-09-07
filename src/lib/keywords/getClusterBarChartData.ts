@@ -13,27 +13,19 @@ export type ClusterBarChartData = {
 export function getClusterBarChartData({
 	clusters,
 	clientDomain,
-	selectedDomains,
 }: {
 	clusters: Array<KeywordClusterAnalysis>;
 	clientDomain: string;
-	selectedDomains: Iterable<string>;
 }): {
 	data: Array<ClusterBarChartData>;
-	comparisonDomain?: string;
 } {
-	const competitors = [...new Set(selectedDomains)].filter((domain) => domain !== clientDomain);
-	const comparisonDomain = competitors.length === 1 ? competitors[0] : undefined;
-	const selectedCompetitors = new Set(competitors);
 
 	return {
-		comparisonDomain,
 		data: clusters.map((cluster) => {
 			const clientVolume =
 				cluster.domains.find(({ domain }) => domain === clientDomain)?.volume ?? 0;
 			const strongestCompetitor = cluster.domains
-				.filter(({ domain }) => domain !== clientDomain &&
-					(selectedCompetitors.size === 0 || selectedCompetitors.has(domain)))
+				.filter(({ domain }) => domain !== clientDomain)
 				.sort((a, b) => b.volume - a.volume || a.domain.localeCompare(b.domain))[0];
 			const comparisonVolume = strongestCompetitor?.volume ?? 0;
 			const shareDivisor = cluster.totalTraffic || 1;

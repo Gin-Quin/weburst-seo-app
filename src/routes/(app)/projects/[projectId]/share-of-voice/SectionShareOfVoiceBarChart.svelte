@@ -10,7 +10,7 @@
 		AggregatedKeywordAnalysis,
 		AggregatedKeywordAnalysisData,
 	} from "$lib/server/clickhouse/services/keywords";
-	import type { SvelteSet } from "svelte/reactivity";
+
 
 	const content = defineContent({
 		en: {
@@ -31,11 +31,9 @@
 
 	let {
 		analysisResults,
-		visibleDomains,
 		client,
 	}: {
 		analysisResults: AggregatedKeywordAnalysis;
-		visibleDomains: SvelteSet<string>;
 		client: AggregatedKeywordAnalysisData;
 	} = $props();
 
@@ -54,12 +52,9 @@
 		getClusterBarChartData({
 			clusters: analysisResults.clusters,
 			clientDomain: client.domain,
-			selectedDomains: visibleDomains,
 		}),
 	);
-	const comparisonLabel = $derived(
-		chartResult.comparisonDomain ?? $content.competitors,
-	);
+	const comparisonLabel = $derived($content.competitors);
 	const chartWidth = $derived(
 		Math.max(
 			620,
