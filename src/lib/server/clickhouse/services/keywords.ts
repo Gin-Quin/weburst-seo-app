@@ -1421,6 +1421,8 @@ export namespace KeywordsService {
 	> {
 		const clickhouse = getClickhouseClient();
 		const allAnalysis = selectLatestAnalysisPerDay(await getAllProjectAnalysis(projectId));
+		const project = await db.query.projects.findFirst({ where: eq(projects.id, projectId) });
+		const clientDomain = extractHost(project?.domain ?? "");
 		if (allAnalysis.length === 0) return [];
 
 		const analysisIds = allAnalysis.map((analysis) => analysis.id);
@@ -1451,12 +1453,13 @@ export namespace KeywordsService {
 				INNER JOIN keywordAnalysis AS analysis ON analysis.id = aggregated.analysisId
 				INNER JOIN analysisTotals ON analysisTotals.analysisId = aggregated.analysisId
 				WHERE aggregated.analysisId IN {analysisIds:Array(UUID)}
-				${domain ? "AND aggregated.domain = {domain:String}" : "AND aggregated.domain IN (SELECT domain FROM selectedDomains)"}
+				${domain ? "AND aggregated.domain = {domain:String}" : "AND (aggregated.domain IN (SELECT domain FROM selectedDomains) OR aggregated.domain = {clientDomain:String})"}
 				ORDER BY analysis.createdAt ASC, aggregated.domain ASC
 			`,
 			query_params: {
 				analysisIds,
 				latestAnalysisId,
+				clientDomain,
 				domain: domain ?? "",
 				domainLimit: domainLimit ?? 0,
 			},

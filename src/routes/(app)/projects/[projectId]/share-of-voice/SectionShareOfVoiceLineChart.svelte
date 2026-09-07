@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { getShareOfVoiceHistory } from "$lib/charts/getShareOfVoiceHistory";
 	import Loader from "$lib/components/Loader.svelte";
 	import * as Chart from "$lib/components/ui/chart/index.js";
 	import { chartColors } from "$lib/charts/chartColors";
@@ -51,7 +52,7 @@
 		visibleDomains,
 	}: {
 		data: Awaited<ReturnType<typeof getAllAggregatedAnalysisResults>>;
-		visibleDomains: SvelteSet<string>;
+		visibleDomains: Iterable<string>;
 	}): {
 		chartData: Array<ChartData>;
 		chartConfig: Chart.ChartConfig;
@@ -59,7 +60,7 @@
 	} {
 		let index = 0;
 
-		const chartData = Array<ChartData>();
+		const chartData = getShareOfVoiceHistory(data, visibleDomains);
 		const chartConfig: Chart.ChartConfig = {};
 		const chartSeries: Array<SeriesData<ChartData, any>> = [];
 
@@ -76,34 +77,6 @@
 			index++;
 		}
 
-		const rowsByDate = new Map<string, ChartData>();
-		for (const analysis of data) {
-			if (!visibleDomains.has(analysis.domain)) {
-				continue;
-			}
-			const key = analysis.createdAt;
-			let item = rowsByDate.get(key);
-			if (!item) {
-				item = { date: new Date(analysis.createdAt) };
-				rowsByDate.set(key, item);
-			}
-			item[analysis.domain] = (analysis.volume / (analysis.totalVolume || 1)) * 100;
-		}
-
-		for (const item of rowsByDate.values()) {
-			for (const domain of visibleDomains) {
-				if (item[domain] === undefined) {
-					item[domain] = 0;
-				}
-			}
-			chartData.push(item);
-		}
-
-		chartData.sort((a, b) => {
-			const aDate = a.date instanceof Date ? a.date.getTime() : 0;
-			const bDate = b.date instanceof Date ? b.date.getTime() : 0;
-			return aDate - bDate;
-		});
 
 		return { chartData, chartConfig, chartSeries };
 	}
@@ -115,7 +88,7 @@
 	{:then data}
 		{@const { chartData, chartConfig, chartSeries } = getChartData({
 			data,
-			visibleDomains,
+			visibleDomains: new Set([client.domain, ...visibleDomains]),
 		})}
 		{#if countShareOfVoiceAnalyses(data) === 1}
 			<ShareOfVoiceSnapshotBarChart

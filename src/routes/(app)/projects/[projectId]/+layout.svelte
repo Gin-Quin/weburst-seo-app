@@ -13,6 +13,7 @@
 	import { onMount } from "svelte";
 	import { fade } from "svelte/transition";
 	import {
+		getAllAggregatedAnalysisResults,
 		getAnalysisResultsWithTrend,
 		getAnalysisStatus,
 		getKeywordClusters,
@@ -113,8 +114,7 @@
 
 		analysisRunning =
 			!!response &&
-			response.status === "pending" &&
-			response.completedTasks + response.failedTasks < response.keywordsCount;
+			response.status === "pending";
 
 		const intervalDuration = (analysisRunning ? 1 : 10) * SECOND;
 		fetchLastAnalysisStatusTimeout = setTimeout(
@@ -126,6 +126,7 @@
 			setTimeout(() => {
 				projectContext.analysisResultsWithTrendQuery?.refresh();
 				projectContext.keywordClustersQuery?.refresh();
+				getAllAggregatedAnalysisResults({ projectId: context.project!.id }).refresh();
 			}, 1000);
 		}
 	}
