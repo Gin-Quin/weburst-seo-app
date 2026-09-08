@@ -98,7 +98,7 @@
 
 					<ul
 						tabindex="0"
-						class="dropdown-content menu flex-nowrap bg-base-100 rounded-box z-20 mt-2 max-h-[70dvh] w-[19rem] overflow-y-auto shadow-md"
+						class="dropdown-content menu flex-nowrap bg-base-100 rounded-box z-20 mt-2 max-h-[70dvh] w-[19rem] shadow-md"
 					>
 						{#each projectGroups as group (`${group.clientId ?? "legacy"}:${group.clientName}`)}
 							<li class="ClientName">{group.clientName}</li>
@@ -273,6 +273,12 @@
 
 	.ProjectSwitcher:focus-within :global(.Caret) {
 		transform: rotate(180deg);
+	}
+
+	.ProjectSwitcher .dropdown-content {
+		overflow-x: hidden;
+		overflow-y: auto;
+		overscroll-behavior-y: contain;
 	}
 
 	.ProjectSwitcher .ClientName,
