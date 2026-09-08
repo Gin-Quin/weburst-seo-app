@@ -275,12 +275,28 @@
 		transform: rotate(180deg);
 	}
 
+	.ProjectSwitcher .ClientName,
+	.ProjectSwitcher li > a {
+		padding-inline: 0.75rem;
+	}
+
 	.ClientName {
-		padding: 0.75rem 1rem 0.5rem;
-		color: var(--color-text-light);
-		font-size: 0.75rem;
+		padding-block: 0.75rem 0.25rem;
+		color: color-mix(in oklab, var(--color-text-light) 75%, var(--color-base-100));
+		font-size: 0.5625rem;
+		font-weight: 500;
+		line-height: 1.25;
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
+	}
+
+	.ClientName:first-child {
+		padding-top: 0.5rem;
+	}
+
+	.ClientName:not(:first-child) {
+		margin-top: 0.5rem;
+		border-top: 1px solid var(--color-border);
 	}
 
 	@media (max-width: 1100px) {
