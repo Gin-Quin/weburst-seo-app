@@ -6,7 +6,6 @@ export const FAILED_ANALYSIS_RETRY_DELAY = 6 * HOUR;
 export const RECURRING_ANALYSIS_PROJECT_TYPES: ProjectType[] = ["monthly_subscription"];
 
 export const ANALYSIS_INTERVALS: Record<KeywordAnalysisFrequency, number> = {
-	"1/day": DAY,
 	"1/week": 7 * DAY,
 	"2/month": 15 * DAY,
 	"1/month": 30 * DAY,

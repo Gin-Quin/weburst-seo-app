@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { safeParse } from "valibot";
 import {
 	ArticleLimit,
+	KeywordAnalysisFrequency,
 	CreateProject,
 	hasAtLeastOneProjectTool,
 	hasValidAnalysisFrequency,
@@ -89,4 +90,11 @@ describe("project schema", () => {
 		expect(result.success).toBe(true);
 		if (result.success) expect(result.output.keywordAnalysisFrequency).toBeNull();
 	});
+});
+
+test("rejects daily analysis and accepts the remaining frequencies", () => {
+	expect(safeParse(KeywordAnalysisFrequency, "1/day").success).toBe(false);
+	for (const frequency of ["1/week", "2/month", "1/month"]) {
+		expect(safeParse(KeywordAnalysisFrequency, frequency).success).toBe(true);
+	}
 });

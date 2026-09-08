@@ -56,7 +56,7 @@ describe("analysis scheduling", () => {
 	test("never duplicates a pending analysis", () => {
 		expect(
 			isProjectAnalysisDue({
-				project: project("pending", "1/day"),
+				project: project("pending", "1/week"),
 				latestAnalysis: { status: "pending", createdAtMs: 0 },
 				nowMs: 100 * DAY,
 			}),
@@ -91,9 +91,9 @@ describe("analysis scheduling", () => {
 
 	test("selects only due projects", () => {
 		const nowMs = 100 * DAY;
-		const projects = [project("due", "1/day"), project("fresh", "1/day")];
+		const projects = [project("due", "1/week"), project("fresh", "1/week")];
 		const latest = new Map([
-			["due", { status: "completed" as const, createdAtMs: nowMs - DAY }],
+			["due", { status: "completed" as const, createdAtMs: nowMs - 7 * DAY }],
 			["fresh", { status: "completed" as const, createdAtMs: nowMs - HOUR }],
 		]);
 
@@ -108,7 +108,7 @@ describe("analysis scheduling", () => {
 
 	test("continues after one project fails and waits only between projects", async () => {
 		const events: string[] = [];
-		const projects = [project("one", "1/day"), project("two", "1/day")];
+		const projects = [project("one", "1/week"), project("two", "1/week")];
 
 		const results = await runDueProjectAnalyses({
 			projects,
@@ -133,7 +133,7 @@ describe("analysis scheduling", () => {
 		const events: string[] = [];
 
 		const results = await runDueProjectAnalyses({
-			projects: [project("one", "1/day"), project("two", "1/day")],
+			projects: [project("one", "1/week"), project("two", "1/week")],
 			startAnalysis: async (projectId) => {
 				events.push(`start:${projectId}`);
 			},

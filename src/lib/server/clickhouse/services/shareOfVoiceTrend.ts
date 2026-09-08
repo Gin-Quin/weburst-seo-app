@@ -1,7 +1,9 @@
 import { extractHost } from "$lib/keywords/serpAnalytics";
 import { DAY } from "$lib/timeUnits";
 
-export const MINIMUM_TREND_REFERENCE_AGE = 30 * DAY;
+import { ANALYSIS_INTERVALS } from "./analysisScheduler";
+
+export const DEFAULT_TREND_REFERENCE_AGE = 14 * DAY;
 
 type DatedAnalysis = {
 	id: string;
@@ -17,8 +19,10 @@ type ShareOfVoiceRow = {
 export function selectTrendReferenceAnalysis<T extends DatedAnalysis>(
 	analyses: ReadonlyArray<T>,
 	currentAnalysisAt: string,
+	frequency?: keyof typeof ANALYSIS_INTERVALS | null,
 ): T | undefined {
-	const cutoff = new Date(currentAnalysisAt).getTime() - MINIMUM_TREND_REFERENCE_AGE;
+	const minimumAge = frequency ? ANALYSIS_INTERVALS[frequency] : DEFAULT_TREND_REFERENCE_AGE;
+	const cutoff = new Date(currentAnalysisAt).getTime() - minimumAge;
 
 	return analyses
 		.filter((analysis) => new Date(analysis.createdAt).getTime() <= cutoff)
@@ -50,5 +54,5 @@ export function applyShareOfVoiceTrends<T extends ShareOfVoiceRow>(
 export function getTrendDays(currentAnalysisAt: string, referenceAnalysisAt?: string): number | undefined {
 	if (!referenceAnalysisAt) return undefined;
 	const days = Math.floor((new Date(currentAnalysisAt).getTime() - new Date(referenceAnalysisAt).getTime()) / DAY);
-	return Number.isFinite(days) && days >= 30 ? days : undefined;
+	return Number.isFinite(days) && days > 0 ? days : undefined;
 }

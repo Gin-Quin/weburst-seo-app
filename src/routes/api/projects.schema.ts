@@ -8,7 +8,6 @@ export const ArticleLimit = v.pipe(v.number(), v.integer(), v.minValue(0));
 export const ProjectName = v.pipe(v.string(), v.trim(), v.minLength(1));
 
 export const KeywordAnalysisFrequency = v.union([
-	v.literal("1/day"),
 	v.literal("1/week"),
 	v.literal("1/month"),
 	v.literal("2/month"),

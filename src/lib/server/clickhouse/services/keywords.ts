@@ -1161,8 +1161,8 @@ export namespace KeywordsService {
 		const keywords = await getKeywords({ setId });
 		if (!keywords?.size) return;
 
-		const [lastMonth, data] = await Promise.all([
-			getLastMonthAggregatedAnalysis({ projectId, currentAnalysisAt: createdAt }),
+		const [trendReference, data] = await Promise.all([
+			getTrendReferenceAggregatedAnalysis({ projectId, currentAnalysisAt: createdAt }),
 			getKeywordAnalysisResponses({
 				analysisId,
 				positionLimit: Math.min(positionLimit ?? 10, 10),
@@ -1187,8 +1187,8 @@ export namespace KeywordsService {
 		const valuesWithTrend = applyShareOfVoiceTrends(
 			valuesToInsert,
 			totalTraffic,
-			lastMonth?.data,
-			lastMonth?.totalVolume ?? 0,
+			trendReference?.data,
+			trendReference?.totalVolume ?? 0,
 		);
 
 		const clickhouse = getClickhouseClient();
@@ -1223,27 +1223,33 @@ export namespace KeywordsService {
 	}
 
 	/**
-	 * Returns the most recent analysis that is at least 30 days older than the
-	 * current analysis. More recent analyses are never used as a fallback.
+	 * Returns the most recent analysis at least one configured analysis interval older
+	 * than the current analysis (14 days when no frequency is configured).
 	 */
-	export async function getLastMonthAnalysisId({
+	export async function getTrendReferenceAnalysisId({
 		projectId,
 		currentAnalysisAt,
 	}: {
 		projectId: string;
 		currentAnalysisAt?: string;
 	}): Promise<string | undefined> {
-		const allAnalysis = await getAllProjectAnalysis(projectId);
+		const [allAnalysis, project] = await Promise.all([
+			getAllProjectAnalysis(projectId),
+			db.query.projects.findFirst({
+				where: eq(projects.id, projectId),
+				columns: { keywordAnalysisFrequency: true },
+			}),
+		]);
 		const currentDate = currentAnalysisAt ?? allAnalysis[0]?.createdAt;
 		if (!currentDate) return undefined;
 
-		return selectTrendReferenceAnalysis(allAnalysis, currentDate)?.id;
+		return selectTrendReferenceAnalysis(allAnalysis, currentDate, project?.keywordAnalysisFrequency)?.id;
 	}
 
 	/**
-	 * Returns the last month aggregated analysis results.
+	 * Returns the aggregated results for the trend reference analysis.
 	 */
-	async function getLastMonthAggregatedAnalysis({
+	async function getTrendReferenceAggregatedAnalysis({
 		projectId,
 		currentAnalysisAt,
 		domain,
@@ -1258,7 +1264,7 @@ export namespace KeywordsService {
 		totalVolume: number;
 		data: Array<ClickhouseTable.AggregatedKeywordAnalysisData>;
 	}> {
-		const analysisId = await getLastMonthAnalysisId({ projectId, currentAnalysisAt });
+		const analysisId = await getTrendReferenceAnalysisId({ projectId, currentAnalysisAt });
 		if (!analysisId) return null;
 
 		const analysis = await getAnalysisMetadata({ analysisId });
@@ -1294,7 +1300,7 @@ export namespace KeywordsService {
 		const totalVolume = getTotalVolume(keywords);
 		const clusterSummaries = getKeywordClusterSummaries(keywordDetails.values());
 
-		const [storedData, clusters, lastMonth] = await Promise.all([
+		const [storedData, clusters, trendReference] = await Promise.all([
 			getAggregatedAnalysisResults({
 				analysisId,
 			}),
@@ -1307,21 +1313,21 @@ export namespace KeywordsService {
 				: Promise.resolve(
 						clusterSummaries.map((cluster) => ({ ...cluster, totalTraffic: 0, domains: [] })),
 					),
-			getLastMonthAggregatedAnalysis({
+			getTrendReferenceAggregatedAnalysis({
 				projectId,
 				currentAnalysisAt: analysis.createdAt,
 			}),
 		]);
 		if (!storedData) return null;
-		const previousAnalysis = lastMonth?.analysis;
-		const previousData = lastMonth?.data;
+		const previousAnalysis = trendReference?.analysis;
+		const previousData = trendReference?.data;
 		const previousKeywords = previousAnalysis ? await getKeywords({ setId: previousAnalysis.setId }) : null;
 		const totalTraffic = storedData.reduce((total, item) => total + item.volume, 0);
 		const data = applyShareOfVoiceTrends(
 			storedData,
 			totalTraffic,
-			lastMonth?.data,
-			lastMonth?.totalVolume ?? 0,
+			trendReference?.data,
+			trendReference?.totalVolume ?? 0,
 		);
 
 		const project = await db.query.projects.findFirst({ where: eq(projects.id, projectId) });

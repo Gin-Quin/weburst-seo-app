@@ -110,7 +110,7 @@ export function formatShareOfVoiceAnalysis({
 		methodology: {
 			shareOfVoice:
 				"Estimated organic traffic divided by the estimated traffic of all top-10 domains.",
-			trend: "Percentage-point change versus the reference analysis from about one month earlier.",
+			trend: "Percentage-point change versus the most recent reference analysis at least one configured analysis interval earlier (14 days if no frequency is configured).",
 		},
 		analysis: {
 			id: latest.data[0]!.analysisId,
