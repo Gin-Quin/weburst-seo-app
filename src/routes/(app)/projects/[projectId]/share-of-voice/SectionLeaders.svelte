@@ -113,7 +113,7 @@
 							{formatPercent(row.volume / (totalTraffic || 1), {
 								maximumFractionDigits: 0,
 							})}
-							<Trend trend={row.trend} size="xs" />
+							<Trend days={analysisResultsWithTrend.trendDays} trend={row.trend} size="xs" />
 						</Table.Cell>
 						<Table.Cell class="text-center">
 							<input

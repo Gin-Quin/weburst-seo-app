@@ -28,11 +28,15 @@
 		visibleDomains,
 		totalTraffic,
 		client,
+		showTrend = true,
+		trendDays,
 	}: {
-		data: Array<ClickhouseTable.AggregatedKeywordAnalysisData>;
+		data: Array<Pick<ClickhouseTable.AggregatedKeywordAnalysisData, "domain" | "volume">>;
 		visibleDomains: SvelteSet<string>;
 		totalTraffic: number;
 		client: ClickhouseTable.AggregatedKeywordAnalysisData;
+		showTrend?: boolean;
+		trendDays?: number;
 	} = $props();
 
 	const { pieChartData, pieChartConfig } = $derived(
@@ -48,7 +52,7 @@
 		totalTraffic,
 		visibleDomains,
 	}: {
-		data: Array<ClickhouseTable.AggregatedKeywordAnalysisData>;
+		data: Array<Pick<ClickhouseTable.AggregatedKeywordAnalysisData, "domain" | "volume">>;
 		totalTraffic: number;
 		visibleDomains: SvelteSet<string>;
 	}): { pieChartData: Array<PieChartData>; pieChartConfig: Chart.ChartConfig } {
@@ -102,7 +106,7 @@
 		class="mx-auto aspect-square h-full center"
 	>
 		<div class="absolute col center">
-			<Trend trend={client.trend} />
+			{#if showTrend}<Trend days={trendDays} trend={client.trend} />{/if}
 			<div class="text-5xl font-bold">
 				{formatPercent(client.volume / (totalTraffic || 1), {
 					maximumFractionDigits: 0,

@@ -159,7 +159,7 @@
 							<span class="w-5"> - </span>
 						{/if}
 					</div>
-					<Trend trend={analysisData?.trend} />
+					<Trend trend={analysisData?.trend} days={project.analysis?.trendDays} />
 				</div>
 			</div>
 		</div>

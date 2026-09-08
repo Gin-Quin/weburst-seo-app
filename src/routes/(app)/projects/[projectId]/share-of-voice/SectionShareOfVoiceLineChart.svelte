@@ -25,18 +25,17 @@
 	let {
 		visibleDomains,
 		client,
-		clusters = [],
+		selectedClusterName = "",
 	}: {
 		visibleDomains: SvelteSet<string>;
 		client: ClickhouseTable.AggregatedKeywordAnalysisData;
-		clusters?: Array<{ name: string }>;
+		selectedClusterName?: string;
 	} = $props();
 
 	const content = defineContent({ en: { clusters: "Filter clusters", all: "All clusters", empty: "No analysis available." }, fr: { clusters: "Filtrer les clusters", all: "Tous les clusters", empty: "Aucune analyse disponible." } });
-	let selectedClusters = $state<string[]>([]);
 	const query = $derived(getAllAggregatedAnalysisResults({
 		projectId: context.project!.id,
-		...(selectedClusters.length ? { clusterNames: [...selectedClusters].sort() } : {}),
+		...(selectedClusterName ? { clusterNames: [selectedClusterName] } : {}),
 	}));
 	$effect(() => {
 		client.createdAt;
@@ -86,17 +85,6 @@
 	}
 </script>
 
-{#if clusters.length}
-	<details class="dropdown mb-2">
-		<summary class="btn control-size-1">{$content.clusters} · {selectedClusters.length || $content.all}</summary>
-		<div class="dropdown-content bg-base-100 border border-border rounded-lg p-3 w-72 max-h-64 overflow-auto z-20 shadow-lg">
-			<button class="btn control-size-1 mb-2" onclick={() => selectedClusters = []}>{$content.all}</button>
-			{#each clusters as cluster (cluster.name)}
-				<label class="flex items-center gap-2 py-1"><input class="checkbox checkbox-sm" type="checkbox" value={cluster.name} bind:group={selectedClusters} />{cluster.name}</label>
-			{/each}
-		</div>
-	</details>
-{/if}
 <div class="Graph w-full min-h-0 grow">
 	{#await query}
 		<Loader />
@@ -105,6 +93,13 @@
 			data,
 			visibleDomains: new Set([client.domain, ...visibleDomains]),
 		})}
+		{@const yMax = Math.min(100, Math.max(1, chartData.reduce(
+			(max, row) => Object.values(row).reduce<number>(
+				(max, value) => typeof value === "number" ? Math.max(max, value) : max,
+				max,
+			),
+			0,
+		) * 1.2))}
 		{#if !data.length}
 			<p class="text-light">{$content.empty}</p>
 		{:else if countShareOfVoiceAnalyses(data) === 1}
@@ -123,7 +118,8 @@
 					xScale={scaleUtc()}
 					yPadding={[0, 0]}
 					seriesLayout="overlap"
-					yDomain={[0, 100]}
+					yDomain={[0, yMax]}
+					yNice={false}
 					series={chartSeries}
 					points={{ r: 3 }}
 					props={{

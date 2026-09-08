@@ -30,7 +30,7 @@ import {
 import { getReadySerpTasks } from "./getReadySerpTasks";
 import { persistKeywordSet } from "./persistKeywordSet";
 import { selectLatestAnalysisPerDay } from "./selectLatestAnalysisPerDay";
-import { applyShareOfVoiceTrends, selectTrendReferenceAnalysis } from "./shareOfVoiceTrend";
+import { applyShareOfVoiceTrends, getTrendDays, selectTrendReferenceAnalysis } from "./shareOfVoiceTrend";
 
 const CONFIGURED_ANALYSIS_DEPTH = Number(env.SEARCH_DEPTH || 50);
 const ANALYSIS_DEPTH = Number.isFinite(CONFIGURED_ANALYSIS_DEPTH)
@@ -61,6 +61,7 @@ export type AggregatedKeywordAnalysis = {
 	keywordCountChanges?: Record<string, KeywordCountChange>;
 	searchVolumeChange?: ReturnType<typeof getSearchVolumeChange>;
 	previousAnalysisAt?: string;
+	trendDays?: number;
 	totalVolume: number;
 	totalTraffic: number;
 	keywordCount: number;
@@ -1253,6 +1254,7 @@ export namespace KeywordsService {
 		domain?: string;
 		limit?: number;
 	}): Promise<null | {
+		analysis: NonNullable<Awaited<ReturnType<typeof getAnalysisMetadata>>>;
 		totalVolume: number;
 		data: Array<ClickhouseTable.AggregatedKeywordAnalysisData>;
 	}> {
@@ -1268,7 +1270,7 @@ export namespace KeywordsService {
 		});
 
 		const totalTraffic = data?.reduce((total, item) => total + item.volume, 0) ?? 0;
-		return data ? { totalVolume: totalTraffic, data } : null;
+		return data ? { analysis, totalVolume: totalTraffic, data } : null;
 	}
 
 	/**
@@ -1311,14 +1313,9 @@ export namespace KeywordsService {
 			}),
 		]);
 		if (!storedData) return null;
-		const previousAnalysis = (await getAllProjectAnalysis(projectId))
-			.filter((item) => item.createdAt < analysis.createdAt)
-			.sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-		const previousData = previousAnalysis
-			? await getAggregatedAnalysisResults({ analysisId: previousAnalysis.id })
-			: null;
-		const previousMetadata = previousAnalysis ? await getAnalysisMetadata({ analysisId: previousAnalysis.id }) : null;
-		const previousKeywords = previousMetadata ? await getKeywords({ setId: previousMetadata.setId }) : null;
+		const previousAnalysis = lastMonth?.analysis;
+		const previousData = lastMonth?.data;
+		const previousKeywords = previousAnalysis ? await getKeywords({ setId: previousAnalysis.setId }) : null;
 		const totalTraffic = storedData.reduce((total, item) => total + item.volume, 0);
 		const data = applyShareOfVoiceTrends(
 			storedData,
@@ -1332,7 +1329,8 @@ export namespace KeywordsService {
 		return {
 			searchVolumeChange: previousKeywords ? getSearchVolumeChange(totalVolume, getTotalVolume(previousKeywords)) : undefined,
 			keywordCountChanges: previousData ? getKeywordCountChanges(storedData, previousData) : undefined,
-			previousAnalysisAt: previousData ? previousAnalysis?.createdAt : undefined,
+			previousAnalysisAt: previousAnalysis?.createdAt,
+			trendDays: getTrendDays(analysis.createdAt, previousAnalysis?.createdAt),
 			keywordCount: keywords.size,
 			totalVolume,
 			totalTraffic,

@@ -19,6 +19,8 @@
 			pieChart: "Pie chart",
 			lineChart: "Evolution chart",
 			barChart: "Cluster bar chart",
+			allClusters: "All clusters",
+			filterCluster: "Filter by cluster",
 		},
 		fr: {
 			title: "Part de voix",
@@ -28,6 +30,8 @@
 			pieChart: "Graphique circulaire",
 			lineChart: "Graphique d'évolution",
 			barChart: "Graphique en barres par cluster",
+			allClusters: "Tous les clusters",
+			filterCluster: "Filtrer par cluster",
 		},
 	});
 
@@ -43,6 +47,28 @@
 
 	const { data, totalTraffic, clusters } = $derived(analysisResultsWithTrend);
 
+	let selectedClusterName = $state("");
+	const selectedCluster = $derived(
+		clusters.length >= 2
+			? clusters.find((cluster) => cluster.name === selectedClusterName)
+			: undefined,
+	);
+	const filteredClient = $derived(
+		selectedCluster
+			? {
+					...client,
+					volume:
+						selectedCluster.domains.find(
+							(item) => item.domain === client.domain,
+						)?.volume ?? 0,
+				}
+			: client,
+	);
+
+	$effect(() => {
+		if (selectedClusterName && !selectedCluster) selectedClusterName = "";
+	});
+
 	let chartType = $state<"line" | "pie" | "bar">("pie");
 
 	$effect(() => {
@@ -53,8 +79,21 @@
 <div class="card col justify-stretch">
 	<header class="flex-row! justify-between items-center gap-4 shrink-0">
 		<div class="col gap-1">
-			<div class="title">
-				{$content.title}
+			<div class="flex items-center gap-3 flex-wrap">
+				<div class="title">{$content.title}</div>
+				{#if chartType !== "bar" && clusters.length >= 2}
+					<select
+						class="select control-size-1 w-auto max-w-full"
+						style="--control-size-1-height: 28px; --control-size-1-padding-inline: 8px; font-size: 0.875rem; padding-block: 0; padding-inline-end: 32px; translate: 0 1px;"
+						aria-label={$content.filterCluster}
+						bind:value={selectedClusterName}
+					>
+						<option value="">{$content.allClusters}</option>
+						{#each clusters as cluster (cluster.name)}
+							<option value={cluster.name}>{cluster.name}</option>
+						{/each}
+					</select>
+				{/if}
 			</div>
 			<div class="description">
 				{$content.description}
@@ -99,13 +138,19 @@
 
 	<main class="col justify-stretch w-full grow gap-1">
 		{#if chartType == "line"}
-			<SectionShareOfVoiceLineChart {visibleDomains} {client} {clusters} />
-		{:else if chartType == "pie"}
-			<SectionShareOfVoicePieChart
-				{data}
-				{totalTraffic}
+			<SectionShareOfVoiceLineChart
 				{visibleDomains}
 				{client}
+				selectedClusterName={selectedCluster?.name ?? ""}
+			/>
+		{:else if chartType == "pie"}
+			<SectionShareOfVoicePieChart
+				data={selectedCluster?.domains ?? data}
+				totalTraffic={selectedCluster?.totalTraffic ?? totalTraffic}
+				{visibleDomains}
+				client={filteredClient}
+				showTrend={!selectedCluster}
+				trendDays={analysisResultsWithTrend.trendDays}
 			/>
 		{:else if chartType == "bar"}
 			<SectionShareOfVoiceBarChart

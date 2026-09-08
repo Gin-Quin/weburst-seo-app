@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { applyShareOfVoiceTrends, selectTrendReferenceAnalysis } from "./shareOfVoiceTrend";
+import { applyShareOfVoiceTrends, getTrendDays, selectTrendReferenceAnalysis } from "./shareOfVoiceTrend";
 
 describe("selectTrendReferenceAnalysis", () => {
 	test("selects the most recent analysis that is at least 30 days old", () => {
@@ -54,5 +54,25 @@ describe("applyShareOfVoiceTrends", () => {
 		);
 
 		expect(row?.trend).toBeUndefined();
+	});
+});
+
+describe("trend period", () => {
+	test("uses the selected reference even when it is more than 60 days old", () => {
+		const current = "2026-08-31T12:00:00.000Z";
+		const reference = selectTrendReferenceAnalysis([
+			{ id: "recent", createdAt: "2026-08-20T12:00:00.000Z" },
+			{ id: "older", createdAt: "2026-06-01T12:00:00.000Z" },
+		], current);
+		expect(getTrendDays(current, reference?.createdAt)).toBe(91);
+	});
+
+	test("counts complete elapsed days from the analysis date", () => {
+		expect(getTrendDays("2026-08-31T18:00:00.000Z", "2026-08-01T12:00:00.000Z")).toBe(30);
+	});
+
+	test("does not report a period without an eligible reference", () => {
+		expect(getTrendDays("2026-08-31T12:00:00.000Z")).toBeUndefined();
+		expect(getTrendDays("2026-08-31T12:00:00.000Z", "2026-08-02T12:00:00.000Z")).toBeUndefined();
 	});
 });

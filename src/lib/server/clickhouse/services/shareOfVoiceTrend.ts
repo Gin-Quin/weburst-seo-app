@@ -45,3 +45,10 @@ export function applyShareOfVoiceTrends<T extends ShareOfVoiceRow>(
 		return { ...row, trend };
 	});
 }
+
+/** Whole elapsed days between the displayed analysis and its trend reference. */
+export function getTrendDays(currentAnalysisAt: string, referenceAnalysisAt?: string): number | undefined {
+	if (!referenceAnalysisAt) return undefined;
+	const days = Math.floor((new Date(currentAnalysisAt).getTime() - new Date(referenceAnalysisAt).getTime()) / DAY);
+	return Number.isFinite(days) && days >= 30 ? days : undefined;
+}

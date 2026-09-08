@@ -42,6 +42,24 @@
 	const TOP = 18;
 	const BOTTOM_GUTTER = 36;
 	const DEFAULT_HEIGHT = 326;
+	let tooltipContainer: HTMLDivElement;
+	let hoveredBar = $state<{ item: ClusterBarChartData; series: "client" | "comparison"; x: number; y: number } | null>(null);
+
+	function showBarTooltip(
+		event: PointerEvent | FocusEvent,
+		item: ClusterBarChartData,
+		series: "client" | "comparison",
+	) {
+		const bar = (event.currentTarget as SVGRectElement).getBoundingClientRect();
+		const container = tooltipContainer.getBoundingClientRect();
+		hoveredBar = {
+			item,
+			series,
+			x: bar.left + bar.width / 2 - container.left,
+			y: bar.top - container.top,
+		};
+	}
+
 	let graphWidth = $state(0);
 	let graphHeight = $state(0);
 	const chartHeight = $derived(graphHeight || DEFAULT_HEIGHT);
@@ -135,8 +153,10 @@
 	</div>
 </div>
 
+<div class="ChartPlot" bind:this={tooltipContainer}>
 <div
 	class="Graph"
+	onscroll={() => hoveredBar = null}
 	tabindex="0"
 	bind:clientWidth={graphWidth}
 	bind:clientHeight={graphHeight}
@@ -186,23 +206,37 @@
 			</rect>
 			<rect
 				class="ClientBar"
+				role="img"
+				tabindex="0"
+				aria-label={`${client.domain}: ${formatPercent(item.clientShare / 100)}`}
+				onpointerenter={(event) => showBarTooltip(event, item, "client")}
+				onpointerleave={() => hoveredBar = null}
+				onfocus={(event) => showBarTooltip(event, item, "client")}
+				onblur={() => hoveredBar = null}
+				onkeydown={(event) => { if (event.key === "Escape") hoveredBar = null; }}
 				x={geometry.clientX}
 				y={geometry.clientY}
 				width={geometry.barWidth}
 				height={geometry.clientHeight}
 				rx="5"
 			>
-				<title>{item.name} — {client.domain}: {formatPercent(item.clientShare / 100)} — {$content.traffic}: {item.clientVolume.toLocaleString($locale)} — {$content.globalVolume}: {item.totalVolume.toLocaleString($locale)}</title>
 			</rect>
 			<rect
 				class="ComparisonBar"
+				role="img"
+				tabindex="0"
+				aria-label={`${item.comparisonDomain ?? $content.competitors}: ${formatPercent(item.comparisonShare / 100)}`}
+				onpointerenter={(event) => showBarTooltip(event, item, "comparison")}
+				onpointerleave={() => hoveredBar = null}
+				onfocus={(event) => showBarTooltip(event, item, "comparison")}
+				onblur={() => hoveredBar = null}
+				onkeydown={(event) => { if (event.key === "Escape") hoveredBar = null; }}
 				x={geometry.comparisonX}
 				y={geometry.comparisonY}
 				width={geometry.barWidth}
 				height={geometry.comparisonHeight}
 				rx="5"
 			>
-				<title>{item.name} — {item.comparisonDomain ?? $content.competitors}: {formatPercent(item.comparisonShare / 100)} — {$content.traffic}: {item.comparisonVolume.toLocaleString($locale)} — {$content.globalVolume}: {item.totalVolume.toLocaleString($locale)}</title>
 			</rect>
 
 			{#if geometry.clientHeight > 34}
@@ -228,6 +262,24 @@
 			</text>
 		{/each}
 	</svg>
+</div>
+	{#if hoveredBar}
+		{@const isClient = hoveredBar.series === "client"}
+		{@const domain = isClient ? client.domain : hoveredBar.item.comparisonDomain ?? $content.competitors}
+		{@const share = isClient ? hoveredBar.item.clientShare : hoveredBar.item.comparisonShare}
+		{@const volume = isClient ? hoveredBar.item.clientVolume : hoveredBar.item.comparisonVolume}
+		<div
+			class="BarTooltip"
+			role="tooltip"
+			style:left={`clamp(0px, ${hoveredBar.x - 120}px, max(0px, 100% - 240px))`}
+			style:bottom={`calc(100% - ${hoveredBar.y}px + 8px)`}
+		>
+			<strong>{domain}</strong>
+			<span>{hoveredBar.item.name} · {formatPercent(share / 100)}</span>
+			<span>{$content.traffic}: {volume.toLocaleString($locale)}</span>
+			<span>{$content.globalVolume}: {hoveredBar.item.totalVolume.toLocaleString($locale)}</span>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -271,6 +323,33 @@
 	.ComparisonBar {
 		fill: #e4d8fa;
 		background: #e4d8fa;
+	}
+
+	.ChartPlot {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+		min-height: 0;
+	}
+
+	.BarTooltip {
+		position: absolute;
+		z-index: 10;
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		width: 240px;
+		max-width: 100%;
+		padding: 0.75rem;
+		border: 1px solid var(--color-border);
+		border-radius: 0.5rem;
+		background: var(--color-base-100);
+		color: var(--color-base-content);
+		box-shadow: 0 4px 12px #0000001a;
+		font-size: 0.75rem;
+		overflow-wrap: anywhere;
+		pointer-events: none;
 	}
 
 	.Graph {

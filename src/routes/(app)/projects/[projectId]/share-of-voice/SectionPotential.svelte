@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { formatTrendPeriod } from "$lib/keywords/formatTrendPeriod";
 	import CountChange from "$lib/components/CountChange.svelte";
 	import { formatPercent } from "$lib/numbers/formatPercent";
 	import { defineContent, locale } from "$lib/i18n/locale.svelte";
@@ -45,6 +46,7 @@
 	const changeLabel = $derived(analysisResultsWithTrend.previousAnalysisAt
 		? `${$content.changeSince} ${new Date(analysisResultsWithTrend.previousAnalysisAt).toLocaleDateString($locale)}`
 		: $content.noPrevious);
+	const trendLabel = $derived(formatTrendPeriod(analysisResultsWithTrend.trendDays, $locale) ?? $content.noPrevious);
 </script>
 
 <div class="card">
@@ -69,11 +71,11 @@
 						{totalVolume.toLocaleString("fr-FR")}
 					</span>
 					{#if volumeChange?.relative !== undefined}
-						<span class="badge text-xs" class:badge-success={volumeChange.relative > 0} class:badge-warning={volumeChange.relative < 0} title={changeLabel}>
+						<span class="badge text-xs" class:badge-success={volumeChange.relative > 0} class:badge-warning={volumeChange.relative < 0} title={trendLabel}>
 							{volumeChange.relative > 0 ? "+" : ""}{formatPercent(volumeChange.relative)}
 						</span>
 					{:else}
-						<CountChange value={volumeChange?.absolute} label={changeLabel} />
+						<CountChange value={volumeChange?.absolute} label={trendLabel} />
 					{/if}
 				</div>
 			</div>
@@ -96,13 +98,13 @@
 			<div class="center justify-between">
 				<span class="">{$content.positionnedKeywordsTitle}</span>
 				<span class="row items-center gap-2"><span class="text-xl">{client.positionnedKeywordCount}</span>
-					<CountChange value={analysisResultsWithTrend.previousAnalysisAt ? changes?.positioned ?? 0 : undefined} label={changeLabel} />
+					<CountChange value={analysisResultsWithTrend.previousAnalysisAt ? changes?.positioned ?? 0 : undefined} label={trendLabel} />
 				</span>
 			</div>
 			<div class="center justify-between">
 				<span class="">{$content.top3KeywordsTitle}</span>
 				<span class="row items-center gap-2"><span class="text-xl">{client.topThreeKeywordCount}</span>
-					<CountChange value={analysisResultsWithTrend.previousAnalysisAt ? changes?.topThree ?? 0 : undefined} label={changeLabel} />
+					<CountChange value={analysisResultsWithTrend.previousAnalysisAt ? changes?.topThree ?? 0 : undefined} label={trendLabel} />
 				</span>
 			</div>
 			<p class="text-xs text-light font-normal">{changeLabel}</p>
