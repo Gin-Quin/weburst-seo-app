@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { refreshAll } from "$app/navigation";
 	import FileInput from "$lib/components/FileInput.svelte";
 	import { defineContent } from "$lib/i18n/locale.svelte";
 	import { parseKeywordsCsv } from "$lib/keywords/parseKeywordsCsv";
@@ -19,38 +20,42 @@
 			cancel: "Cancel",
 			submit: "Submit",
 			replace: "Replace existing keywords with the new ones",
-			append: "Complete existing keywords with the new ones",
+			append: "Add keywords and update existing ones",
 			instructions: [
 				"The file must contain the keyword and its volume. A third clusters column can group keywords together.",
 				"The file can include or not a header.",
+				"For keywords with the same name, merging uses the file’s volumes and clusters. Clusters immediately regroup past results; historical volumes and positions are preserved. New keywords and updated volumes are used in the next analysis.",
 			],
 			keywordsAddedSuccessfully: "Keywords added successfully.",
 			errorAddingKeywords: "An error occurred while adding keywords.",
+			errorRefreshingResults: "Keywords saved, but results could not be refreshed. Reload the page to see the updated clusters.",
 			errorLoadingKeywords: "The existing keywords could not be loaded.",
 			noValidKeywords: "No valid keyword was found in this file.",
 			startAnalysis: "Start Analysis?",
 			startAnalysisDescription:
-				"Keywords added successfully. Do you want to start a analysis using the new keywords?",
+				"Clusters now apply to past results. Start a new analysis to collect fresh positions using the current keywords and volumes?",
 		},
 		fr: {
 			title: "Ajouter des mots-clés",
 			cancel: "Annuler",
 			submit: "Ajouter",
 			replace: "Remplacer les anciens mots-clés par les nouveaux",
-			append: "Compléter les anciens mots-clés par les nouveaux",
+			append: "Ajouter et mettre à jour les mots-clés existants",
 			instructions: [
 				"Le fichier doit contenir le mot-clé et son volume. Une troisième colonne clusters peut regrouper les mots-clés.",
 				"Le fichier peut inclure ou non un header.",
+				"Pour les mots-clés de même nom, la fusion reprend les volumes et clusters du fichier. Les clusters regroupent immédiatement les résultats passés ; les volumes et positions historiques sont conservés. Les nouveaux mots-clés et volumes seront utilisés à la prochaine analyse.",
 			],
 			keywordsAddedSuccessfully: "Mots-clés ajoutés avec succès.",
 			errorAddingKeywords:
 				"Une erreur est survenue lors de l'ajout des mots-clés.",
+			errorRefreshingResults: "Mots-clés enregistrés, mais les résultats n’ont pas pu être actualisés. Rechargez la page pour voir les clusters mis à jour.",
 			errorLoadingKeywords:
 				"Les mots-clés existants n’ont pas pu être chargés.",
 			noValidKeywords: "Aucun mot-clé valide n’a été trouvé dans ce fichier.",
 			startAnalysis: "Démarrer une analyse ?",
 			startAnalysisDescription:
-				"Les mots-clés ont été ajoutés avec succès. Voulez-vous démarrer une analyse en utilisant les nouveaux mots-clés ?",
+				"Les clusters s’appliquent désormais aux résultats passés. Lancer une nouvelle analyse pour relever les positions avec les mots-clés et volumes actuels ?",
 		},
 	});
 
@@ -132,6 +137,10 @@
 				richColors: true,
 			});
 			ref?.close();
+			await refreshAll({ includeLoadFunctions: false }).catch((error) => {
+				console.error(error);
+				toast.error($content.errorRefreshingResults, { richColors: true });
+			});
 			context.openConfirmDialog?.({
 				title: $content.startAnalysis,
 				description: $content.startAnalysisDescription,

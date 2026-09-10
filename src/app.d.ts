@@ -4,8 +4,12 @@ import type { Session, User } from "lucia";
 
 declare global {
 	namespace App {
-		// interface Error {}
+		interface Error {
+			errorId?: string;
+		}
 		interface Locals {
+			requestStartedAt?: number;
+			requestUserId?: string;
 			user: User | null;
 			session: Session | null;
 		}

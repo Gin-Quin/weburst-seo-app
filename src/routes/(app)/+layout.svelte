@@ -2,6 +2,9 @@
 	import { goto } from "$app/navigation";
 	import { page } from "$app/state";
 	import Loader from "$lib/components/Loader.svelte";
+	import { defineContent } from "$lib/i18n/locale.svelte";
+	import { loadWithDiagnostics } from "$lib/loading/loadWithDiagnostics";
+	import { reportLoadError } from "$lib/loading/reportLoadError";
 	import { context, setContextUser } from "$lib/stores/context.svelte";
 	import { cubicIn } from "svelte/easing";
 	import { fade } from "svelte/transition";
@@ -18,18 +21,41 @@
 
 	let projectId = $state<string | undefined>();
 	let loading = $state(true);
+	let loadFailed = $state(false);
+	const content = defineContent({
+		en: { loadFailed: "Unable to load the application.", retry: "Retry" },
+		fr: { loadFailed: "Impossible de charger l’application.", retry: "Réessayer" },
+	});
 	let lastOpenedLoaded = $state(false);
 	let lastTrackedProjectId: string | undefined;
 	const projectLastOpenedKey = "project-last-opened";
 
 	$effect(() => {
 		if (context.user) {
-			Promise.all([listClients(), listProjects()]).then(
-				([clients, projects]) => {
+			let active = true;
+			const details = { userId: context.user.id, pathname: window.location.pathname };
+			const onError = (failure: Parameters<typeof reportLoadError>[0]) => {
+				if (active) reportLoadError(failure, details);
+			};
+			Promise.all([
+				loadWithDiagnostics("listClients", () => listClients(), onError),
+				loadWithDiagnostics("listProjects", () => listProjects(), onError),
+			])
+				.then(([clients, projects]) => {
+					if (!active) return;
 					context.clients = clients;
 					context.projects = projects;
-				},
-			);
+					loadFailed = false;
+				})
+				.catch(() => {
+					if (active) {
+						loadFailed = true;
+						loading = false;
+					}
+				});
+			return () => {
+				active = false;
+			};
 		}
 	});
 
@@ -92,14 +118,24 @@
 		} else if (!localStorage.getItem("bearer")) {
 			goto("/login");
 		} else if (!localStorage.getItem("user")) {
-			getCurrentUser().then((user) => {
-				if (!user) {
-					localStorage.removeItem("bearer");
-					goto("/login");
-				} else {
-					setContextUser(user);
-				}
-			});
+			const pathname = window.location.pathname;
+			loadWithDiagnostics(
+				"getCurrentUser",
+				() => getCurrentUser(),
+				(failure) => reportLoadError(failure, { pathname }),
+			)
+				.then((user) => {
+					if (!user) {
+						localStorage.removeItem("bearer");
+						goto("/login");
+					} else {
+						setContextUser(user);
+					}
+				})
+				.catch(() => {
+					loadFailed = true;
+					loading = false;
+				});
 		} else {
 			context.user = JSON.parse(localStorage.getItem("user")!);
 		}
@@ -108,7 +144,12 @@
 
 <ConfirmDialog bind:openConfirmDialog={context.openConfirmDialog} />
 
-{#if loading || !context.user}
+{#if loadFailed}
+	<div class="h-[100dvh] center flex-col gap-4" role="alert">
+		<p>{$content.loadFailed}</p>
+		<button class="btn" onclick={() => window.location.reload()}>{$content.retry}</button>
+	</div>
+{:else if loading || !context.user}
 	<Loader class="h-[100dvh] center" />
 {:else}
 	<ProjectDialog bind:openProjectDialog={context.openProjectDialog} />

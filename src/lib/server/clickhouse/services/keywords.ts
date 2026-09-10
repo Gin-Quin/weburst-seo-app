@@ -1,12 +1,10 @@
 import { ensureClientHistory } from "$lib/charts/ensureClientHistory";
 import { getSearchVolumeChange } from "$lib/keywords/getSearchVolumeChange";
-import { getClusterHistory, type ClusterHistoryRow } from "$lib/keywords/getClusterHistory";
+import { getClusterHistory } from "$lib/keywords/getClusterHistory";
 import { getKeywordCountChanges, type KeywordCountChange } from "$lib/keywords/getKeywordCountChanges";
 import { env } from "$env/dynamic/private";
-import {
-	getKeywordClusterSummaries,
-	type KeywordClusterSummary,
-} from "$lib/keywords/getKeywordClusterSummaries";
+import type { KeywordClusterSummary } from "$lib/keywords/getKeywordClusterSummaries";
+import { getReclassifiedClusterSummaries, reclassifyKeywords } from "$lib/keywords/reclassifyKeywords";
 import { mergeKeywordTuples } from "$lib/keywords/mergeKeywordTuples";
 import { getPivotClusters } from "$lib/keywords/pivotClustering";
 import { extractHost, getDomainMetrics, hostMatchesTarget } from "$lib/keywords/serpAnalytics";
@@ -29,6 +27,7 @@ import {
 } from "./analysisScheduler";
 import { getReadySerpTasks } from "./getReadySerpTasks";
 import { persistKeywordSet } from "./persistKeywordSet";
+import { getReclassifiedClusterRows } from "./reclassifiedClusterRows";
 import { selectLatestAnalysisPerDay } from "./selectLatestAnalysisPerDay";
 import { applyShareOfVoiceTrends, getTrendDays, selectTrendReferenceAnalysis } from "./shareOfVoiceTrend";
 
@@ -1293,26 +1292,32 @@ export namespace KeywordsService {
 		const analysis = await getAnalysisMetadata({ analysisId });
 		if (!analysis) return null;
 
-		const keywordDetails = await getKeywordDetails(analysis.setId);
+		const currentSetId = (await getCurrentKeywordSet(projectId)) ?? analysis.setId;
+		const currentKeywords = await getKeywordDetails(currentSetId);
+		const keywordDetails = reclassifyKeywords(
+			(await getKeywordDetails(analysis.setId)).values(),
+			currentKeywords,
+		);
 		const keywords = await getKeywords({ setId: analysis.setId });
 		if (!keywords) return null;
 
 		const totalVolume = getTotalVolume(keywords);
-		const clusterSummaries = getKeywordClusterSummaries(keywordDetails.values());
+		const clusterSummaries = getReclassifiedClusterSummaries(
+			keywordDetails.values(),
+			currentKeywords.values(),
+		);
 
 		const [storedData, clusters, trendReference] = await Promise.all([
 			getAggregatedAnalysisResults({
 				analysisId,
 			}),
-			clusterSummaries.length >= 2
+			clusterSummaries.length > 0
 				? getAggregatedAnalysisResultsByCluster({
 						analysisId,
-						setId: analysis.setId,
+						currentSetId,
 						clusters: clusterSummaries,
 					})
-				: Promise.resolve(
-						clusterSummaries.map((cluster) => ({ ...cluster, totalTraffic: 0, domains: [] })),
-					),
+				: Promise.resolve([]),
 			getTrendReferenceAggregatedAnalysis({
 				projectId,
 				currentAnalysisAt: analysis.createdAt,
@@ -1348,36 +1353,17 @@ export namespace KeywordsService {
 	/** Return the latest estimated organic traffic grouped by cluster and domain. */
 	async function getAggregatedAnalysisResultsByCluster({
 		analysisId,
-		setId,
+		currentSetId,
 		clusters,
 	}: {
 		analysisId: string;
-		setId: string;
+		currentSetId: string;
 		clusters: Array<KeywordClusterSummary>;
 	}): Promise<Array<KeywordClusterAnalysis>> {
 		const clickhouse = getClickhouseClient();
-		const response = await clickhouse.query({
-			query: `
-				SELECT
-					trim(keywords.clusters) AS cluster,
-					responses.keyword AS keyword,
-					keywords.volume AS keywordVolume,
-					responses.domain AS domain,
-					responses.position AS position,
-					responses.type AS type
-				FROM
-				(
-					SELECT DISTINCT keyword, domain, position, type
-					FROM keywordAnalysisResponses
-					WHERE analysisId = {analysisId:String} AND position <= 10
-				) AS responses
-				INNER JOIN keywords
-					ON keywords.setId = {setId:UUID} AND keywords.name = responses.keyword
-				WHERE notEmpty(trim(keywords.clusters))
-				ORDER BY cluster ASC, responses.position ASC
-			`,
-			query_params: { analysisId, setId },
-			format: "CSV",
+		const rows = await getReclassifiedClusterRows(clickhouse, {
+			analysisIds: [analysisId],
+			currentSetId,
 		});
 
 		const rowsByCluster = new Map<
@@ -1387,24 +1373,14 @@ export namespace KeywordsService {
 				rows: Array<{ keyword: string; domain: string; position: number; type: string }>;
 			}
 		>();
-		for await (const rows of response.stream()) {
-			const parsedRows = parseClickhouseCsvRows(rows, {
-				cluster: "string",
-				keyword: "string",
-				keywordVolume: "number",
-				domain: "string",
-				position: "number",
-				type: "string",
-			});
-			for (const row of parsedRows) {
-				const data = rowsByCluster.get(row.cluster) ?? {
-					volumes: new Map<string, number>(),
-					rows: [],
-				};
-				data.volumes.set(row.keyword, row.keywordVolume);
-				data.rows.push(row);
-				rowsByCluster.set(row.cluster, data);
-			}
+		for (const row of rows) {
+			const data = rowsByCluster.get(row.cluster) ?? {
+				volumes: new Map<string, number>(),
+				rows: [],
+			};
+			data.volumes.set(row.keyword, row.keywordVolume);
+			data.rows.push(row);
+			rowsByCluster.set(row.cluster, data);
 		}
 
 		return clusters.map((cluster) => {
@@ -1451,24 +1427,10 @@ export namespace KeywordsService {
 
 		const analysisIds = allAnalysis.map((analysis) => analysis.id);
 		if (clusterNames?.length) {
-			const response = await clickhouse.query({
-				query: `SELECT DISTINCT responses.analysisId AS analysisId, responses.keyword AS keyword,
-					keywords.volume AS keywordVolume, responses.domain AS domain,
-					responses.position AS position, responses.type AS type
-					FROM keywordAnalysisResponses AS responses
-					INNER JOIN keywordAnalysis AS analysis ON toString(analysis.id) = responses.analysisId
-					INNER JOIN keywords ON keywords.setId = analysis.setId AND keywords.name = responses.keyword
-					WHERE analysis.id IN {analysisIds:Array(UUID)} AND responses.position <= 10
-					AND trim(keywords.clusters) IN {clusterNames:Array(String)}`,
-				query_params: { analysisIds, clusterNames }, format: "CSV",
-			});
-			const rows: ClusterHistoryRow[] = [];
-			for await (const batch of response.stream()) {
-				rows.push(...parseClickhouseCsvRows(batch, {
-					analysisId: "string", keyword: "string", keywordVolume: "number",
-					domain: "string", position: "number", type: "string",
-				}));
-			}
+			const currentSetId = await getCurrentKeywordSet(projectId);
+			const rows = currentSetId
+				? await getReclassifiedClusterRows(clickhouse, { analysisIds, currentSetId, clusterNames })
+				: [];
 			return getClusterHistory(allAnalysis, rows, clientDomain);
 		}
 
@@ -1598,7 +1560,11 @@ export namespace KeywordsService {
 
 		const keywords = await getKeywords({ setId });
 		if (!keywords?.size) return null;
-		const keywordDetails = await getKeywordDetails(setId);
+		const currentSetId = (await getCurrentKeywordSet(projectId)) ?? setId;
+		const keywordDetails = reclassifyKeywords(
+			(await getKeywordDetails(setId)).values(),
+			await getKeywordDetails(currentSetId),
+		);
 		const project = await db.query.projects.findFirst({
 			columns: { domain: true },
 			where: and(eq(projects.id, projectId), isNull(projects.deletedAt)),

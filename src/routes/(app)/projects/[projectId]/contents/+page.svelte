@@ -6,6 +6,8 @@
 	import { page } from "$app/state";
 	import Loader from "$lib/components/Loader.svelte";
 	import OptimizationScore from "$lib/components/OptimizationScore.svelte";
+	import { loadWithDiagnostics } from "$lib/loading/loadWithDiagnostics";
+	import { reportLoadError } from "$lib/loading/reportLoadError";
 	import type { Content, ContentPriority, ContentStatus } from "$lib/server/db/schema";
 	import { context } from "$lib/stores/context.svelte";
 	import IconArchiveRegular from "phosphor-icons-svelte/IconArchiveRegular.svelte";
@@ -33,6 +35,27 @@
 	>();
 	let openClientContextDialog = $state<(() => void) | undefined>();
 	const contentsQuery = $derived(listContents({ projectId, archived }));
+	let contentsLoadingFailed = $state(false);
+
+	$effect(() => {
+		let active = true;
+		contentsLoadingFailed = false;
+		const query = contentsQuery;
+		const typologies = typologiesQuery;
+		const details = { projectId, userId: context.user?.id, pathname: window.location.pathname };
+		const onError = (failure: Parameters<typeof reportLoadError>[0]) => {
+			if (active) reportLoadError(failure, details);
+		};
+		void loadWithDiagnostics("listContents", () => query, onError).catch(() => {
+			if (active) contentsLoadingFailed = true;
+		});
+		void loadWithDiagnostics("listTypologies", () => typologies, onError).catch(() => {
+			// The content list remains usable if its optional typologies cannot load.
+		});
+		return () => {
+			active = false;
+		};
+	});
 
 	const priorityLabels: Record<ContentPriority, string> = {
 		high: "Haute",
@@ -108,6 +131,12 @@
 		</div>
 	</header>
 
+	{#if contentsLoadingFailed}
+		<div class="center flex-col gap-4 min-h-72" role="alert">
+			<p>Impossible de charger les contenus.</p>
+			<button class="btn" onclick={() => window.location.reload()}>Réessayer</button>
+		</div>
+	{:else}
 	{#await contentsQuery}
 		<div class="center min-h-72"><Loader /></div>
 	{:then rows}
@@ -189,7 +218,10 @@
 				</table>
 			{/if}
 		</div>
+	{:catch}
+		<p class="text-error" role="alert">Impossible de charger les contenus.</p>
 	{/await}
+	{/if}
 </div>
 
 <style>

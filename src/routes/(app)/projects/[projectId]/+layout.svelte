@@ -3,6 +3,8 @@
 	import { page } from "$app/state";
 	import { canViewProjectContents } from "$lib/contents/access";
 	import { defineContent } from "$lib/i18n/locale.svelte";
+	import { loadWithDiagnostics } from "$lib/loading/loadWithDiagnostics";
+	import { reportLoadError } from "$lib/loading/reportLoadError";
 	import type { KeywordAnalysisStatus } from "$lib/server/clickhouse/services/keywords";
 	import { context } from "$lib/stores/context.svelte";
 	import { projectContext } from "$lib/stores/projectContext.svelte";
@@ -31,6 +33,8 @@
 			confirmStartAnalysisDescription:
 				"This will start a new analysis for the project using the most recent keyword set. The analysis will take a few minutes to complete.",
 			export: "Export as CSV",
+			loadFailed: "Unable to load project data.",
+			retry: "Retry",
 		},
 		fr: {
 			addKeywords: "Ajouter des mots-clés",
@@ -39,12 +43,16 @@
 			confirmStartAnalysisDescription:
 				"Cela lancera une nouvelle analyse pour le projet en utilisant l'ensemble de mots-clés le plus récent. L'analyse prendra quelques minutes à se terminer.",
 			export: "Exporter en CSV",
+			loadFailed: "Impossible de charger les données du projet.",
+			retry: "Réessayer",
 		},
 	});
 
 	let { children } = $props();
 
 	let analysisRunning = $state(false);
+	let projectLoadFailed = $state(false);
+	let disposed = false;
 	let lastAnalysisStatus = $state<KeywordAnalysisStatus | undefined>();
 	let fetchLastAnalysisStatusTimeout: ReturnType<typeof setTimeout>;
 	const isContentsPage = $derived(page.url.pathname.includes("/contents"));
@@ -80,6 +88,13 @@
 
 	$effect(() => {
 		if (context.project) {
+			let active = true;
+			projectLoadFailed = false;
+			const details = {
+				projectId: context.project.id,
+				userId: context.user?.id,
+				pathname: window.location.pathname,
+			};
 			projectContext.analysisResultsWithTrendQuery =
 				getAnalysisResultsWithTrend({
 					projectId: context.project.id,
@@ -87,26 +102,63 @@
 			projectContext.keywordClustersQuery = getKeywordClusters({
 				projectId: context.project.id,
 			});
+			const analysisQuery = projectContext.analysisResultsWithTrendQuery;
+			const clustersQuery = projectContext.keywordClustersQuery;
+			const onError = (failure: Parameters<typeof reportLoadError>[0]) => {
+				if (active) reportLoadError(failure, details);
+			};
+			void Promise.all([
+				loadWithDiagnostics("getAnalysisResultsWithTrend", () => analysisQuery, onError),
+				loadWithDiagnostics("getKeywordClusters", () => clustersQuery, onError),
+			]).catch(() => {
+				if (active) projectLoadFailed = true;
+			});
+			return () => {
+				active = false;
+			};
 		}
 	});
 
 	onMount(() => {
+		disposed = false;
 		fetchLastAnalysisStatus();
 
 		return () => {
+			disposed = true;
 			clearTimeout(fetchLastAnalysisStatusTimeout);
 		};
 	});
 
 	async function fetchLastAnalysisStatus() {
+		if (disposed) return;
 		if (!context.project) {
 			fetchLastAnalysisStatusTimeout = setTimeout(fetchLastAnalysisStatus, 500);
 			return;
 		}
 
-		const response = await getAnalysisStatus({
-			projectId: context.project!.id,
-		});
+		const projectId = context.project.id;
+		const details = { projectId, userId: context.user?.id, pathname: window.location.pathname };
+		let response;
+		try {
+			response = await loadWithDiagnostics(
+				"getAnalysisStatus",
+				() => getAnalysisStatus({ projectId }),
+				(failure) => {
+					if (!disposed && context.project?.id === projectId) reportLoadError(failure, details);
+				},
+			);
+		} catch {
+			// Resume polling after a transient failure without an unhandled rejection.
+			if (!disposed) {
+				fetchLastAnalysisStatusTimeout = setTimeout(fetchLastAnalysisStatus, 30 * SECOND);
+			}
+			return;
+		}
+		if (disposed) return;
+		if (context.project?.id !== projectId) {
+			fetchLastAnalysisStatusTimeout = setTimeout(fetchLastAnalysisStatus, 0);
+			return;
+		}
 		if (response !== null) {
 			lastAnalysisStatus = response;
 		}
@@ -151,6 +203,11 @@
 {#if context.project && isContentsPage && canViewContents}
 	<div class="EmptyPage" in:fade={{ duration: 300 }}>
 		{@render children()}
+	</div>
+{:else if projectLoadFailed}
+	<div class="center flex-col gap-4 p-10" role="alert">
+		<p>{$content.loadFailed}</p>
+		<button class="btn" onclick={() => window.location.reload()}>{$content.retry}</button>
 	</div>
 {:else if context.project && projectContext.analysisResultsWithTrendQuery && projectContext.keywordClustersQuery}
 	<AddKeywordsDialog

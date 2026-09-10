@@ -10,6 +10,7 @@ export const getRequestBearerToken = (): string | null => {
 };
 
 export const getRequestUserId = async (): Promise<string | null> => {
+	const { locals } = getRequestEvent();
 	const bearerToken = getRequestBearerToken();
 	if (!bearerToken) return null;
 
@@ -17,6 +18,7 @@ export const getRequestUserId = async (): Promise<string | null> => {
 		where: eq(sessions.id, bearerToken),
 	});
 
+	locals.requestUserId = session?.userId;
 	return session?.userId ?? null;
 };
 

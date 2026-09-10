@@ -3,6 +3,34 @@ import { env } from "$env/dynamic/private";
 import { startRecurringTask } from "$lib/server/backgroundJobs";
 import { KeywordsService } from "$lib/server/clickhouse/services/keywords";
 import { HOUR, MINUTE } from "$lib/timeUnits";
+import type { Handle, HandleServerError } from "@sveltejs/kit";
+
+export const handle: Handle = async ({ event, resolve }) => {
+	event.locals.requestStartedAt = performance.now();
+	return resolve(event);
+};
+
+export const handleError: HandleServerError = ({ error, event, status, message }) => {
+	const errorId = crypto.randomUUID();
+	console.error("[server-request-error]", {
+		errorId,
+		timestamp: new Date().toISOString(),
+		method: event.request.method,
+		pathname: event.url.pathname,
+		route: event.route.id,
+		projectId: event.params.projectId,
+		userId: event.locals.requestUserId,
+		status,
+		durationMs:
+			event.locals.requestStartedAt === undefined
+				? undefined
+				: Math.round(performance.now() - event.locals.requestStartedAt),
+		error,
+	});
+	// Keep internal errors server-side; the reference is also included in the
+	// remote query error logged by the client for correlation.
+	return { message, errorId };
+};
 
 type BackgroundJobs = {
 	stop: () => Promise<void>;

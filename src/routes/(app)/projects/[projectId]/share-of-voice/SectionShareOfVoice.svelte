@@ -21,6 +21,7 @@
 			barChart: "Cluster bar chart",
 			allClusters: "All clusters",
 			filterCluster: "Filter by cluster",
+			clusterHistory: "Current clusters, historical volumes and positions.",
 		},
 		fr: {
 			title: "Part de voix",
@@ -32,6 +33,7 @@
 			barChart: "Graphique en barres par cluster",
 			allClusters: "Tous les clusters",
 			filterCluster: "Filtrer par cluster",
+			clusterHistory: "Clusters actuels, volumes et positions historiques.",
 		},
 	});
 
@@ -49,7 +51,7 @@
 
 	let selectedClusterName = $state("");
 	const selectedCluster = $derived(
-		clusters.length >= 2
+		clusters.length > 0
 			? clusters.find((cluster) => cluster.name === selectedClusterName)
 			: undefined,
 	);
@@ -81,7 +83,7 @@
 		<div class="col gap-1">
 			<div class="flex items-center gap-3 flex-wrap">
 				<div class="title">{$content.title}</div>
-				{#if chartType !== "bar" && clusters.length >= 2}
+				{#if chartType !== "bar" && clusters.length > 0}
 					<select
 						class="select control-size-1 w-auto max-w-full"
 						style="--control-size-1-height: 28px; --control-size-1-padding-inline: 8px; font-size: 0.875rem; padding-block: 0; padding-inline-end: 32px; translate: 0 1px;"
@@ -97,6 +99,9 @@
 			</div>
 			<div class="description">
 				{$content.description}
+				{#if clusters.length > 0}
+					<span>{$content.clusterHistory}</span>
+				{/if}
 			</div>
 		</div>
 

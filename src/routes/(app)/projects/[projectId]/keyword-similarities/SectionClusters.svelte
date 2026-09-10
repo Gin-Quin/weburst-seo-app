@@ -39,7 +39,7 @@
 		clusterNames: string[];
 	} = $props();
 
-	const showClusterColumn = $derived(clusterNames.length >= 2);
+	const showClusterColumn = $derived(clusterNames.length > 0);
 	const clusterGroups = $derived(
 		groupSimilarityResultsByCluster(clusters, clusterNames),
 	);

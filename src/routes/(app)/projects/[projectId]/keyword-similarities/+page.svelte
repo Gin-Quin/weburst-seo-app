@@ -7,11 +7,13 @@
 	const content = defineContent({
 		en: {
 			addKeywords: "Add Keywords",
+			loadFailed: "Unable to load project data.",
 			noAnalysisResults:
 				"No data available. Add keywords and start an analysis.",
 		},
 		fr: {
 			addKeywords: "Ajouter des mots-clés",
+			loadFailed: "Impossible de charger les données du projet.",
 			noAnalysisResults:
 				"Aucune donnée disponible. Ajoutez des mots-clés et lancez une analyse.",
 		},
@@ -35,5 +37,9 @@
 			/>
 			<!-- <SectionUrlAnalysis /> -->
 		{/if}
+	{:catch}
+		<p class="text-error" role="alert">{$content.loadFailed}</p>
 	{/await}
+{:catch}
+	<p class="text-error" role="alert">{$content.loadFailed}</p>
 {/await}
