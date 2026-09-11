@@ -24,6 +24,7 @@
 	let title = $state("");
 	let then = $state<() => unknown>(() => {});
 	let confirmLabel = $state<string | undefined>();
+	let cancelLabel = $state<string | undefined>();
 	let color = $state<
 		| "info"
 		| "success"
@@ -40,6 +41,7 @@
 		description = input.description;
 		then = input.then;
 		confirmLabel = input.confirmLabel;
+		cancelLabel = input.cancelLabel;
 		color = input.color ?? "error";
 		ref?.showModal();
 	};
@@ -73,12 +75,12 @@
 
 			<div class="grid grid-cols-2 gap-3 pt-2">
 				<button
-					class="btn control-size-2"
+					class="btn control-size-2 h-auto! min-h-(--control-size-2-height) whitespace-normal py-2!"
 					disabled={loading}
 					type="button"
 					onclick={() => ref?.close()}
 				>
-					{$content.cancel}
+					{cancelLabel ?? $content.cancel}
 				</button>
 				<button
 					type="submit"

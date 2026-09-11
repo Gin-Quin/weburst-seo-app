@@ -32,6 +32,8 @@
 			errorLoadingKeywords: "The existing keywords could not be loaded.",
 			noValidKeywords: "No valid keyword was found in this file.",
 			startAnalysis: "Start Analysis?",
+			continueWithoutAnalysis: "Continue without starting an analysis",
+			launchAnalysis: "Start analysis",
 			startAnalysisDescription:
 				"Clusters now apply to past results. Start a new analysis to collect fresh positions using the current keywords and volumes?",
 		},
@@ -54,6 +56,8 @@
 				"Les mots-clés existants n’ont pas pu être chargés.",
 			noValidKeywords: "Aucun mot-clé valide n’a été trouvé dans ce fichier.",
 			startAnalysis: "Démarrer une analyse ?",
+			continueWithoutAnalysis: "Continuer sans lancer d’analyse",
+			launchAnalysis: "Lancer l’analyse",
 			startAnalysisDescription:
 				"Les clusters s’appliquent désormais aux résultats passés. Lancer une nouvelle analyse pour relever les positions avec les mots-clés et volumes actuels ?",
 		},
@@ -144,6 +148,8 @@
 			context.openConfirmDialog?.({
 				title: $content.startAnalysis,
 				description: $content.startAnalysisDescription,
+				cancelLabel: $content.continueWithoutAnalysis,
+				confirmLabel: $content.launchAnalysis,
 				color: "primary",
 				then: () => {
 					startNewAnalysis({

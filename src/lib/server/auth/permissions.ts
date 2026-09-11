@@ -1,3 +1,4 @@
+import { canManageKeywords } from "$lib/keywords/access";
 import type { Role } from "../db/schema";
 
 export type ClientAction = "view" | "manage";
@@ -10,7 +11,7 @@ export function roleCanAccessClient(
 	if (role === "admin") return true;
 	if (!hasMembership) return false;
 	if (action === "view") return true;
-	return role === "project_manager";
+	return canManageKeywords(role);
 }
 
 export function roleCanCreateUser(creatorRole: Role, createdRole: Role): boolean {

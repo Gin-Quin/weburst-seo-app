@@ -81,3 +81,11 @@ export const getKeywordClusters = query(
 		return await KeywordsService.getKeywordClusters({ projectId });
 	},
 );
+
+export const getKeywordClustersForExport = command(
+	v.object({ projectId: v.string() }),
+	async ({ projectId }) => {
+		await requireProjectAccess(await getRequestUser(), projectId, "manage_keywords");
+		return await KeywordsService.getKeywordClusters({ projectId });
+	},
+);

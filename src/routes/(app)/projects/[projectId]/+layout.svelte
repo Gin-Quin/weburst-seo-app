@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from "$app/navigation";
 	import { page } from "$app/state";
+	import { canManageKeywords } from "$lib/keywords/access";
 	import { canViewProjectContents } from "$lib/contents/access";
 	import { defineContent } from "$lib/i18n/locale.svelte";
 	import { loadWithDiagnostics } from "$lib/loading/loadWithDiagnostics";
@@ -55,6 +56,7 @@
 	let disposed = false;
 	let lastAnalysisStatus = $state<KeywordAnalysisStatus | undefined>();
 	let fetchLastAnalysisStatusTimeout: ReturnType<typeof setTimeout>;
+	const canManageProjectKeywords = $derived(canManageKeywords(context.user?.role));
 	const isContentsPage = $derived(page.url.pathname.includes("/contents"));
 	const isShareOfVoicePage = $derived(
 		page.url.pathname.endsWith("/share-of-voice") ||
@@ -184,6 +186,7 @@
 	}
 
 	function startAnalysis() {
+		if (!canManageProjectKeywords) return;
 		context.openConfirmDialog?.({
 			title: $content.confirmStartAnalysis,
 			description: $content.confirmStartAnalysisDescription,
@@ -210,9 +213,11 @@
 		<button class="btn" onclick={() => window.location.reload()}>{$content.retry}</button>
 	</div>
 {:else if context.project && projectContext.analysisResultsWithTrendQuery && projectContext.keywordClustersQuery}
-	<AddKeywordsDialog
-		bind:openAddKeywordsDialog={projectContext.openAddKeywordsDialog}
-	/>
+	{#if canManageProjectKeywords}
+		<AddKeywordsDialog
+			bind:openAddKeywordsDialog={projectContext.openAddKeywordsDialog}
+		/>
+	{/if}
 
 	<div in:fade={{ duration: 300 }}>
 		<div
@@ -222,37 +227,33 @@
 		>
 			<header class="ProjectToolbar">
 				<div class="ToolbarActions">
-					<button
-						class="btn control-size-1"
-						onclick={() =>
-							projectContext.openAddKeywordsDialog?.({
-								afterAnalysis: () => {
-									clearTimeout(fetchLastAnalysisStatusTimeout);
-									fetchLastAnalysisStatus();
-								},
-							})}
-					>
-						<IconDownloadSimpleRegular class="icon text-accent" />
-						{$content.addKeywords}
-					</button>
-					<button class="btn control-size-1" onclick={startAnalysis}>
-						<IconArrowsClockwiseRegular class="icon text-accent" />
-						{$content.startAnalysis}
-					</button>
-					{#if page.url.pathname.endsWith("keyword-similarities")}
+					{#if canManageProjectKeywords}
 						<button
 							class="btn control-size-1"
-							onclick={async () => {
-								const keywordClusters =
-									await projectContext.keywordClustersQuery;
-								if (keywordClusters) {
-									exportDataToCsv(keywordClusters);
-								}
-							}}
+							onclick={() =>
+								projectContext.openAddKeywordsDialog?.({
+									afterAnalysis: () => {
+										clearTimeout(fetchLastAnalysisStatusTimeout);
+										fetchLastAnalysisStatus();
+									},
+								})}
 						>
-							<IconExportRegular class="icon text-accent" />
-							{$content.export}
+							<IconDownloadSimpleRegular class="icon text-accent" />
+							{$content.addKeywords}
 						</button>
+						<button class="btn control-size-1" onclick={startAnalysis}>
+							<IconArrowsClockwiseRegular class="icon text-accent" />
+							{$content.startAnalysis}
+						</button>
+						{#if page.url.pathname.endsWith("keyword-similarities")}
+							<button
+								class="btn control-size-1"
+								onclick={() => exportDataToCsv(context.project!.id)}
+							>
+								<IconExportRegular class="icon text-accent" />
+								{$content.export}
+							</button>
+						{/if}
 					{/if}
 
 					{#if lastAnalysisStatus}

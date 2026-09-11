@@ -1,11 +1,13 @@
 import { defineContent } from "$lib/i18n/locale.svelte";
-import type { KeywordCluster } from "$lib/server/clickhouse/services/keywords";
+import { canManageKeywords } from "$lib/keywords/access";
+import { getKeywordClustersForExport } from "../../../api/keywords/index.remote";
 import { context } from "$lib/stores/context.svelte";
 import { toast } from "svelte-sonner";
 import { get } from "svelte/store";
 
 	const content = defineContent({
 		en: {
+			exportFailed: "Unable to export keywords.",
 			mainKeyword: "Main Keyword",
 			keywordVolume: "Main Keyword Volume",
 			associatedKeywords: "Secondary Keywords",
@@ -19,6 +21,7 @@ import { get } from "svelte/store";
 				"No data available. Add keywords and start an analysis.",
 		},
 		fr: {
+			exportFailed: "Impossible d’exporter les mots-clés.",
 			mainKeyword: "Mot-clé principal",
 			keywordVolume: "Volume du mot-clé principal",
 			associatedKeywords: "Mots-clés secondaires",
@@ -34,10 +37,16 @@ import { get } from "svelte/store";
 		},
 	});
 
-	export async function exportDataToCsv(clusters: KeywordCluster[]) {
-		const $content = get(content)
-
-		// const clusters = await queryKeywordClusters;
+	export async function exportDataToCsv(projectId: string) {
+		if (!canManageKeywords(context.user?.role)) return;
+		const $content = get(content);
+		let clusters;
+		try {
+			clusters = await getKeywordClustersForExport({ projectId });
+		} catch {
+			toast.error($content.exportFailed);
+			return;
+		}
 		if (!clusters) {
 			toast.error($content.noAnalysisResults);
 			return;

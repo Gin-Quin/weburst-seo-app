@@ -15,6 +15,7 @@ export type Context = {
 		title: string;
 		description?: string;
 		confirmLabel?: string;
+		cancelLabel?: string;
 		color?: "info" | "success" | "warning" | "error" | "primary" | "secondary" | "accent";
 		then: () => unknown;
 	}) => void;
