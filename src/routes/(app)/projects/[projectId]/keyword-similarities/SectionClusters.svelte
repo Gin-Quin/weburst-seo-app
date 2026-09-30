@@ -70,7 +70,7 @@
 {/snippet}
 
 {#snippet urlLink(url: string, className: string)}
-	<Tooltip.Root delayDuration={0}>
+	<Tooltip.Root delayDuration={0} disableHoverableContent>
 		<Tooltip.Trigger>
 			{#snippet child({ props })}
 				<a
@@ -88,7 +88,7 @@
 			<Tooltip.Content
 				sideOffset={6}
 				collisionPadding={8}
-				class="z-50 max-w-[480px] break-all rounded-[8px] border border-border bg-base-100 p-2 text-[13px] shadow-lg"
+				class="pointer-events-none z-50 max-w-[480px] break-all rounded-[8px] border border-border bg-base-100 p-2 text-[13px] shadow-lg"
 			>
 				{url}
 			</Tooltip.Content>
