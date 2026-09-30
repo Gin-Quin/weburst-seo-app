@@ -67,11 +67,11 @@
 	<main
 		class="LeadersTable col justify-stretch w-full grow overflow-x-hidden overflow-y-auto"
 	>
-		<Table.Root class="w-fit">
+		<Table.Root class="w-full">
 			<Table.Header>
 				<Table.Row class="border-none h-9">
 					<Table.Head></Table.Head>
-					<Table.Head>
+					<Table.Head class="w-full">
 						{$content.domain}
 					</Table.Head>
 					<Table.Head class="text-center">
@@ -137,7 +137,6 @@
 	}
 
 	.LeadersTable :global([data-slot="table-container"]) {
-		width: fit-content;
 		overflow: visible;
 	}
 </style>

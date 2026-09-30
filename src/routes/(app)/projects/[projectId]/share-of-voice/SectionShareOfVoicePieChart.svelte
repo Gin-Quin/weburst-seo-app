@@ -109,9 +109,7 @@
 		<div class="absolute col center">
 			{#if showTrend}<Trend days={trendDays} trend={client.trend} />{/if}
 			<div class="text-5xl font-bold">
-				{formatPercent(client.volume / (totalTraffic || 1), {
-					maximumFractionDigits: 0,
-				})}
+				{formatPercent(client.volume / (totalTraffic || 1))}
 			</div>
 		</div>
 

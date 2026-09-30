@@ -31,7 +31,7 @@
 		},
 	});
 
-	const projectDomain = extractHost(context.project!.domain);
+	const projectDomain = $derived(extractHost(context.project?.domain ?? ""));
 </script>
 
 {#await projectContext.analysisResultsWithTrendQuery}

@@ -5,6 +5,7 @@
 	import { groupSimilarityResultsByCluster } from "$lib/keywords/groupSimilarityResultsByCluster";
 	import type { KeywordCluster } from "$lib/server/clickhouse/services/keywords";
 	import { Tooltip } from "bits-ui";
+	import IconWarningRegular from "phosphor-icons-svelte/IconWarningRegular.svelte";
 
 	const content = defineContent({
 		en: {
@@ -14,7 +15,7 @@
 			mainKeyword: "Main Keyword",
 			cluster: "Cluster",
 			keywordVolume: "Volume",
-			cannibalizationRisk: "Cannibalization risk?",
+			cannibalizationRisk: "Cannibalization risk",
 			positionnedPages: "Positionned Pages",
 			noPosition: "No page positionned",
 		},
@@ -69,13 +70,30 @@
 	</span>
 {/snippet}
 
-{#snippet urlLink(url: string, className: string)}
+{#snippet warningIcon()}
+	<Tooltip.Root delayDuration={0} disableHoverableContent>
+		<Tooltip.Trigger class="shrink-0 border-0 bg-transparent p-0 text-warning">
+			<IconWarningRegular />
+		</Tooltip.Trigger>
+		<Tooltip.Portal>
+			<Tooltip.Content
+				sideOffset={6}
+				collisionPadding={8}
+				class="pointer-events-none z-50 rounded-[8px] border border-border bg-base-100 p-2 text-[13px] shadow-lg"
+			>
+				{$content.cannibalizationRisk}
+			</Tooltip.Content>
+		</Tooltip.Portal>
+	</Tooltip.Root>
+{/snippet}
+
+{#snippet urlLink(url: string)}
 	<Tooltip.Root delayDuration={0} disableHoverableContent>
 		<Tooltip.Trigger>
 			{#snippet child({ props })}
 				<a
 					{...props}
-					class="link block max-w-full truncate {className}"
+					class="link block min-w-0 truncate"
 					href={url}
 					target="_blank"
 					rel="noopener noreferrer"
@@ -162,11 +180,6 @@
 						<Table.Head class="w-[120px] text-center">
 							{$content.keywordVolume}
 						</Table.Head>
-						<Table.Head
-							class={showClusterColumn ? "w-[31%] text-center" : "text-center"}
-						>
-							{$content.cannibalizationRisk}
-						</Table.Head>
 						<Table.Head class="text-center">
 							{$content.positionnedPages}
 						</Table.Head>
@@ -213,36 +226,18 @@
 										{@render keywordVolume(mainVolume, totalVolume)}
 									{/if}
 								</Table.Cell>
-								<Table.Cell
-									class={showClusterColumn
-										? "max-w-[500px] whitespace-normal py-3 text-center text-[13px]"
-										: "max-w-[500px] py-3 text-center text-[13px]"}
-								>
-									<div class="col w-full items-center gap-1">
-										{#if items.length < 2}
-											<div class="center text-[#777] w-full">-</div>
-										{:else}
-											{#each items as item}
-												<div class="center w-full min-w-0">
-														{@render urlLink(item.url, "text-warning")}
-													</div>
-											{/each}
-										{/if}
-									</div>
-								</Table.Cell>
-								<Table.Cell
-									class={showClusterColumn
-										? "whitespace-normal text-center text-[13px]"
-										: "text-center text-[13px]"}
-								>
+								<Table.Cell class="max-w-[500px] py-3 text-center text-[13px]">
 									<div class="col w-full items-center gap-1">
 										{#if items.length == 0}
 											<div class="center text-[#777] w-full">-</div>
 										{:else}
 											{#each items as item}
-												<div class="center w-full min-w-0">
-														{@render urlLink(item.url, "")}
-													</div>
+												<div class="center w-full min-w-0 gap-1">
+													{#if items.length > 1}
+														{@render warningIcon()}
+													{/if}
+													{@render urlLink(item.url)}
+												</div>
 											{/each}
 										{/if}
 									</div>
