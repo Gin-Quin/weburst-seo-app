@@ -1,13 +1,16 @@
 import { getLocale } from "$lib/i18n/locale.svelte";
 import { toast } from "svelte-sonner";
 import type { LoadFailure } from "./loadWithDiagnostics";
+import { getClientErrorDetails } from "./getClientErrorDetails";
 
 export function reportLoadError(
 	failure: LoadFailure,
 	context: { userId?: string; projectId?: string; pathname: string },
 ) {
 	console.error("[client-load-error]", {
-		...failure,
+		operation: failure.operation,
+		durationMs: failure.durationMs,
+		error: getClientErrorDetails(failure.error),
 		...context,
 		timestamp: new Date().toISOString(),
 		online: navigator.onLine,

@@ -6,6 +6,8 @@ export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
 	server: {
 		port: 3857,
+		// Quick tunnel used to receive DataForSEO postbacks locally.
+		allowedHosts: [".trycloudflare.com"],
 	},
 	preview: {
 		port: 3857,
@@ -15,5 +17,8 @@ export default defineConfig({
 	},
 	ssr: {
 		external: ["bun"],
+		// Production only receives build/, without node_modules. Bundle the AI
+		// SDK and its schema dependency instead of relying on Bun auto-install.
+		noExternal: ["ai", /^@ai-sdk\//, "zod"],
 	},
 });

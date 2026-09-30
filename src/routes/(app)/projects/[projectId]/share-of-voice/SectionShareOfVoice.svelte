@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { defineContent } from "$lib/i18n/locale.svelte";
+	import { findDomainRow } from "$lib/keywords/findDomainRow";
 	import type { ClickhouseTable } from "$lib/server/clickhouse/migrations";
 	import type { AggregatedKeywordAnalysis } from "$lib/server/clickhouse/services/keywords";
 	import IconChartBarRegular from "phosphor-icons-svelte/IconChartBarRegular.svelte";
@@ -60,9 +61,7 @@
 			? {
 					...client,
 					volume:
-						selectedCluster.domains.find(
-							(item) => item.domain === client.domain,
-						)?.volume ?? 0,
+						findDomainRow(selectedCluster.domains, client.domain)?.volume ?? 0,
 				}
 			: client,
 	);
@@ -78,9 +77,9 @@
 	});
 </script>
 
-<div class="card col justify-stretch">
-	<header class="flex-row! justify-between items-center gap-4 shrink-0">
-		<div class="col gap-1">
+<div class="ShareOfVoiceCard card col justify-stretch" class:ClusterChart={chartType === "bar"}>
+	<header class="flex-row! flex-wrap justify-between items-center gap-4 shrink-0">
+		<div class="col gap-1 min-w-0 flex-1 basis-56">
 			<div class="flex items-center gap-3 flex-wrap">
 				<div class="title">{$content.title}</div>
 				{#if chartType !== "bar" && clusters.length > 0}
@@ -105,7 +104,7 @@
 			</div>
 		</div>
 
-		<div class="join gap-1">
+		<div class="join gap-1 shrink-0">
 			<button
 				class="Toggle"
 				class:active={chartType === "pie"}
@@ -167,6 +166,10 @@
 </div>
 
 <style>
+	.ClusterChart {
+		min-height: 32rem;
+	}
+
 	.Toggle {
 		padding: 0.125rem;
 		color: #ccc;

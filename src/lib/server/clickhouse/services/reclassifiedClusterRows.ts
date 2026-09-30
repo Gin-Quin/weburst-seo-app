@@ -25,6 +25,10 @@ export async function getReclassifiedClusterRows(
 			INNER JOIN keywords AS currentKeywords
 				ON currentKeywords.setId = {currentSetId:UUID} AND currentKeywords.name = keywords.name
 			WHERE analysis.id IN {analysisIds:Array(UUID)} AND responses.position <= 10
+				AND (responses.analysisId, responses.taskId) NOT IN (
+					SELECT toString(analysisId), taskId FROM keywordAnalysisTaskResults FINAL
+					WHERE analysisId IN {analysisIds:Array(UUID)} AND status = 'failed'
+				)
 				AND notEmpty(trim(currentKeywords.clusters))
 				${input.clusterNames?.length ? "AND trim(currentKeywords.clusters) IN {clusterNames:Array(String)}" : ""}
 		`,

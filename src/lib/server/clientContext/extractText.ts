@@ -1,5 +1,3 @@
-import { getGoogleGenerativeAI, GOOGLE_CHAT_MODEL } from "$lib/server/ai/google";
-import { generateText } from "ai";
 import type { ClientContextExtension } from "./validation";
 import { decodeContextTextFile, validateContextFileContents } from "./validation";
 
@@ -21,15 +19,21 @@ export async function extractClientContextFileText(input: {
 	if (input.extension !== "pdf") return decodeContextTextFile(input.data);
 
 	validateContextFileContents("pdf", input.data);
-	const google = getGoogleGenerativeAI();
-	if (!google) {
-		throw new PdfTextExtractionError(
-			"L’extraction PDF nécessite une clé GEMINI_API_KEY configurée.",
-			503,
-		);
-	}
 
 	try {
+		// Reading client context and importing text files must not load the AI SDK.
+		const [{ getGoogleGenerativeAI, GOOGLE_CHAT_MODEL }, { generateText }] = await Promise.all([
+			import("$lib/server/ai/google"),
+			import("ai"),
+		]);
+		const google = getGoogleGenerativeAI();
+		if (!google) {
+			throw new PdfTextExtractionError(
+				"L’extraction PDF nécessite une clé GEMINI_API_KEY configurée.",
+				503,
+			);
+		}
+
 		const result = await generateText({
 			model: google(GOOGLE_CHAT_MODEL),
 			messages: [
@@ -58,6 +62,7 @@ export async function extractClientContextFileText(input: {
 		if (!text) throw new Error("empty extraction");
 		return text;
 	} catch (error) {
+		if (error instanceof PdfTextExtractionError) throw error;
 		console.error("Gemini PDF text extraction error", error);
 		throw new PdfTextExtractionError(
 			`Le texte du fichier « ${input.name} » n’a pas pu être extrait.`,

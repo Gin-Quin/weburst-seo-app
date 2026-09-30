@@ -14,6 +14,7 @@
 	import IconArrowCounterClockwiseRegular from "phosphor-icons-svelte/IconArrowCounterClockwiseRegular.svelte";
 	import IconBrainRegular from "phosphor-icons-svelte/IconBrainRegular.svelte";
 	import IconPencilSimpleRegular from "phosphor-icons-svelte/IconPencilSimpleRegular.svelte";
+	import IconShapesRegular from "phosphor-icons-svelte/IconShapesRegular.svelte";
 	import IconPlusRegular from "phosphor-icons-svelte/IconPlusRegular.svelte";
 	import { toast } from "svelte-sonner";
 	import {
@@ -114,7 +115,14 @@
 		<h1>Voici vos <span>contenus</span>.</h1>
 		<div class="ContentsActions">
 			{#if context.user?.role !== "client"}
-				<button class="btn control-size-2" disabled={!context.project?.clientId} onclick={() => openTypologies?.()}>Typologies</button>
+				<button
+					class="btn control-size-2"
+					disabled={!context.project?.clientId}
+					onclick={() => openTypologies?.()}
+				>
+					<IconShapesRegular class="icon text-accent" />
+					Typologies
+				</button>
 			{/if}
 			<button
 				class="btn control-size-2"

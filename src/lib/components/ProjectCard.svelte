@@ -3,6 +3,7 @@
 	import { canViewProjectContents } from "$lib/contents/access";
 	import { getProjectTypeLabel, projectTypes } from "$lib/i18n/contents/projects";
 	import { defineContent } from "$lib/i18n/locale.svelte";
+	import { findDomainRow } from "$lib/keywords/findDomainRow";
 	import { extractHost } from "$lib/keywords/serpAnalytics";
 	import { formatPercent } from "$lib/numbers/formatPercent";
 	import { getProjectPath } from "$lib/projects/getProjectPath";
@@ -52,7 +53,7 @@
 	} = $props();
 
 	const analysisData = $derived(
-		project.analysis?.data.find((item) => item.domain === extractHost(project.domain)),
+		project.analysis && findDomainRow(project.analysis.data, extractHost(project.domain)),
 	);
 </script>
 

@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { formatTrendPeriod } from "$lib/keywords/formatTrendPeriod";
 	import CountChange from "$lib/components/CountChange.svelte";
+	import { extractHost } from "$lib/keywords/serpAnalytics";
 	import { formatPercent } from "$lib/numbers/formatPercent";
 	import { defineContent, locale } from "$lib/i18n/locale.svelte";
 	import type {
@@ -13,22 +13,22 @@
 			title: "SEO Potential",
 			description: "Estimated traffic from positions not yet exploited.",
 			trafficPotential: "Traffic potential",
-			targetedKeywordsLabel: "Number of targeted keywords",
+			targetedKeywordsLabel: "Number of analysed keywords",
 			positionnedKeywordsTitle: "Positionned keywords",
 			top3KeywordsTitle: "Top 3 keywords",
 			changeSince: "Change since",
-			noPrevious: "No previous analysis",
+			noPrevious: "No comparable analysis",
 		},
 		fr: {
 			title: "Potentiel SEO",
 			description:
 				"Trafic SEO potentiel sur les positions pas encore exploitées.",
 			trafficPotential: "Volume total de recherche",
-			targetedKeywordsLabel: "Nombre de mots clés ciblés",
+			targetedKeywordsLabel: "Nombre de mots-clés analysés",
 			positionnedKeywordsTitle: "Mots-clés positionnés",
 			top3KeywordsTitle: "Mots-clés en top 3",
 			changeSince: "Évolution depuis le",
-			noPrevious: "Aucune analyse précédente",
+			noPrevious: "Aucune analyse comparable",
 		},
 	});
 
@@ -42,11 +42,10 @@
 
 	const { totalVolume, keywordCount } = $derived(analysisResultsWithTrend);
 	const volumeChange = $derived(analysisResultsWithTrend.searchVolumeChange);
-	const changes = $derived(analysisResultsWithTrend.keywordCountChanges?.[client.domain]);
+	const changes = $derived(analysisResultsWithTrend.keywordCountChanges?.[extractHost(client.domain)]);
 	const changeLabel = $derived(analysisResultsWithTrend.previousAnalysisAt
 		? `${$content.changeSince} ${new Date(analysisResultsWithTrend.previousAnalysisAt).toLocaleDateString($locale)}`
 		: $content.noPrevious);
-	const trendLabel = $derived(formatTrendPeriod(analysisResultsWithTrend.trendDays, $locale) ?? $content.noPrevious);
 </script>
 
 <div class="card">
@@ -70,12 +69,12 @@
 					<span class="text-xl font-bold">
 						{totalVolume.toLocaleString("fr-FR")}
 					</span>
-					{#if volumeChange?.relative !== undefined}
-						<span class="badge text-xs" class:badge-success={volumeChange.relative > 0} class:badge-warning={volumeChange.relative < 0} title={trendLabel}>
+					{#if volumeChange?.relative !== undefined && volumeChange.absolute !== 0}
+						<span class="badge text-xs" class:badge-success={volumeChange.relative > 0} class:badge-warning={volumeChange.relative < 0} title={changeLabel}>
 							{volumeChange.relative > 0 ? "+" : ""}{formatPercent(volumeChange.relative)}
 						</span>
 					{:else}
-						<CountChange value={volumeChange?.absolute} label={trendLabel} />
+						<CountChange value={volumeChange?.absolute} label={changeLabel} />
 					{/if}
 				</div>
 			</div>
@@ -98,16 +97,15 @@
 			<div class="center justify-between">
 				<span class="">{$content.positionnedKeywordsTitle}</span>
 				<span class="row items-center gap-2"><span class="text-xl">{client.positionnedKeywordCount}</span>
-					<CountChange value={analysisResultsWithTrend.previousAnalysisAt ? changes?.positioned ?? 0 : undefined} label={trendLabel} />
+					<CountChange value={analysisResultsWithTrend.previousAnalysisAt ? changes?.positioned ?? 0 : undefined} label={changeLabel} />
 				</span>
 			</div>
 			<div class="center justify-between">
 				<span class="">{$content.top3KeywordsTitle}</span>
 				<span class="row items-center gap-2"><span class="text-xl">{client.topThreeKeywordCount}</span>
-					<CountChange value={analysisResultsWithTrend.previousAnalysisAt ? changes?.topThree ?? 0 : undefined} label={trendLabel} />
+					<CountChange value={analysisResultsWithTrend.previousAnalysisAt ? changes?.topThree ?? 0 : undefined} label={changeLabel} />
 				</span>
 			</div>
-			<p class="text-xs text-light font-normal">{changeLabel}</p>
 		</div>
 	</main>
 </div>

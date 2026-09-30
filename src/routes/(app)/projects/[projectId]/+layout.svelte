@@ -1,7 +1,9 @@
 <script lang="ts">
+	import { getClientErrorDetails } from "$lib/loading/getClientErrorDetails";
 	import { goto } from "$app/navigation";
 	import { page } from "$app/state";
 	import { canManageKeywords } from "$lib/keywords/access";
+	import { syncCompletedAnalysis } from "$lib/keywords/syncCompletedAnalysis";
 	import { canViewProjectContents } from "$lib/contents/access";
 	import { defineContent } from "$lib/i18n/locale.svelte";
 	import { loadWithDiagnostics } from "$lib/loading/loadWithDiagnostics";
@@ -24,6 +26,7 @@
 	import AddKeywordsDialog from "./AddKeywordsDialog.svelte";
 	import { exportDataToCsv } from "./exportDataToCsv";
 	import KeywordAnalysisProgress from "./share-of-voice/KeywordAnalysisProgress.svelte";
+	import FailedKeywordsNotice from "./share-of-voice/FailedKeywordsNotice.svelte";
 	import { startNewAnalysis } from "./startNewAnalysis";
 
 	const content = defineContent({
@@ -54,8 +57,14 @@
 	let analysisRunning = $state(false);
 	let projectLoadFailed = $state(false);
 	let disposed = false;
+	let lastRefreshedAnalysis: { projectId: string; analysisId: string } | undefined;
 	let lastAnalysisStatus = $state<KeywordAnalysisStatus | undefined>();
+	let lastAnalysisProjectId = $state<string>();
 	let fetchLastAnalysisStatusTimeout: ReturnType<typeof setTimeout>;
+	const projectAnalysisRunning = $derived(
+		lastAnalysisStatus?.status === "pending" &&
+			lastAnalysisProjectId === context.project?.id,
+	);
 	const canManageProjectKeywords = $derived(canManageKeywords(context.user?.role));
 	const isContentsPage = $derived(page.url.pathname.includes("/contents"));
 	const isShareOfVoicePage = $derived(
@@ -86,7 +95,6 @@
 		}
 	});
 
-	$inspect({ lastAnalysisStatus });
 
 	$effect(() => {
 		if (context.project) {
@@ -161,32 +169,41 @@
 			fetchLastAnalysisStatusTimeout = setTimeout(fetchLastAnalysisStatus, 0);
 			return;
 		}
-		if (response !== null) {
-			lastAnalysisStatus = response;
-		}
-		const wasRunning = analysisRunning;
+		lastAnalysisStatus = response ?? undefined;
+		lastAnalysisProjectId = projectId;
 
 		analysisRunning =
 			!!response &&
 			response.status === "pending";
 
-		const intervalDuration = (analysisRunning ? 1 : 10) * SECOND;
-		fetchLastAnalysisStatusTimeout = setTimeout(
-			fetchLastAnalysisStatus,
-			intervalDuration,
-		);
-
-		if (wasRunning && !analysisRunning) {
-			setTimeout(() => {
-				projectContext.analysisResultsWithTrendQuery?.refresh();
-				projectContext.keywordClustersQuery?.refresh();
-				getAllAggregatedAnalysisResults({ projectId: context.project!.id }).refresh();
-			}, 1000);
+		try {
+			const analysisId = await syncCompletedAnalysis(
+				response,
+				lastRefreshedAnalysis?.projectId === projectId ? lastRefreshedAnalysis.analysisId : undefined,
+				() => Promise.all([
+					getAnalysisResultsWithTrend({ projectId }).refresh(),
+					getKeywordClusters({ projectId }).refresh(),
+					getAllAggregatedAnalysisResults({ projectId }).refresh(),
+				]),
+			);
+			if (!disposed && context.project?.id === projectId && analysisId) {
+				lastRefreshedAnalysis = { projectId, analysisId };
+			}
+		} catch (error) {
+			// Leave the analysis unacknowledged so the next poll retries the refresh.
+			console.error("Unable to refresh completed analysis", { projectId, error: getClientErrorDetails(error) });
+		} finally {
+			if (!disposed) {
+				fetchLastAnalysisStatusTimeout = setTimeout(
+					fetchLastAnalysisStatus,
+					context.project?.id !== projectId ? 0 : (analysisRunning ? 1 : 10) * SECOND,
+				);
+			}
 		}
 	}
 
 	function startAnalysis() {
-		if (!canManageProjectKeywords) return;
+		if (!canManageProjectKeywords || projectAnalysisRunning) return;
 		context.openConfirmDialog?.({
 			title: $content.confirmStartAnalysis,
 			description: $content.confirmStartAnalysisDescription,
@@ -241,9 +258,17 @@
 							<IconDownloadSimpleRegular class="icon text-accent" />
 							{$content.addKeywords}
 						</button>
-						<button class="btn control-size-1" onclick={startAnalysis}>
-							<IconArrowsClockwiseRegular class="icon text-accent" />
-							{$content.startAnalysis}
+						<button
+							class="btn control-size-1"
+							disabled={projectAnalysisRunning}
+							onclick={startAnalysis}
+						>
+							{#if projectAnalysisRunning && lastAnalysisStatus}
+								<KeywordAnalysisProgress analysis={lastAnalysisStatus} />
+							{:else}
+								<IconArrowsClockwiseRegular class="icon text-accent" />
+								{$content.startAnalysis}
+							{/if}
 						</button>
 						{#if page.url.pathname.endsWith("keyword-similarities")}
 							<button
@@ -256,12 +281,20 @@
 						{/if}
 					{/if}
 
-					{#if lastAnalysisStatus}
+					{#if lastAnalysisStatus && lastAnalysisProjectId === context.project.id && !projectAnalysisRunning}
 						<KeywordAnalysisProgress analysis={lastAnalysisStatus} />
 					{/if}
 				</div>
 			</header>
 
+			{#if lastAnalysisStatus && lastAnalysisProjectId === context.project.id && (lastAnalysisStatus.status !== "completed" || !page.url.pathname.endsWith("share-of-voice"))}
+				<FailedKeywordsNotice
+					keywords={lastAnalysisStatus.failedKeywords}
+					completedCount={lastAnalysisStatus.completedTasks}
+					totalCount={lastAnalysisStatus.keywordsCount}
+					pending={lastAnalysisStatus.status === "pending"}
+				/>
+			{/if}
 			{@render children()}
 		</div>
 	</div>
@@ -279,7 +312,7 @@
 	.Page-share-of-voice {
 		min-height: 800px;
 		grid-template-columns: 1fr;
-		grid-template-rows: 2.5rem 1fr 1fr;
+		grid-template-rows: auto 1fr 1fr;
 	}
 
 	.ProjectToolbar,
@@ -301,7 +334,7 @@
 
 	.Page-keyword-similarities {
 		grid-template-columns: 1fr;
-		grid-template-rows: 2.5rem 1fr /*1fr*/;
+		grid-template-rows: auto 1fr /*1fr*/;
 		min-height: 600px;
 	}
 

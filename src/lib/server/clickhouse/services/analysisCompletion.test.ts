@@ -48,6 +48,28 @@ describe("hasEveryTaskFinished", () => {
 });
 
 describe("getAnalysisCompletionOutcome", () => {
+	test("waits for the other keywords after a failure", () => {
+		expect(
+			getAnalysisCompletionOutcome({
+				keywordsCount: 84,
+				startedTasks: 84,
+				completedTasks: 2,
+				failedTasks: 1,
+			}),
+		).toBe("pending");
+	});
+
+	test("waits while other submission chunks are still being registered", () => {
+		expect(
+			getAnalysisCompletionOutcome({
+				keywordsCount: 200,
+				startedTasks: 100,
+				completedTasks: 0,
+				failedTasks: 1,
+			}),
+		).toBe("pending");
+	});
+
 	test("completes only when every expected task completed successfully", () => {
 		expect(
 			getAnalysisCompletionOutcome({
@@ -59,7 +81,7 @@ describe("getAnalysisCompletionOutcome", () => {
 		).toBe("completed");
 	});
 
-	test("fails instead of publishing partial results", () => {
+	test("publishes successful keywords when all tasks are terminal", () => {
 		expect(
 			getAnalysisCompletionOutcome({
 				keywordsCount: 2,
@@ -67,7 +89,7 @@ describe("getAnalysisCompletionOutcome", () => {
 				completedTasks: 1,
 				failedTasks: 1,
 			}),
-		).toBe("failed");
+		).toBe("completed");
 	});
 
 	test("remains pending until all expected tasks are terminal", () => {
@@ -80,4 +102,15 @@ describe("getAnalysisCompletionOutcome", () => {
 			}),
 		).toBe("pending");
 	});
+});
+
+test("fails if all keywords fail", () => {
+	expect(
+		getAnalysisCompletionOutcome({
+			keywordsCount: 2,
+			startedTasks: 2,
+			completedTasks: 0,
+			failedTasks: 2,
+		}),
+	).toBe("failed");
 });

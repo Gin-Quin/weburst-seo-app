@@ -14,7 +14,8 @@ bun install
 
 # Development server (requires Docker to be running)
 docker compose up  # Start database and services
-bun dev           # Start development server
+bun dev           # Start development server + cloudflared quick tunnel (DataForSEO postbacks)
+bun dev --no-tunnel  # Same, without the tunnel (analyses fail without DATA_FOR_SEO_SERP_POSTBACK_URL)
 
 # Build and preview production
 bun run build

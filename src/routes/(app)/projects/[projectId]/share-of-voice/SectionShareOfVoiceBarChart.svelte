@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { wrapSvgLabel } from "$lib/charts/wrapSvgLabel";
+	import { getClusterBarHeights } from "$lib/keywords/getClusterBarHeights";
 	import { defineContent, locale } from "$lib/i18n/locale.svelte";
 	import {
 		getClusterBarChartData,
@@ -14,15 +15,15 @@
 	const content = defineContent({
 		en: {
 			competitors: "Strongest competitor",
-			clusterShare: "Share of voice per cluster (%)",
+			clusterShare: "Percentages are relative to each cluster (full height = 100%).",
 			globalVolume: "Monthly searches",
 			traffic: "Estimated visits",
 			chartLabel: "Latest share of voice analysis by keyword cluster",
 		},
 		fr: {
 			competitors: "Meilleur concurrent",
-			clusterShare: "Part de voix par cluster (en %)",
-			globalVolume: "Volume potentiel",
+			clusterShare: "Pourcentages relatifs à chaque cluster (hauteur totale = 100 %).",
+			globalVolume: "Volume global du cluster",
 			traffic: "Visites mensuelles estimées",
 			chartLabel: "Dernière analyse de part de voix par cluster",
 		},
@@ -36,10 +37,11 @@
 		client: AggregatedKeywordAnalysisData;
 	} = $props();
 
-	const LEFT = 58;
-	const RIGHT = 72;
-	const TOP = 18;
-	const BOTTOM_GUTTER = 36;
+	// Keep compact volume ticks (e.g. “765,5 k”) clear of the vertical title.
+	const LEFT = 80;
+	const RIGHT = 24;
+	const TOP = 24;
+	const BOTTOM_GUTTER = 44;
 	const DEFAULT_HEIGHT = 326;
 	let tooltipContainer: HTMLDivElement;
 	let hoveredBar = $state<{
@@ -84,24 +86,14 @@
 			analysisResults.clusters.length * 92 + LEFT + RIGHT,
 		),
 	);
-	const shareMax = $derived.by(() => {
-		const highestShare = Math.max(
-			100,
-			...chartResult.data.flatMap(({ clientShare, comparisonShare }) => [
-				clientShare,
-				comparisonShare,
-			]),
-		);
-		return Math.ceil(highestShare / 25) * 25;
-	});
 	const volumeMax = $derived(
 		Math.max(1, ...chartResult.data.map((item) => item.totalVolume)),
 	);
-	const shareTicks = $derived(
-		Array.from({ length: 5 }, (_, index) => (shareMax / 4) * index),
+	const volumeTicks = $derived(
+		Array.from({ length: 5 }, (_, index) => (volumeMax / 4) * index),
 	);
-	function shareY(value: number): number {
-		return bottom - (value / shareMax) * plotHeight;
+	function volumeY(value: number): number {
+		return bottom - (value / volumeMax) * plotHeight;
 	}
 
 	function formatVolume(value: number): string {
@@ -111,16 +103,6 @@
 		}).format(value);
 	}
 
-	function formatShareTick(value: number): string {
-		return new Intl.NumberFormat($locale, {
-			maximumFractionDigits: 1,
-		}).format(value);
-	}
-
-	function compactLabel(label: string): string {
-		return label.length > 16 ? `${label.slice(0, 15)}…` : label;
-	}
-
 	function getGeometry(item: ClusterBarChartData, index: number) {
 		const plotWidth = chartWidth - LEFT - RIGHT;
 		const slotWidth = Math.min(
@@ -128,19 +110,20 @@
 			plotWidth / Math.max(1, chartResult.data.length),
 		);
 		const firstX = LEFT + (plotWidth - slotWidth * chartResult.data.length) / 2;
-		const backgroundWidth = Math.min(74, slotWidth * 0.8);
+		const backgroundWidth = Math.min(64, slotWidth * 0.7);
 		const gap = 4;
 		const barWidth = (backgroundWidth - gap) / 2;
 		const backgroundX =
 			firstX + index * slotWidth + (slotWidth - backgroundWidth) / 2;
-		const clientY = shareY(item.clientShare);
-		const comparisonY = shareY(item.comparisonShare);
+		const heights = getClusterBarHeights(item, volumeMax, plotHeight);
+		const clientY = bottom - heights.client;
+		const comparisonY = bottom - heights.comparison;
 
 		return {
 			centerX: firstX + index * slotWidth + slotWidth / 2,
 			backgroundX,
 			backgroundWidth,
-			backgroundY: bottom - (item.totalVolume / volumeMax) * plotHeight,
+			backgroundY: bottom - heights.cluster,
 			barWidth,
 			clientX: backgroundX,
 			clientY,
@@ -153,6 +136,10 @@
 </script>
 
 <div class="ChartHeader">
+	<div class="LegendItem">
+		<span class="LegendDot VolumeDot"></span>
+		<span>{$content.globalVolume}</span>
+	</div>
 	<div class="LegendItem" title={client.domain}>
 		<span class="LegendDot ClientDot"></span>
 		<span>{client.domain}</span>
@@ -162,6 +149,7 @@
 		<span>{comparisonLabel}</span>
 	</div>
 </div>
+<p class="ShareExplanation">{$content.clusterShare}</p>
 
 <div class="ChartPlot" bind:this={tooltipContainer}>
 	<div
@@ -177,8 +165,8 @@
 			viewBox={`0 0 ${chartWidth} ${chartHeight}`}
 			style={`width: ${chartWidth}px; height: 100%`}
 		>
-			{#each shareTicks as tick (tick)}
-				{@const y = shareY(tick)}
+			{#each volumeTicks as tick (tick)}
+				{@const y = volumeY(tick)}
 				<line
 					class="GridLine"
 					x1={LEFT}
@@ -187,15 +175,7 @@
 					y2={y}
 				/>
 				<text class="AxisTick" x={LEFT - 10} y={y + 4} text-anchor="end">
-					{formatShareTick(tick)}
-				</text>
-				<text
-					class="AxisTick"
-					x={chartWidth - RIGHT + 10}
-					y={y + 4}
-					text-anchor="start"
-				>
-					{formatVolume((tick / shareMax) * volumeMax)}
+					{formatVolume(tick)}
 				</text>
 			{/each}
 
@@ -205,15 +185,6 @@
 				y={(TOP + bottom) / 2}
 				text-anchor="middle"
 				transform={`rotate(-90 18 ${(TOP + bottom) / 2})`}
-			>
-				{$content.clusterShare}
-			</text>
-			<text
-				class="AxisTitle"
-				x={chartWidth - 12}
-				y={(TOP + bottom) / 2}
-				text-anchor="middle"
-				transform={`rotate(90 ${chartWidth - 12} ${(TOP + bottom) / 2})`}
 			>
 				{$content.globalVolume}
 			</text>
@@ -273,16 +244,12 @@
 				>
 				</rect>
 
-				{#if geometry.clientHeight > 34}
-					<text
-						class="BarLabel ClientLabel"
-						x={geometry.clientX + geometry.barWidth / 2}
-						y={bottom - 8}
-						transform={`rotate(-90 ${geometry.clientX + geometry.barWidth / 2} ${bottom - 8})`}
-					>
-						{compactLabel(client.domain)}
-					</text>
-				{/if}
+				<text class="BarLabel ClientLabel" x={geometry.clientX + geometry.barWidth / 2} y={geometry.clientY - 5}>
+					{formatPercent(item.clientShare / 100, { maximumFractionDigits: 0 })}
+				</text>
+				<text class="BarLabel" x={geometry.comparisonX + geometry.barWidth / 2} y={geometry.comparisonY - 5}>
+					{formatPercent(item.comparisonShare / 100, { maximumFractionDigits: 0 })}
+				</text>
 				<text
 					class="ClusterLabel"
 					x={geometry.centerX}
@@ -331,6 +298,7 @@
 <style>
 	.ChartHeader {
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: flex-end;
 		align-items: center;
 		gap: 1rem;
@@ -339,11 +307,24 @@
 		font-weight: 600;
 	}
 
+	.ShareExplanation {
+		margin-block: 0.25rem;
+		font-size: 0.6875rem;
+		color: var(--color-text-light);
+		text-align: right;
+	}
+
+	.VolumeDot {
+		background: #faf8fd;
+		border: 1px dashed #d9c8f7;
+	}
+
 	.LegendItem {
 		display: flex;
 		align-items: center;
 		gap: 0.375rem;
-		max-width: 45%;
+		min-width: 0;
+		max-width: 100%;
 	}
 
 	.LegendItem > span:last-child {
@@ -376,7 +357,8 @@
 		display: flex;
 		flex-direction: column;
 		flex: 1;
-		min-height: 0;
+		min-width: 0;
+		min-height: 240px;
 	}
 
 	.BarTooltip {
@@ -400,6 +382,7 @@
 
 	.Graph {
 		width: 100%;
+		min-width: 0;
 		min-height: 0;
 		flex: 1;
 		overflow-x: auto;
@@ -446,14 +429,15 @@
 	}
 
 	.BarLabel {
+		fill: var(--color-base-content);
 		font-size: 10px;
 		font-weight: 700;
-		text-anchor: start;
+		text-anchor: middle;
 		pointer-events: none;
 	}
 
 	.ClientLabel {
-		fill: white;
+		fill: var(--color-primary);
 	}
 
 	.ClusterLabel {

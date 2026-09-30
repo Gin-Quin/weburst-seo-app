@@ -109,11 +109,13 @@
 						>
 							{row.domain}
 						</Table.Cell>
-						<Table.Cell class="h-full center gap-1 text-center">
-							{formatPercent(row.volume / (totalTraffic || 1), {
-								maximumFractionDigits: 0,
-							})}
-							<Trend days={analysisResultsWithTrend.trendDays} trend={row.trend} size="xs" />
+						<Table.Cell class="text-center">
+							<div class="center gap-1">
+								{formatPercent(row.volume / (totalTraffic || 1), {
+									maximumFractionDigits: 0,
+								})}
+								<Trend days={analysisResultsWithTrend.trendDays} trend={row.trend} size="xs" />
+							</div>
 						</Table.Cell>
 						<Table.Cell class="text-center">
 							<input

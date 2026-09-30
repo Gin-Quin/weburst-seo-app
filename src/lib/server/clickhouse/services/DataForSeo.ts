@@ -33,6 +33,7 @@ export namespace DataForSeo {
 			location_code: number;
 			language_code: string;
 			priority: number;
+			depth?: number;
 			postback_data: string;
 			postback_url: string;
 			device: string;

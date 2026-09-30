@@ -20,8 +20,8 @@ const usersSchema = {
 	})
 		.notNull()
 		.default(true),
-	createdAt: integer("created_at").notNull().default(Date.now()),
-	updatedAt: integer("updated_at").notNull().default(Date.now()),
+	createdAt: integer("created_at").notNull().$defaultFn(() => Date.now()),
+	updatedAt: integer("updated_at").notNull().$defaultFn(() => Date.now()),
 } as const;
 
 export const users = sqliteTable("users", usersSchema);
@@ -40,9 +40,9 @@ export const deletedUsers = sqliteTable("deleted_users", {
 	})
 		.notNull()
 		.default(true),
-	createdAt: integer("created_at").notNull().default(Date.now()),
-	updatedAt: integer("updated_at").notNull().default(Date.now()),
-	deletedAt: integer("deleted_at").notNull().default(Date.now()),
+	createdAt: integer("created_at").notNull().$defaultFn(() => Date.now()),
+	updatedAt: integer("updated_at").notNull().$defaultFn(() => Date.now()),
+	deletedAt: integer("deleted_at").notNull().$defaultFn(() => Date.now()),
 });
 export type DeletedUser = typeof deletedUsers.$inferSelect;
 

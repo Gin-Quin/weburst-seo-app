@@ -2,7 +2,7 @@
 	let { value, label }: { value: number | undefined; label: string } = $props();
 </script>
 
-{#if value !== undefined}
+{#if value !== undefined && value !== 0}
 	<span class="badge text-xs whitespace-nowrap" class:badge-success={value > 0}
 		class:badge-warning={value < 0} title={label} aria-label={label}>
 		{value > 0 ? "+" : ""}{value}

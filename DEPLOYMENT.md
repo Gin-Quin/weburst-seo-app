@@ -44,6 +44,19 @@ The production ClickHouse command loads its connection credentials from
 `.env.prod` and explicitly targets the `default` database used by the deployed
 application, regardless of the current Git branch.
 
+The keyword analysis retry feature requires the `Persist keyword analysis retry
+state` ClickHouse migration before deploying the application. It adds the keyword,
+sanitized resubmission parameters, retry count, active provider task ID and retry
+deadline to each task. Existing completed analyses remain readable. Previously
+failed analyses are not automatically restarted.
+
+Partial DataForSEO results (`40106`) get at most two new task submissions. The
+background poller resumes persisted retries; successful keywords are retained.
+After all keywords finish, an analysis with at least one success is published
+with its excluded keywords listed. Failed keywords do not contribute to metrics
+or similarity groups. Change indicators are unavailable if either comparison
+analysis is partial. An analysis with no successful keywords remains failed.
+
 Do not run `bun migrate` against production. That command generates migrations and uses `db:push`; production deployments must apply reviewed, committed files with `db:migrate`.
 
 If step 3 or 4 fails, stop the deployment and do not restart the application.

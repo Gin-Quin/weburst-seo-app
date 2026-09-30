@@ -26,6 +26,12 @@ export namespace ClickhouseTable {
 	};
 
 	export type KeywordAnalysisTask = {
+		/** One logical task per keyword; retries replace only its provider task. */
+		keyword?: string;
+		request?: string;
+		retryCount?: number;
+		providerTaskId?: string;
+		retryAt?: number;
 		id: string; // UUID
 		analysisId: string; // UUID
 		createdAt: string;
@@ -438,5 +444,16 @@ export const clickhouseMigrations: Array<ClickhouseMigration> = [
 		name: "Store estimated traffic with decimal precision",
 		query: (database: string) =>
 			`ALTER TABLE ${database}.aggregatedKeywordAnalysisData MODIFY COLUMN volume Float64`,
+	},
+	{
+		name: "Persist keyword analysis retry state",
+		query: (database: string) => [
+			`ALTER TABLE ${database}.keywordAnalysisTasks
+			ADD COLUMN IF NOT EXISTS keyword String DEFAULT '',
+			ADD COLUMN IF NOT EXISTS request String DEFAULT '',
+			ADD COLUMN IF NOT EXISTS retryCount UInt8 DEFAULT 0,
+			ADD COLUMN IF NOT EXISTS providerTaskId String DEFAULT '',
+			ADD COLUMN IF NOT EXISTS retryAt UInt64 DEFAULT 0`,
+		],
 	},
 ];

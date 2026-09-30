@@ -1,3 +1,4 @@
+import { getClientErrorDetails } from "$lib/loading/getClientErrorDetails";
 import { defineContent } from "$lib/i18n/locale.svelte";
 import { toast } from "svelte-sonner";
 import { get } from "svelte/store";
@@ -6,13 +7,13 @@ import { startKeywordAnalysis } from "../../../api/keywords/index.remote";
 const content = defineContent({
 	en: {
 		analysisStartedSuccess: "Analysis started. Wait a few minutes for the results to be ready.",
-		analysisStartedError: "An error occurred while starting the analysis.",
+		analysisStartedError: "An error occurred while starting the analysis. Please try again later.",
 		analysisStarting: "The analysis is starting...",
 	},
 	fr: {
 		analysisStarting: "L'analyse est en cours de démarrage...",
 		analysisStartedSuccess: "Analyse démarrée. Les résultats seront prêts dans quelques minutes.",
-		analysisStartedError: "Une erreur est survenue lors du lancement de l'analyse.",
+		analysisStartedError: "Une erreur est survenue lors du lancement de l'analyse. Veuillez réessayer ultérieurement.",
 	},
 });
 
@@ -29,7 +30,7 @@ export const startNewAnalysis = ({ projectId, setId, then }: { projectId: string
 			then?.();
 		})
 		.catch((error) => {
-			console.error(error);
+			console.error(getClientErrorDetails(error));
 			toast.error(get(content).analysisStartedError, {
 				richColors: true,
 			});

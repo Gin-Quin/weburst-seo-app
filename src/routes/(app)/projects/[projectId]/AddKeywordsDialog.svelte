@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { getClientErrorDetails } from "$lib/loading/getClientErrorDetails";
 	import { refreshAll } from "$app/navigation";
 	import FileInput from "$lib/components/FileInput.svelte";
 	import { defineContent } from "$lib/i18n/locale.svelte";
@@ -106,7 +107,7 @@
 				hasExistingKeywords = result;
 			}
 		} catch (error) {
-			console.error(error);
+			console.error(getClientErrorDetails(error));
 			if (requestId === keywordStatusRequestId) {
 				toast.error($content.errorLoadingKeywords, { richColors: true });
 			}
@@ -142,7 +143,7 @@
 			});
 			ref?.close();
 			await refreshAll({ includeLoadFunctions: false }).catch((error) => {
-				console.error(error);
+				console.error(getClientErrorDetails(error));
 				toast.error($content.errorRefreshingResults, { richColors: true });
 			});
 			context.openConfirmDialog?.({
@@ -160,7 +161,7 @@
 				},
 			});
 		} catch (error) {
-			console.error(error);
+			console.error(getClientErrorDetails(error));
 			toast.error($content.errorAddingKeywords, {
 				richColors: true,
 			});

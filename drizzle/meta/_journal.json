@@ -120,6 +120,20 @@
       "when": 1788882294476,
       "tag": "0016_strange_mockingbird",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1790765126596,
+      "tag": "0017_flawless_wonder_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1790765238389,
+      "tag": "0018_natural_pride",
+      "breakpoints": true
     }
   ]
 }

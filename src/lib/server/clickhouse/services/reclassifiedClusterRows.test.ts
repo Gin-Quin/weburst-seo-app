@@ -33,7 +33,8 @@ describe.skipIf(!process.env.TEST_CLICKHOUSE_URL)("reclassification against Clic
 		for (const query of [
 			"CREATE TABLE keywords (setId UUID, name String, volume UInt32, clusters String) ENGINE = Memory",
 			"CREATE TABLE keywordAnalysis (id UUID, setId UUID) ENGINE = Memory",
-			"CREATE TABLE keywordAnalysisResponses (analysisId String, keyword String, domain String, position UInt32, type String) ENGINE = Memory",
+			"CREATE TABLE keywordAnalysisTaskResults (analysisId UUID, taskId UUID, status String) ENGINE = ReplacingMergeTree ORDER BY (analysisId, taskId)",
+			"CREATE TABLE keywordAnalysisResponses (analysisId String, taskId UUID DEFAULT generateUUIDv4(), keyword String, domain String, position UInt32, type String) ENGINE = Memory",
 		])
 			await client.command({ query });
 		await client.insert({

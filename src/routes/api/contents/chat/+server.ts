@@ -1,11 +1,7 @@
+import { buildContentChatSystemPrompt } from "$lib/server/ai/contentChatPrompt";
 import { getClientWritingExamples, formatWritingExamples } from "$lib/server/contents/writingExamples";
 import { getProjectTypology } from "$lib/server/contents/typologies";
 import { getGoogleGenerativeAI, GOOGLE_CHAT_MODEL } from "$lib/server/ai/google";
-import {
-	describeChatError,
-	logContentChatEvent,
-	summarizeChatMessages,
-} from "$lib/server/ai/chatDiagnostics";
 import {
 	appendClientChatMemory,
 	appendContentChatMemory,
@@ -54,37 +50,9 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 	// underlying Bun request alive while the provider and tools are working.
 	platform?.server.timeout(platform.request, 0);
 
-	const requestId = crypto.randomUUID();
-	const startedAt = Date.now();
-	const elapsedMs = () => Date.now() - startedAt;
-	const baseLog = (extra: Record<string, unknown> = {}) => ({
-		requestId,
-		elapsedMs: elapsedMs(),
-		...extra,
-	});
-
-	logContentChatEvent(
-		"info",
-		"request_received",
-		baseLog({
-			contentLength: request.headers.get("content-length"),
-			via: request.headers.get("via"),
-			userAgent: request.headers.get("user-agent"),
-			bunIdleTimeoutDisabled: Boolean(platform),
-		}),
-	);
-	request.signal.addEventListener(
-		"abort",
-		() => {
-			logContentChatEvent("warn", "request_aborted", baseLog());
-		},
-		{ once: true },
-	);
-
 	try {
 		const body = (await request.json()) as ChatRequest;
 		if (!body.projectId || !body.contentId || !Array.isArray(body.messages)) {
-			logContentChatEvent("warn", "request_invalid", baseLog());
 			return new Response("Requête de chat invalide.", { status: 400 });
 		}
 		const user = await getRequestUser();
@@ -96,14 +64,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 		const typology = await getProjectTypology(db, body.projectId!, content.typologyId);
 		const writingExamples = await getClientWritingExamples(db, { projectId: body.projectId, contentId: content.id, typologyId: content.typologyId });
 		const google = getGoogleGenerativeAI();
-		if (!google) {
-			logContentChatEvent(
-				"error",
-				"provider_not_configured",
-				baseLog({ userId: user?.id, projectId: body.projectId, contentId: body.contentId }),
-			);
-			return new Response("GEMINI_API_KEY n’est pas configurée.", { status: 503 });
-		}
+		if (!google) return new Response("GEMINI_API_KEY n’est pas configurée.", { status: 503 });
 
 		const tools = {
 			google_search: google.tools.googleSearch({
@@ -111,7 +72,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			}),
 			getArticleContext: tool({
 				description:
-					"Relire le contenu, le brief et les recommandations SEO les plus récents avant de répondre ou de modifier l’article.",
+					"Relire le contenu, le brief, la typologie éditoriale, le contexte client, les mémoires et les recommandations SEO les plus récents avant de répondre ou de modifier l’article.",
 				inputSchema: z.object({}),
 				execute: async () => {
 					const latest = await getContentById(body.contentId!, body.projectId!);
@@ -217,137 +178,16 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			tools,
 			ignoreIncompleteToolCalls: true,
 		});
-		const diagnosticContext = {
-			userId: user?.id,
-			projectId: body.projectId,
-			contentId: body.contentId,
-			model: GOOGLE_CHAT_MODEL,
-			messages: summarizeChatMessages(messages),
-			modelMessageCount: modelMessages.length,
-			contextLengths: {
-				title: content.title.length,
-				brief: content.brief.length,
-				contentMemory: content.chatMemory.length,
-				clientContext: clientContext.context.length,
-				clientMemory: clientContext.memory.length,
-				contentHtml: content.contentHtml.length,
-				contentText: content.contentText.length,
-				optimizationGuide: JSON.stringify(content.serpmanticsGuide ?? null).length,
-				optimizationAnalysis: JSON.stringify(content.serpmanticsAnalysis ?? null).length,
-			},
-		};
-		logContentChatEvent("info", "request_validated", baseLog(diagnosticContext));
 
 		const result = streamText({
 			model: google(GOOGLE_CHAT_MODEL),
-			instructions: buildSystemPrompt(content, clientContext, typology, formatWritingExamples(writingExamples)),
+			instructions: buildContentChatSystemPrompt(content, clientContext, typology, formatWritingExamples(writingExamples)),
 			// A provider or network interruption can leave a partial tool call in the
 			// client history. Ignore it so the next user attempt can still be sent.
 			messages: modelMessages,
 			tools,
 			stopWhen: stepCountIs(6),
 			temperature: 0.4,
-			onStart: ({ callId, provider, modelId }) => {
-				logContentChatEvent(
-					"info",
-					"generation_started",
-					baseLog({ ...diagnosticContext, callId, provider, modelId }),
-				);
-			},
-			onLanguageModelCallStart: ({ callId, provider, modelId, tools: providerTools }) => {
-				logContentChatEvent(
-					"info",
-					"provider_call_started",
-					baseLog({ callId, provider, modelId, toolCount: providerTools?.length ?? 0 }),
-				);
-			},
-			onLanguageModelCallEnd: ({
-				callId,
-				provider,
-				modelId,
-				finishReason,
-				usage,
-				content: providerContent,
-				performance,
-			}) => {
-				logContentChatEvent(
-					"info",
-					"provider_call_finished",
-					baseLog({
-						callId,
-						provider,
-						modelId,
-						finishReason,
-						usage,
-						contentTypes: providerContent.map((part) => part.type),
-						responseTimeMs: performance.responseTimeMs,
-					}),
-				);
-			},
-			onToolExecutionStart: ({ callId, toolCall }) => {
-				logContentChatEvent(
-					"info",
-					"tool_execution_started",
-					baseLog({ callId, toolName: toolCall.toolName, toolCallId: toolCall.toolCallId }),
-				);
-			},
-			onToolExecutionEnd: ({ callId, toolCall, toolOutput, toolExecutionMs }) => {
-				logContentChatEvent(
-					toolOutput.type === "tool-error" ? "error" : "info",
-					"tool_execution_finished",
-					baseLog({
-						callId,
-						toolName: toolCall.toolName,
-						toolCallId: toolCall.toolCallId,
-						toolOutputType: toolOutput.type,
-						toolExecutionMs,
-						...(toolOutput.type === "tool-error"
-							? { error: describeChatError(toolOutput.error) }
-							: {}),
-					}),
-				);
-			},
-			onStepEnd: ({ callId, stepNumber, finishReason, usage, text, toolCalls, performance }) => {
-				logContentChatEvent(
-					"info",
-					"generation_step_finished",
-					baseLog({
-						callId,
-						stepNumber,
-						finishReason,
-						usage,
-						textLength: text.length,
-						toolNames: toolCalls.map((toolCall) => toolCall.toolName),
-						performance,
-					}),
-				);
-			},
-			onEnd: ({ callId, finishReason, usage, steps }) => {
-				logContentChatEvent(
-					"info",
-					"generation_finished",
-					baseLog({ callId, finishReason, usage, stepCount: steps.length }),
-				);
-			},
-			onAbort: ({ steps }) => {
-				logContentChatEvent(
-					"warn",
-					"generation_aborted",
-					baseLog({
-						stepCount: steps.length,
-						requestAbortReason: request.signal.aborted
-							? describeChatError(request.signal.reason)
-							: undefined,
-					}),
-				);
-			},
-			onError: ({ error }) => {
-				logContentChatEvent(
-					"error",
-					"generation_error",
-					baseLog({ ...diagnosticContext, error: describeChatError(error) }),
-				);
-			},
 		});
 
 		const uiStream = createUIMessageStream<ChatMessage>({
@@ -367,160 +207,26 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 					}),
 				);
 			},
-			onEnd: async ({
-				messages: completedMessages,
-				responseMessage,
-				finishReason,
-				isAborted,
-				isContinuation,
-			}) => {
-				logContentChatEvent(
-					"info",
-					"ui_stream_finished",
-					baseLog({
-						finishReason,
-						isAborted,
-						isContinuation,
-						response: summarizeChatMessages([responseMessage])[0],
-						completedMessageCount: completedMessages.length,
-					}),
+			onEnd: async ({ messages: completedMessages, finishReason, isAborted }) => {
+				if (isAborted || finishReason === "error") return;
+				await saveContentChatMessages(
+					body.contentId!,
+					body.projectId!,
+					user.id,
+					completedMessages,
 				);
-				if (isAborted || finishReason === "error") {
-					logContentChatEvent(
-						"warn",
-						"messages_not_persisted",
-						baseLog({ reason: isAborted ? "aborted" : "generation_error" }),
-					);
-					return;
-				}
-				try {
-					await saveContentChatMessages(
-						body.contentId!,
-						body.projectId!,
-						user.id,
-						completedMessages,
-					);
-					logContentChatEvent(
-						"info",
-						"messages_persisted",
-						baseLog({ completedMessageCount: completedMessages.length }),
-					);
-				} catch (error) {
-					logContentChatEvent(
-						"error",
-						"message_persistence_error",
-						baseLog({ error: describeChatError(error) }),
-					);
-					throw error;
-				}
 			},
 			onError: reportUiStreamError,
 		});
 
-		return createUIMessageStreamResponse({
-			stream: uiStream,
-			headers: { "x-request-id": requestId },
-			consumeSseStream: async ({ stream }) => {
-				const reader = stream.getReader();
-				let chunkCount = 0;
-				let characterCount = 0;
-				let sawFinish = false;
-				let sawError = false;
-				try {
-					while (true) {
-						const { done, value } = await reader.read();
-						if (done) break;
-						chunkCount += 1;
-						characterCount += value.length;
-						sawFinish ||= value.includes('"type":"finish"');
-						sawError ||= value.includes('"type":"error"');
-					}
-					logContentChatEvent(
-						sawFinish && !sawError ? "info" : "warn",
-						"sse_observer_closed",
-						baseLog({ chunkCount, characterCount, sawFinish, sawError }),
-					);
-				} catch (error) {
-					logContentChatEvent(
-						"error",
-						"sse_observer_error",
-						baseLog({
-							chunkCount,
-							characterCount,
-							sawFinish,
-							sawError,
-							error: describeChatError(error),
-						}),
-					);
-				} finally {
-					reader.releaseLock();
-				}
-			},
-		});
+		return createUIMessageStreamResponse({ stream: uiStream });
 
-		function reportUiStreamError(error: unknown) {
-			logContentChatEvent(
-				"error",
-				"ui_stream_error",
-				baseLog({ ...diagnosticContext, error: describeChatError(error) }),
-			);
+		function reportUiStreamError() {
 			return "Le chat n’a pas pu terminer sa réponse.";
 		}
 	} catch (error) {
-		logContentChatEvent("error", "request_error", baseLog({ error: describeChatError(error) }));
 		return new Response(error instanceof Error ? error.message : "Erreur de chat.", {
 			status: 500,
-			headers: { "x-request-id": requestId },
 		});
 	}
 };
-
-function buildSystemPrompt(
-	content: Awaited<ReturnType<typeof getContentById>>,
-	clientContext: { context: string; memory: string },
-	typology: { name: string; instructions: string } | null,
-	writingExamples: string,
-): string {
-	return `Tu es un assistant éditorial SEO francophone intégré à WeBurst.
-Tu aides l’utilisateur à écrire et optimiser l’article courant. Réponds en Markdown clair et concis.
-N’invente jamais de données issues de l’analyse SEO. Appuie tes conseils sur le contexte ci-dessous.
-Pour toute information externe, récente ou susceptible d’avoir changé, utilise Google Search et appuie ta réponse sur les sources trouvées.
-Quand l’utilisateur fournit une information durable qui sera utile plus tard, mémorise-la de façon proactive. Utilise save_memory_content si elle concerne uniquement cet article, et save_memory_client si elle s’applique au client et à plusieurs de ses contenus. Ne mémorise pas les demandes ponctuelles, les informations déjà présentes dans la mémoire, ni les faits généraux issus de recherches web.
-Avant une modification importante, relis le contexte avec getArticleContext si une conversation précédente a pu le changer.
-Quand l’utilisateur te demande d’appliquer, réécrire, créer ou optimiser le texte, utilise write_article au lieu de seulement proposer le texte dans le chat.
-Transmets toujours l’article complet dans le champ content, en Markdown valide. Pour toute donnée tabulaire ou comparaison, utilise impérativement la syntaxe de tableau Markdown avec en-têtes ; n’utilise jamais de tableau ASCII dans un bloc de code. Ne produis jamais de diagramme, organigramme ou autre dessin ASCII. Exprime les relations et les enchaînements avec des titres, des listes ordonnées ou à puces et du texte explicatif afin que le résultat reste lisible, responsive et éditable. Préserve la structure, les images et les informations utiles, et n’ajoute pas de faux faits. L’utilisateur validera la proposition avant qu’elle soit appliquée.
-
-CONTEXTE COMPLET ACTUEL
-Titre : ${content.title}
-URL existante : ${content.existingUrl ?? "aucune"}
-Cluster : ${content.cluster ?? "aucun"}
-Typologie éditoriale (base de rédaction pour ce client) :
-${typology ? `${typology.name}\n${typology.instructions}` : "aucune"}
-
-Informations sur le client :
-${clientContext.context || "(vide)"}
-
-Mémoire partagée du client :
-${clientContext.memory || "(vide)"}
-
-EXEMPLES D’ÉCRITURE DU CLIENT :
-${writingExamples}
-
-Mémoire propre à ce contenu :
-${content.chatMemory || "(vide)"}
-
-Brief :
-${content.brief || "(vide)"}
-
-ARTICLE HTML :
-${content.contentHtml}
-
-ARTICLE TEXTE :
-${content.contentText}
-
-DERNIER GUIDE D’OPTIMISATION SEO :
-${JSON.stringify(content.serpmanticsGuide ?? null)}
-
-DERNIÈRE ANALYSE SEO :
-${JSON.stringify(content.serpmanticsAnalysis ?? null)}`;
-}

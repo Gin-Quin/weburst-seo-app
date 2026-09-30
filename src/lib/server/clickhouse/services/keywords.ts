@@ -1,6 +1,9 @@
 import { ensureClientHistory } from "$lib/charts/ensureClientHistory";
+import { excludeFailedKeywords } from "$lib/keywords/excludeFailedKeywords";
 import { getSearchVolumeChange } from "$lib/keywords/getSearchVolumeChange";
+import { getAnalysisFailureReason, type AnalysisFailureReason } from "$lib/keywords/analysisFailure";
 import { getClusterHistory } from "$lib/keywords/getClusterHistory";
+import { mergeWwwDomains } from "$lib/keywords/mergeWwwDomains";
 import { getKeywordCountChanges, type KeywordCountChange } from "$lib/keywords/getKeywordCountChanges";
 import { env } from "$env/dynamic/private";
 import type { KeywordClusterSummary } from "$lib/keywords/getKeywordClusterSummaries";
@@ -18,6 +21,14 @@ import type { ClickhouseTable } from "../migrations";
 import { parseClickhouseCsvRows } from "../parseClickhouseCsvRow";
 import type { DataForSeo } from "./DataForSeo";
 import { getAnalysisCompletionOutcome } from "./analysisCompletion";
+import { getAnalysisFailureLog, getKeywordTaskFailure } from "./analysisFailure";
+import {
+	getRetryRequest,
+	shouldRetryKeyword,
+	MAX_KEYWORD_RETRIES,
+	KEYWORD_RETRY_DELAY_MS,
+	RETRY_SUBMISSION_TIMEOUT_MS,
+} from "./analysisRetry";
 import {
 	RECURRING_ANALYSIS_PROJECT_TYPES,
 	runDueProjectAnalyses,
@@ -25,6 +36,7 @@ import {
 	type LatestAnalysisState,
 	type SchedulableProject,
 } from "./analysisScheduler";
+import { createDataForSeoClient } from "./dataForSeoClient";
 import { getReadySerpTasks } from "./getReadySerpTasks";
 import { persistKeywordSet } from "./persistKeywordSet";
 import { getReclassifiedClusterRows } from "./reclassifiedClusterRows";
@@ -35,6 +47,10 @@ const CONFIGURED_ANALYSIS_DEPTH = Number(env.SEARCH_DEPTH || 50);
 const ANALYSIS_DEPTH = Number.isFinite(CONFIGURED_ANALYSIS_DEPTH)
 	? Math.max(50, Math.floor(CONFIGURED_ANALYSIS_DEPTH))
 	: 50;
+const dataForSeoRequest = createDataForSeoClient({
+	authorization: () => `Basic ${btoa(`${env.DATA_FOR_SEO_LOGIN}:${env.DATA_FOR_SEO_PASSWORD}`)}`,
+});
+const READY_TASK_PARALLELISM = 5;
 const SIMILARITY_THRESHOLD = 0.5;
 const SIMILARITY_URL_LIMIT = 12;
 
@@ -54,9 +70,14 @@ export type KeywordAnalysisStatus = {
 	keywordsCount: number;
 	completedTasks: number;
 	failedTasks: number;
+	failedKeywords: string[];
+	retryingTasks: number;
+	failureReason?: AnalysisFailureReason;
 };
 
 export type AggregatedKeywordAnalysis = {
+	failedKeywords: string[];
+	requestedKeywordCount: number;
 	keywordCountChanges?: Record<string, KeywordCountChange>;
 	searchVolumeChange?: ReturnType<typeof getSearchVolumeChange>;
 	previousAnalysisAt?: string;
@@ -97,8 +118,8 @@ type AnalysisMetadata = Pick<ClickhouseTable.KeywordAnalysis, "projectId" | "set
 
 type AnalysisTaskStats = Pick<
 	KeywordAnalysisStatus,
-	"status" | "totalTasks" | "completedTasks" | "failedTasks"
->;
+	"status" | "totalTasks" | "completedTasks" | "failedTasks" | "failedKeywords" | "retryingTasks"
+> & { error: string };
 
 export type KeywordCluster = Array<KeywordClusterData>;
 
@@ -120,6 +141,7 @@ export namespace KeywordsService {
 	const analysisMetadata = new Map<string, AnalysisMetadata>();
 	const keywordsBySetId = new Map<string, Map<string, number>>();
 	const keywordDetailsBySetId = new Map<string, Map<string, Keyword>>();
+	const retryRunLocks = new Map<string, Promise<void>>();
 	const analysisStartLocks = new Map<string, Promise<"ok">>();
 	const taskSaveLocks = new Map<string, Promise<void>>();
 	const analysisCompletionLocks = new Map<string, Promise<void>>();
@@ -170,11 +192,20 @@ export namespace KeywordsService {
 			query: `
 				ALTER TABLE keywordAnalysis
 				UPDATE status = {status:String}, error = {error:String}
-				WHERE id = {analysisId:UUID}
+				WHERE id = {analysisId:UUID} AND status = 'pending'
 			`,
 			query_params: { analysisId, status, error },
 			clickhouse_settings: { mutations_sync: "1" },
 		});
+	}
+
+	async function isAnalysisPending(analysisId: string): Promise<boolean> {
+		const response = await getClickhouseClient().query({
+			query: "SELECT status FROM keywordAnalysis WHERE id = {analysisId:UUID} LIMIT 1",
+			query_params: { analysisId },
+			format: "JSON",
+		});
+		return (await response.json<{ status: string }>()).data[0]?.status === "pending";
 	}
 
 	async function recordTaskResult({
@@ -225,11 +256,16 @@ export namespace KeywordsService {
 				if (outcome === "pending") return;
 
 				if (outcome === "failed") {
+					const error = stats.error || `${stats.failedTasks}/${stats.totalTasks} keyword analysis tasks failed`;
 					await updateAnalysisState({
 						analysisId,
 						status: "failed",
-						error: `${stats.failedTasks}/${stats.totalTasks} keyword analysis tasks failed`,
+						error,
 					});
+					console.error("[keyword-analysis-aborted]", JSON.stringify({
+						analysisId, keywordsCount, ...stats, error,
+						timestamp: new Date().toISOString(),
+					}));
 					return;
 				}
 
@@ -515,15 +551,14 @@ export namespace KeywordsService {
 			throw new Error(`No keywords found for set ${setId}`);
 		}
 
-		const analysisId = crypto.randomUUID();
-		const callbackOptions = env.DATA_FOR_SEO_SERP_POSTBACK_URL
-			? {
-					postback_url: env.DATA_FOR_SEO_SERP_POSTBACK_URL,
-					postback_data: "regular",
-				}
-			: {};
+		// Results are delivered by postback; a failed delivery is recovered through tasks_ready.
+		const postbackUrl = env.DATA_FOR_SEO_SERP_POSTBACK_URL;
+		if (!postbackUrl) {
+			throw new Error("DATA_FOR_SEO_SERP_POSTBACK_URL is required to receive DataForSEO results");
+		}
 
-		const url = `https://api.dataforseo.com/v3/serp/google/organic/task_post`;
+		const analysisId = crypto.randomUUID();
+		const callbackOptions = { postback_url: postbackUrl, postback_data: "regular" };
 
 		const chunks: Array<Array<[string, number]>> = [];
 		const keywordEntries = Array.from(keywords.entries());
@@ -546,8 +581,6 @@ export namespace KeywordsService {
 			format: "JSON",
 		});
 
-		const taskIdsToPoll: string[] = [];
-
 		try {
 			const chunkResults = await Promise.allSettled(
 				chunks.map(async (chunk) => {
@@ -566,30 +599,21 @@ export namespace KeywordsService {
 					console.log(
 						`Starting keyword analysis chunk ${chunks.indexOf(chunk) + 1}/${chunks.length}`,
 					);
-					const response = await fetch(url, {
-						method: "POST",
-						headers: {
-							Authorization: `Basic ${btoa(`${env.DATA_FOR_SEO_LOGIN}:${env.DATA_FOR_SEO_PASSWORD}`)}`,
-							"Content-Type": "application/json",
-						},
-						body: JSON.stringify(body),
-					});
-
-					if (!response.ok) {
-						console.error(`Error starting keyword analysis: ${response.statusText}`);
-						console.error(await response.json());
-						throw new Error(`Error starting keyword analysis: ${response.statusText}`);
-					}
-
-					const result = (await response.json()) as DataForSeo.Serp.Response;
+					const result = await dataForSeoRequest<DataForSeo.Serp.Response>(
+						"/v3/serp/google/organic/task_post",
+						{ method: "POST", body },
+					);
 
 					if (result.status_code !== 20000) {
 						throw new Error(`Error starting keyword analysis: ${result.status_message}`);
 					}
 
 					const taskRows: KeywordAnalysisTaskInput[] = [];
-					for (const task of result.tasks) {
+					for (const [index, task] of result.tasks.entries()) {
+						const request = body.find((item) => item.keyword === task.data?.keyword) ?? body[index];
 						taskRows.push({
+							keyword: request?.keyword ?? task.data?.keyword ?? "",
+							request: JSON.stringify(request ? getRetryRequest(request, analysisId) : {}),
 							id: task.id,
 							analysisId: analysisId,
 							status: task.status_code === 20100 ? "pending" : "failed",
@@ -598,9 +622,6 @@ export namespace KeywordsService {
 
 						if (task.status_code === 20100) {
 							console.log(`🏗️  Task ${task.id} started successfully.`);
-							if (!env.DATA_FOR_SEO_SERP_POSTBACK_URL) {
-								taskIdsToPoll.push(task.id);
-							}
 						} else {
 							console.error(
 								`⚠️ Task ${task.id} failed with status code ${task.status_code}: ${task.status_message}`,
@@ -639,10 +660,6 @@ export namespace KeywordsService {
 			throw error;
 		}
 
-		for (const taskId of taskIdsToPoll) {
-			setTimeout(() => pollKeywordAnalysisTask({ analysisId, taskId }), 1000);
-		}
-
 		await checkAnalysisCompletionAndTriggerNext({ analysisId });
 
 		return "ok";
@@ -666,60 +683,43 @@ export namespace KeywordsService {
 	}
 
 	/**
-	 * Poll a keyword analysis task until it's completed.
-	 * @param taskId - The ID of the task.
+	 * Fetch the result of a keyword analysis task once and save it. A task that is not ready yet,
+	 * or whose fetch failed, stays pending for the next tasks_ready pass.
+	 * @param taskId - The provider ID of the task.
 	 */
-	export async function pollKeywordAnalysisTask({
+	export async function collectKeywordAnalysisTask({
 		analysisId,
 		taskId,
-		retries = Infinity,
 		signal,
 	}: {
 		analysisId: string;
 		taskId: string;
-		retries?: number;
 		signal?: AbortSignal;
 	}) {
-		const url = `https://api.dataforseo.com/v3/serp/google/organic/task_get/regular/${taskId}`;
+		if (signal?.aborted || !(await isAnalysisPending(analysisId))) return;
+		const storedTask = await getAnalysisTaskPersistence({ analysisId, taskId });
+		if (!storedTask || storedTask.status !== "pending" || storedTask.retryAt > 0 || storedTask.activeTaskId !== taskId) return;
+
 		let result: DataForSeo.Serp.Response;
-
-		let tries = 0;
-
-		do {
-			if (signal?.aborted) return;
-			if (tries >= retries) {
-				console.error(`Max retries reached for task ${taskId}`);
-				return;
-			}
-			tries++;
-
-			if (!(await waitForDelay(1_000, signal))) return;
-			const response = await fetch(url, {
-				method: "GET",
-				headers: {
-					Authorization: `Basic ${btoa(`${env.DATA_FOR_SEO_LOGIN}:${env.DATA_FOR_SEO_PASSWORD}`)}`,
-					"Content-Type": "application/json",
-				},
-				signal,
-			});
-
-			if (!response.ok) {
-				console.error(`Error polling keyword analysis task: ${response.statusText}`);
-				console.error(await response.json());
-				return;
-			}
-
-			result = await response.json();
-		} while (result.tasks[0]?.status_code == 40601 || result.tasks[0]?.status_code == 40602);
-
-		const task = result.tasks.find((item) => item.id === taskId);
-		if (!task) {
-			const error = `DataForSEO response did not contain task ${taskId}: ${result.status_message}`;
-			console.error(error);
-			await recordTaskResult({ analysisId, taskId, status: "failed", error });
-			await checkAnalysisCompletionAndTriggerNext({ analysisId });
+		try {
+			result = await dataForSeoRequest<DataForSeo.Serp.Response>(
+				`/v3/serp/google/organic/task_get/regular/${taskId}`,
+				{ signal },
+			);
+		} catch (error) {
+			if (!signal?.aborted) console.error(`Error fetching keyword analysis task ${taskId}: ${error}`);
 			return;
 		}
+
+		const task = result.tasks?.find((item) => item.id === taskId);
+		if (!task) {
+			// Malformed or rate-limited response: not a terminal result for this keyword, the
+			// next tasks_ready or retry pass fetches it again using the same provider ID.
+			console.error(`DataForSEO response did not contain task ${taskId}: ${result.status_message}`);
+			return;
+		}
+		// 40601 Task Handed / 40602 Task In Queue: not finished yet.
+		if (task.status_code === 40601 || task.status_code === 40602) return;
 
 		// Got the result, save it in database
 		if (!signal?.aborted) {
@@ -739,13 +739,16 @@ export namespace KeywordsService {
 		analysisId: string;
 		result: DataForSeo.Serp.Response;
 	}) {
+		if (!(await isAnalysisPending(analysisId))) return;
 		await Promise.all(
 			result.tasks.map(async (task) => {
-				const lockId = `${analysisId}:${task.id}`;
+				const stored = await getAnalysisTaskPersistence({ analysisId, taskId: task.id });
+				if (!stored) return; // A late callback for a superseded attempt.
+				const lockId = `${analysisId}:${stored.id}`;
 				const previousSave = taskSaveLocks.get(lockId) ?? Promise.resolve();
 				const currentSave = previousSave
 					.catch(() => undefined)
-					.then(() => saveKeywordAnalysisTask({ analysisId, task }));
+					.then(() => saveKeywordAnalysisTask({ analysisId, task, response: result }));
 
 				taskSaveLocks.set(lockId, currentSave);
 				try {
@@ -764,35 +767,56 @@ export namespace KeywordsService {
 	async function saveKeywordAnalysisTask({
 		analysisId,
 		task,
+		response,
 	}: {
 		analysisId: string;
 		task: DataForSeo.Serp.Task;
+		response: DataForSeo.Serp.Response;
 	}): Promise<void> {
+		if (!(await isAnalysisPending(analysisId))) return;
 		const storedTask = await getAnalysisTaskPersistence({ analysisId, taskId: task.id });
-		if (!storedTask) {
-			throw new Error(`Task ${task.id} does not belong to analysis ${analysisId}`);
-		}
-		if (storedTask.status !== "pending") return;
+		if (!storedTask || storedTask.status !== "pending" || storedTask.retryAt > 0 || storedTask.activeTaskId !== task.id) return;
+		const logicalTaskId = storedTask.id;
 
-		if (task.status_code !== 20000 || task.result == null) {
-			const error =
-				task.status_code !== 20000
-					? `${task.status_code}: ${task.status_message}`
-					: "Task completed without result data";
-			console.warn(`Cannot save result for task ${task.id}: ${error}`);
-			if (storedTask.persistedItems > 0) {
-				await deletePersistedTaskItems({ analysisId, taskId: task.id });
+		const error = getKeywordTaskFailure(task);
+		if (error) {
+			// Tasks created before the retry migration have no stored keyword yet.
+			if (!storedTask.keyword && task.data?.keyword) {
+				await updateTaskRetry(analysisId, logicalTaskId, {
+					keyword: task.data.keyword, request: JSON.stringify(getRetryRequest(task.data, analysisId)),
+					retryCount: storedTask.retryCount, providerTaskId: storedTask.retryCount === 0 ? "" : task.id,
+					retryAt: 0, error,
+				});
 			}
-			await recordTaskResult({ analysisId, taskId: task.id, status: "failed", error });
+			const metadata = await getAnalysisMetadata({ analysisId }).catch((metadataError) => {
+				console.error("[keyword-analysis-failure-metadata]", { analysisId, taskId: task.id, metadataError });
+				return null;
+			});
+			console.error("[keyword-analysis-task-rejected]", JSON.stringify(getAnalysisFailureLog({
+				analysisId, projectId: metadata?.projectId, setId: metadata?.setId, task, response,
+			})));
+			if (shouldRetryKeyword(task.status_code, storedTask.retryCount)) {
+				await updateTaskRetry(analysisId, logicalTaskId, {
+					keyword: storedTask.keyword || task.data.keyword,
+					request: storedTask.request || JSON.stringify(getRetryRequest(task.data, analysisId)),
+					retryCount: storedTask.retryCount,
+					providerTaskId: storedTask.retryCount === 0 ? "" : task.id,
+					retryAt: Date.now() + KEYWORD_RETRY_DELAY_MS,
+					error,
+				});
+				return;
+			}
+			await recordTaskResult({ analysisId, taskId: logicalTaskId, status: "failed", error });
+			await checkAnalysisCompletionAndTriggerNext({ analysisId });
 			return;
 		}
 
 		const values: KeywordAnalysisResponseInput[] = [];
-		for (const { keyword, items } of task.result) {
+		for (const { keyword, items } of task.result!) {
 			for (const item of items) {
 				values.push({
 					analysisId,
-					taskId: task.id,
+					taskId: logicalTaskId,
 					keyword,
 					position: item.rank_group,
 					domain: item.domain,
@@ -810,7 +834,7 @@ export namespace KeywordsService {
 		// A previous interrupted attempt may have left only part of the task in the
 		// response table. Replace that partial block before retrying the full result.
 		if (persistedItems !== 0 && persistedItems !== values.length) {
-			await deletePersistedTaskItems({ analysisId, taskId: task.id });
+			await deletePersistedTaskItems({ analysisId, taskId: logicalTaskId });
 			persistedItems = 0;
 		}
 
@@ -822,7 +846,7 @@ export namespace KeywordsService {
 			});
 		}
 
-		const savedItems = await getPersistedTaskItemsCount({ analysisId, taskId: task.id });
+		const savedItems = await getPersistedTaskItemsCount({ analysisId, taskId: logicalTaskId });
 		if (savedItems !== values.length) {
 			throw new Error(
 				`Saved ${savedItems}/${values.length} items for task ${task.id}; task remains pending for retry`,
@@ -831,7 +855,7 @@ export namespace KeywordsService {
 
 		await recordTaskResult({
 			analysisId,
-			taskId: task.id,
+			taskId: logicalTaskId,
 			status: "completed",
 			itemCount: savedItems,
 		});
@@ -845,40 +869,137 @@ export namespace KeywordsService {
 		analysisId: string;
 		taskId: string;
 	}): Promise<
-		(Pick<ClickhouseTable.KeywordAnalysisTask, "status"> & { persistedItems: number }) | null
+		(Required<Pick<ClickhouseTable.KeywordAnalysisTask, "id" | "status" | "keyword" | "request" | "retryCount" | "retryAt">> & { activeTaskId: string; persistedItems: number }) | null
 	> {
 		const clickhouse = getClickhouseClient();
 		const response = await clickhouse.query({
 			query: `
 				SELECT
+					tasks.id AS id, tasks.keyword AS keyword, tasks.request AS request,
+					tasks.retryCount AS retryCount, tasks.retryAt AS retryAt,
+					if(tasks.retryCount = 0, toString(tasks.id), tasks.providerTaskId) AS activeTaskId,
 					if(empty(results.status), tasks.status, results.status) AS status,
 					(
 						SELECT uniqExact(tuple(keyword, position, domain, url, type, title, description))
 						FROM keywordAnalysisResponses
-						WHERE analysisId = {analysisIdString:String} AND taskId = {taskId:UUID}
+						WHERE analysisId = {analysisIdString:String} AND taskId IN (
+							SELECT id FROM keywordAnalysisTasks WHERE analysisId = {analysisId:UUID}
+							AND (id = {taskId:UUID} OR providerTaskId = {taskId:String})
+						)
 					) AS persistedItems
 				FROM keywordAnalysisTasks AS tasks
 				LEFT JOIN
 				(
 					SELECT analysisId, taskId, status
 					FROM keywordAnalysisTaskResults FINAL
-					WHERE analysisId = {analysisId:UUID} AND taskId = {taskId:UUID}
+					WHERE analysisId = {analysisId:UUID}
 				) AS results
 					ON results.analysisId = tasks.analysisId AND results.taskId = tasks.id
-				WHERE tasks.analysisId = {analysisId:UUID} AND tasks.id = {taskId:UUID}
+				WHERE tasks.analysisId = {analysisId:UUID} AND (tasks.id = {taskId:UUID} OR tasks.providerTaskId = {taskId:String})
 				LIMIT 1
 			`,
 			query_params: { analysisId, analysisIdString: analysisId, taskId },
 			format: "JSON",
 		});
 		const result = await response.json<{
+			id: string; keyword: string; request: string; retryCount: number; retryAt: string; activeTaskId: string;
 			status: ClickhouseTable.KeywordAnalysisTask["status"];
 			persistedItems: string;
 		}>();
 		const data = result.data[0];
 		return data
-			? { status: data.status, persistedItems: Number.parseInt(data.persistedItems, 10) }
+			? { ...data, retryAt: Number(data.retryAt), persistedItems: Number.parseInt(data.persistedItems, 10) }
 			: null;
+	}
+
+	async function updateTaskRetry(
+		analysisId: string,
+		taskId: string,
+		state: { keyword: string; request: string; retryCount: number; providerTaskId: string; retryAt: number; error: string },
+	) {
+		await getClickhouseClient().command({
+			query: `ALTER TABLE keywordAnalysisTasks UPDATE
+				keyword = {keyword:String}, request = {request:String}, retryCount = {retryCount:UInt8},
+				providerTaskId = {providerTaskId:String}, retryAt = {retryAt:UInt64}, error = {error:String}
+				WHERE analysisId = {analysisId:UUID} AND id = {taskId:UUID}`,
+			query_params: { analysisId, taskId, ...state },
+			clickhouse_settings: { mutations_sync: "1" },
+		});
+	}
+
+	/** Durable retry reservations consume a slot even if the process dies during submission. */
+	async function retryKeywordTask(analysisId: string, taskId: string, signal?: AbortSignal) {
+		const lockId = `${analysisId}:${taskId}`;
+		const previous = taskSaveLocks.get(lockId) ?? Promise.resolve();
+		const current = previous.catch(() => undefined).then(async () => {
+			if (signal?.aborted || !(await isAnalysisPending(analysisId))) return;
+			const task = await getAnalysisTaskPersistence({ analysisId, taskId });
+			if (!task || task.status !== "pending" || !task.retryAt || task.retryAt > Date.now()) return;
+			if (task.retryCount >= MAX_KEYWORD_RETRIES) {
+				await recordTaskResult({ analysisId, taskId, status: "failed", error: "Keyword retry submission could not be confirmed" });
+				return;
+			}
+			const state = {
+				keyword: task.keyword, request: task.request, retryCount: task.retryCount + 1,
+				providerTaskId: "", retryAt: Date.now() + RETRY_SUBMISSION_TIMEOUT_MS + KEYWORD_RETRY_DELAY_MS,
+				error: "Keyword retry submission could not be confirmed",
+			};
+			// Save before calling the provider: never submit an unbounded number of paid tasks.
+			await updateTaskRetry(analysisId, taskId, state);
+			try {
+				const request = JSON.parse(task.request);
+				if (!request.keyword) throw new Error("Missing keyword retry request");
+				const timeout = AbortSignal.timeout(RETRY_SUBMISSION_TIMEOUT_MS);
+				// Retries use the durable poller, without a postback registration race.
+				const result = await dataForSeoRequest<DataForSeo.Serp.Response>(
+					"/v3/serp/google/organic/task_post",
+					{ method: "POST", body: [request], signal: signal ? AbortSignal.any([signal, timeout]) : timeout },
+				);
+				const created = result.tasks?.[0];
+				if (result.status_code !== 20000 || result.tasks.length !== 1 || created?.status_code !== 20100 || !created.id) {
+					throw new Error(`Retry submission failed: ${created?.status_message ?? result.status_message}`);
+				}
+				await updateTaskRetry(analysisId, taskId, { ...state, providerTaskId: created.id, retryAt: 0, error: "" });
+				console.log("[keyword-analysis-retry]", { analysisId, taskId, providerTaskId: created.id, attempt: state.retryCount });
+			} catch (error) {
+				console.error("[keyword-analysis-retry-submission]", { analysisId, taskId, attempt: state.retryCount, error });
+				// The persisted reservation will be recovered on the next pass, including after a restart.
+			}
+		});
+		taskSaveLocks.set(lockId, current);
+		try { await current; } finally {
+			if (taskSaveLocks.get(lockId) === current) taskSaveLocks.delete(lockId);
+		}
+	}
+
+	/** Resume queued retries and poll known attempts even if tasks_ready no longer lists them. */
+	export function resumeKeywordRetries(analysisId: string, signal?: AbortSignal): Promise<void> {
+		const existing = retryRunLocks.get(analysisId);
+		if (existing) return existing;
+		const run = (async () => {
+			const response = await getClickhouseClient().query({
+				query: `SELECT tasks.id AS id, tasks.providerTaskId AS providerTaskId, tasks.retryAt AS retryAt
+					FROM keywordAnalysisTasks AS tasks
+					LEFT JOIN (SELECT taskId, status FROM keywordAnalysisTaskResults FINAL WHERE analysisId = {analysisId:UUID}) AS results
+					ON results.taskId = tasks.id
+					WHERE tasks.analysisId = {analysisId:UUID} AND (tasks.retryCount > 0 OR tasks.retryAt > 0)
+					AND if(empty(results.status), tasks.status, results.status) = 'pending'`,
+				query_params: { analysisId }, format: "JSON",
+			});
+			for (const task of (await response.json<{ id: string; providerTaskId: string; retryAt: string }>()).data) {
+				if (signal?.aborted) break;
+				try {
+					if (Number(task.retryAt) > 0) await retryKeywordTask(analysisId, task.id, signal);
+					else if (task.providerTaskId) await collectKeywordAnalysisTask({ analysisId, taskId: task.providerTaskId, signal });
+				} catch (error) {
+					console.error("[keyword-analysis-retry-recovery]", { analysisId, taskId: task.id, error });
+				}
+			}
+		})();
+		retryRunLocks.set(analysisId, run);
+		const clear = () => { if (retryRunLocks.get(analysisId) === run) retryRunLocks.delete(analysisId); };
+		void run.then(clear, clear);
+		return run;
 	}
 
 	async function getPersistedTaskItemsCount({
@@ -1000,10 +1121,12 @@ export namespace KeywordsService {
 			getKeywordsCount(analysisId),
 		]);
 
+		const { error, ...publicStats } = stats;
 		return {
 			analysisId,
-			...stats,
+			...publicStats,
 			keywordsCount,
+			...(stats.status === "failed" ? { failureReason: getAnalysisFailureReason(error) } : {}),
 		};
 	}
 
@@ -1018,13 +1141,22 @@ export namespace KeywordsService {
 						WHERE id = {analysisId:UUID}
 						LIMIT 1
 					) AS analysisStatus,
+					(
+						SELECT error FROM keywordAnalysis WHERE id = {analysisId:UUID} LIMIT 1
+					) AS analysisError,
+					groupUniqArrayIf(
+						if(empty(results.error), tasks.error, results.error),
+						if(empty(results.status), tasks.status, results.status) = 'failed'
+					) AS taskErrors,
+					groupUniqArrayIf(tasks.keyword, notEmpty(tasks.keyword) AND if(empty(results.status), tasks.status, results.status) = 'failed') AS failedKeywords,
+					countIf((tasks.retryAt > 0 OR tasks.retryCount > 0) AND if(empty(results.status), tasks.status, results.status) = 'pending') AS retryingTasks,
 					count(*) AS totalTasks,
 					countIf(if(empty(results.status), tasks.status, results.status) = 'completed') AS completedTasks,
 					countIf(if(empty(results.status), tasks.status, results.status) = 'failed') AS failedTasks
 				FROM keywordAnalysisTasks AS tasks
 				LEFT JOIN
 				(
-					SELECT analysisId, taskId, status
+					SELECT analysisId, taskId, status, error
 					FROM keywordAnalysisTaskResults FINAL
 					WHERE analysisId = {analysisId:UUID}
 				) AS results
@@ -1036,6 +1168,10 @@ export namespace KeywordsService {
 		});
 		const result = await response.json<{
 			analysisStatus: ClickhouseTable.KeywordAnalysis["status"];
+			analysisError: string;
+			taskErrors: string[];
+			failedKeywords: string[];
+			retryingTasks: string;
 			totalTasks: string;
 			completedTasks: string;
 			failedTasks: string;
@@ -1047,10 +1183,18 @@ export namespace KeywordsService {
 
 		return {
 			status: data.analysisStatus,
+			failedKeywords: data.failedKeywords.sort((a, b) => a.localeCompare(b)),
+			retryingTasks: Number(data.retryingTasks),
+			error: [...new Set([data.analysisError, ...data.taskErrors].filter(Boolean))].join("\n"),
 			totalTasks: Number.parseInt(data.totalTasks, 10),
 			completedTasks: Number.parseInt(data.completedTasks, 10),
 			failedTasks: Number.parseInt(data.failedTasks, 10),
 		};
+	}
+
+	async function getUsableAnalysisKeywords(analysisId: string, setId: string): Promise<Map<string, number>> {
+		const [keywords, stats] = await Promise.all([getKeywords({ setId }), getAnalysisTaskStats(analysisId)]);
+		return excludeFailedKeywords(keywords ?? new Map(), stats.failedKeywords);
 	}
 
 	/**
@@ -1107,6 +1251,7 @@ export namespace KeywordsService {
 				SELECT DISTINCT keyword, position, domain, type
 				FROM keywordAnalysisResponses
 				WHERE analysisId = {analysisId:String}
+				AND taskId NOT IN (SELECT taskId FROM keywordAnalysisTaskResults FINAL WHERE toString(analysisId) = {analysisId:String} AND status = 'failed')
 				${positionLimit ? "AND position <= {positionLimit:UInt32}" : ""}
 				${resultType ? "AND positionCaseInsensitive(type, {resultType:String}) > 0" : ""}
 				ORDER BY position ASC
@@ -1157,11 +1302,13 @@ export namespace KeywordsService {
 
 		const { setId, projectId, createdAt } = analysis;
 
-		const keywords = await getKeywords({ setId });
+		const keywords = await getUsableAnalysisKeywords(analysisId, setId);
 		if (!keywords?.size) return;
 
 		const [trendReference, data] = await Promise.all([
-			getTrendReferenceAggregatedAnalysis({ projectId, currentAnalysisAt: createdAt }),
+			(await getAnalysisTaskStats(analysisId)).failedTasks === 0
+				? getTrendReferenceAggregatedAnalysis({ projectId, currentAnalysisAt: createdAt })
+				: Promise.resolve(null),
 			getKeywordAnalysisResponses({
 				analysisId,
 				positionLimit: Math.min(positionLimit ?? 10, 10),
@@ -1264,7 +1411,7 @@ export namespace KeywordsService {
 		data: Array<ClickhouseTable.AggregatedKeywordAnalysisData>;
 	}> {
 		const analysisId = await getTrendReferenceAnalysisId({ projectId, currentAnalysisAt });
-		if (!analysisId) return null;
+		if (!analysisId || (await getAnalysisTaskStats(analysisId)).failedTasks > 0) return null;
 
 		const analysis = await getAnalysisMetadata({ analysisId });
 		if (!analysis) return null;
@@ -1292,14 +1439,16 @@ export namespace KeywordsService {
 		const analysis = await getAnalysisMetadata({ analysisId });
 		if (!analysis) return null;
 
+		const stats = await getAnalysisTaskStats(analysisId);
 		const currentSetId = (await getCurrentKeywordSet(projectId)) ?? analysis.setId;
 		const currentKeywords = await getKeywordDetails(currentSetId);
 		const keywordDetails = reclassifyKeywords(
-			(await getKeywordDetails(analysis.setId)).values(),
+			excludeFailedKeywords(await getKeywordDetails(analysis.setId), stats.failedKeywords).values(),
 			currentKeywords,
 		);
-		const keywords = await getKeywords({ setId: analysis.setId });
-		if (!keywords) return null;
+		const allKeywords = await getKeywords({ setId: analysis.setId });
+		if (!allKeywords) return null;
+		const keywords = excludeFailedKeywords(allKeywords, stats.failedKeywords);
 
 		const totalVolume = getTotalVolume(keywords);
 		const clusterSummaries = getReclassifiedClusterSummaries(
@@ -1318,18 +1467,19 @@ export namespace KeywordsService {
 						clusters: clusterSummaries,
 					})
 				: Promise.resolve([]),
-			getTrendReferenceAggregatedAnalysis({
+			stats.failedTasks === 0 ? getTrendReferenceAggregatedAnalysis({
 				projectId,
 				currentAnalysisAt: analysis.createdAt,
-			}),
+			}) : Promise.resolve(null),
 		]);
-		if (!storedData) return null;
+		// A successful crawl may legitimately contain no organic results.
+		const usableData = storedData ?? [];
 		const previousAnalysis = trendReference?.analysis;
 		const previousData = trendReference?.data;
 		const previousKeywords = previousAnalysis ? await getKeywords({ setId: previousAnalysis.setId }) : null;
-		const totalTraffic = storedData.reduce((total, item) => total + item.volume, 0);
+		const totalTraffic = usableData.reduce((total, item) => total + item.volume, 0);
 		const data = applyShareOfVoiceTrends(
-			storedData,
+			usableData,
 			totalTraffic,
 			trendReference?.data,
 			trendReference?.totalVolume ?? 0,
@@ -1338,15 +1488,17 @@ export namespace KeywordsService {
 		const project = await db.query.projects.findFirst({ where: eq(projects.id, projectId) });
 		const clientDomain = extractHost(project?.domain ?? "");
 		return {
+			failedKeywords: stats.failedKeywords,
+			requestedKeywordCount: allKeywords.size,
 			searchVolumeChange: previousKeywords ? getSearchVolumeChange(totalVolume, getTotalVolume(previousKeywords)) : undefined,
-			keywordCountChanges: previousData ? getKeywordCountChanges(storedData, previousData) : undefined,
+			keywordCountChanges: previousData ? getKeywordCountChanges(usableData, previousData) : undefined,
 			previousAnalysisAt: previousAnalysis?.createdAt,
 			trendDays: getTrendDays(analysis.createdAt, previousAnalysis?.createdAt),
 			keywordCount: keywords.size,
 			totalVolume,
 			totalTraffic,
 			clusters,
-			data: [...data.slice(0, 100), ...data.slice(100).filter((row) => row.domain === clientDomain)],
+			data: [...data.slice(0, 100), ...data.slice(100).filter((row) => extractHost(row.domain) === clientDomain)],
 		};
 	}
 
@@ -1439,7 +1591,7 @@ export namespace KeywordsService {
 			query: `
 				WITH selectedDomains AS
 				(
-					SELECT domain
+					SELECT replaceRegexpOne(domain, '^www[.]', '') AS host
 					FROM aggregatedKeywordAnalysisData
 					WHERE analysisId = {latestAnalysisId:UUID}
 					ORDER BY volume DESC
@@ -1454,14 +1606,14 @@ export namespace KeywordsService {
 				)
 				SELECT
 					analysis.createdAt AS createdAt,
-					aggregated.domain AS domain,
+					replaceRegexpOne(aggregated.domain, '^www[.]', '') AS domain,
 					aggregated.volume AS volume,
 					analysisTotals.totalVolume AS totalVolume
 				FROM aggregatedKeywordAnalysisData AS aggregated
 				INNER JOIN keywordAnalysis AS analysis ON analysis.id = aggregated.analysisId
 				INNER JOIN analysisTotals ON analysisTotals.analysisId = aggregated.analysisId
 				WHERE aggregated.analysisId IN {analysisIds:Array(UUID)}
-				${domain ? "AND aggregated.domain = {domain:String}" : "AND (aggregated.domain IN (SELECT domain FROM selectedDomains) OR aggregated.domain = {clientDomain:String})"}
+				${domain ? "AND replaceRegexpOne(aggregated.domain, '^www[.]', '') = {domain:String}" : "AND (replaceRegexpOne(aggregated.domain, '^www[.]', '') IN (SELECT host FROM selectedDomains) OR replaceRegexpOne(aggregated.domain, '^www[.]', '') = {clientDomain:String})"}
 				ORDER BY analysis.createdAt ASC, aggregated.domain ASC
 			`,
 			query_params: {
@@ -1492,6 +1644,8 @@ export namespace KeywordsService {
 			);
 		}
 
+		// Older analyses stored www. and bare hosts separately.
+		data = mergeWwwDomains(data, ["volume"], (row) => row.createdAt);
 		return domain ? data : ensureClientHistory(data, allAnalysis, clientDomain);
 	}
 
@@ -1514,7 +1668,7 @@ export namespace KeywordsService {
 							 topTenKeywordCount, positionnedKeywordCount, trend
 				FROM aggregatedKeywordAnalysisData
 				WHERE analysisId = {analysisId: UUID}
-				${domain ? `AND domain = {domain: String}` : ""}
+				${domain ? `AND replaceRegexpOne(domain, '^www[.]', '') = {domain: String}` : ""}
 				ORDER BY volume DESC
 				${limit ? "LIMIT {limit:UInt32}" : ""}
 			`,
@@ -1540,7 +1694,12 @@ export namespace KeywordsService {
 			);
 		}
 
-		return data.length ? data : null;
+		// Older analyses stored www. and bare hosts separately.
+		return data.length
+			? mergeWwwDomains(data, ["volume", "topThreeKeywordCount", "topTenKeywordCount", "positionnedKeywordCount"]).sort(
+					(a, b) => b.volume - a.volume,
+				)
+			: null;
 	}
 
 	/**
@@ -1558,7 +1717,7 @@ export namespace KeywordsService {
 		if (!analysis) return null;
 		const { setId } = analysis;
 
-		const keywords = await getKeywords({ setId });
+		const keywords = await getUsableAnalysisKeywords(analysisId, setId);
 		if (!keywords?.size) return null;
 		const currentSetId = (await getCurrentKeywordSet(projectId)) ?? setId;
 		const keywordDetails = reclassifyKeywords(
@@ -1578,6 +1737,7 @@ export namespace KeywordsService {
 				SELECT DISTINCT keyword, domain, url, position, type
 				FROM keywordAnalysisResponses
 				WHERE analysisId = {analysisId: String}
+					AND taskId NOT IN (SELECT taskId FROM keywordAnalysisTaskResults FINAL WHERE toString(analysisId) = {analysisId:String} AND status = 'failed')
 					AND positionCaseInsensitive(type, 'organic') > 0
 				ORDER BY position ASC
 			`,
@@ -1796,7 +1956,7 @@ export namespace KeywordsService {
 	}
 
 	/**
-	 * Fail analyses that never received every task result. This is a final safety
+	 * Finalize analyses that never received every task result, keeping successes. This is a safety
 	 * net for lost provider callbacks, exhausted polling retries, or process exits.
 	 */
 	export async function failStaleKeywordAnalyses(): Promise<void> {
@@ -1815,20 +1975,40 @@ export namespace KeywordsService {
 		const analysisIds = result.data.map(({ id }) => id);
 		if (analysisIds.length === 0) return;
 
-		await clickhouse.command({
-			query: `
-				ALTER TABLE keywordAnalysis
-				UPDATE status = 'failed', error = 'Analysis timed out while waiting for task results'
-				WHERE id IN {analysisIds:Array(UUID)}
-			`,
-			query_params: { analysisIds },
-			clickhouse_settings: { mutations_sync: "1" },
-		});
-		console.warn(`Marked ${analysisIds.length} stale keyword analyses as failed`);
+		for (const analysisId of analysisIds) {
+			const pending = await clickhouse.query({
+				query: `SELECT tasks.id AS id FROM keywordAnalysisTasks AS tasks
+					LEFT JOIN (SELECT taskId, status FROM keywordAnalysisTaskResults FINAL WHERE analysisId = {analysisId:UUID}) AS results
+					ON results.taskId = tasks.id
+					WHERE tasks.analysisId = {analysisId:UUID}
+					AND if(empty(results.status), tasks.status, results.status) = 'pending'`,
+				query_params: { analysisId }, format: "JSON",
+			});
+			for (const { id: taskId } of (await pending.json<{ id: string }>()).data) {
+				const lockId = `${analysisId}:${taskId}`;
+				const previous = taskSaveLocks.get(lockId) ?? Promise.resolve();
+				const current = previous.catch(() => undefined).then(async () => {
+					const task = await getAnalysisTaskPersistence({ analysisId, taskId });
+					if (task?.status === "pending") {
+						await recordTaskResult({ analysisId, taskId, status: "failed", error: "Task timed out while waiting for results" });
+					}
+				});
+				taskSaveLocks.set(lockId, current);
+				try { await current; } finally {
+					if (taskSaveLocks.get(lockId) === current) taskSaveLocks.delete(lockId);
+				}
+			}
+			await checkAnalysisCompletionAndTriggerNext({ analysisId });
+			// Missing task registrations cannot yield a trustworthy keyword population.
+			if (await isAnalysisPending(analysisId)) {
+				await updateAnalysisState({ analysisId, status: "failed", error: "Analysis timed out with missing task registrations" });
+			}
+		}
+		console.warn(`Finalized ${analysisIds.length} stale keyword analyses`);
 	}
 
 	/** Recover completion work that may have been interrupted by a process restart. */
-	export async function reconcilePendingKeywordAnalyses(): Promise<void> {
+	export async function reconcilePendingKeywordAnalyses(signal?: AbortSignal): Promise<void> {
 		const clickhouse = getClickhouseClient();
 		const response = await clickhouse.query({
 			query: `SELECT id FROM keywordAnalysis WHERE status = 'pending'`,
@@ -1837,6 +2017,10 @@ export namespace KeywordsService {
 		const result = await response.json<Pick<ClickhouseTable.KeywordAnalysis, "id">>();
 
 		for (const { id: analysisId } of result.data) {
+			if (signal?.aborted) break;
+			await resumeKeywordRetries(analysisId, signal).catch((error) => {
+				console.error(`Error resuming retries for analysis ${analysisId}: ${error}`);
+			});
 			await checkAnalysisCompletionAndTriggerNext({ analysisId }).catch((error) => {
 				console.error(`Error reconciling pending analysis ${analysisId}: ${error}`);
 			});
@@ -1850,52 +2034,48 @@ export namespace KeywordsService {
 		if (signal?.aborted) return;
 		console.log("⏰ Fetching tasks ready");
 
-		const url = `https://api.dataforseo.com/v3/serp/google/organic/tasks_ready`;
-
 		try {
-			const response = await fetch(url, {
-				method: "GET",
-				headers: {
-					Authorization: `Basic ${btoa(`${env.DATA_FOR_SEO_LOGIN}:${env.DATA_FOR_SEO_PASSWORD}`)}`,
-					"Content-Type": "application/json",
-				},
-				signal,
-			});
-
-			if (!response.ok) {
-				console.error(`Error starting keyword analysis: ${response.statusText}`);
-				console.error(await response.json());
-				throw new Error(`Error starting keyword analysis: ${response.statusText}`);
-			}
-
-			const result = (await response.json()) as DataForSeo.Serp.TaskReadyResponse;
+			const result = await dataForSeoRequest<DataForSeo.Serp.TaskReadyResponse>(
+				"/v3/serp/google/organic/tasks_ready",
+				{ signal },
+			);
 			if (result.status_code !== 20000) {
 				throw new Error(`Error fetching tasks ready: ${result.status_message}`);
 			}
 
-			for (const task of getReadySerpTasks(result)) {
-				if (signal?.aborted) break;
+			// With the postback configured, only tasks whose delivery failed are listed here, so a
+			// steady non-zero count means callbacks are timing out or being rejected.
+			const readyTasks = getReadySerpTasks(result);
+			console.log("[dataforseo-tasks-ready]", { count: readyTasks.length });
+
+			const collect = async (task: (typeof readyTasks)[number]) => {
 				const analysisId = await getAnalysisIdFromTaskId({ taskId: task.id });
 				if (!analysisId) {
 					console.warn(`No analysis ID found for task ${task.id}`);
-					continue;
+					return;
 				}
-				await pollKeywordAnalysisTask({
-					analysisId,
-					taskId: task.id,
-					retries: 1,
-					signal,
-				});
+				await collectKeywordAnalysisTask({ analysisId, taskId: task.id, signal });
+			};
+			for (let offset = 0; offset < readyTasks.length; offset += READY_TASK_PARALLELISM) {
+				if (signal?.aborted) break;
+				// One task that cannot be saved must not keep the others from being collected.
+				const batch = readyTasks.slice(offset, offset + READY_TASK_PARALLELISM);
+				const results = await Promise.allSettled(batch.map(collect));
+				for (const [index, outcome] of results.entries()) {
+					if (outcome.status === "rejected" && !signal?.aborted) {
+						console.error(`Error collecting ready task ${batch[index]!.id}: ${outcome.reason}`);
+					}
+				}
 			}
 		} catch (error) {
 			if (!signal?.aborted) console.error(`Error fetching tasks ready: ${error}`);
 		} finally {
 			if (!signal?.aborted) {
-				await reconcilePendingKeywordAnalyses().catch((error) => {
-					console.error(`Error reconciling pending keyword analyses: ${error}`);
-				});
 				await failStaleKeywordAnalyses().catch((error) => {
 					console.error(`Error failing stale keyword analyses: ${error}`);
+				});
+				await reconcilePendingKeywordAnalyses(signal).catch((error) => {
+					console.error(`Error reconciling pending keyword analyses: ${error}`);
 				});
 			}
 		}
@@ -1911,7 +2091,7 @@ export namespace KeywordsService {
 	}): Promise<string | null> {
 		const clickhouse = getClickhouseClient();
 		const response = await clickhouse.query({
-			query: `SELECT analysisId FROM keywordAnalysisTasks WHERE id = {taskId:UUID} LIMIT 1`,
+			query: `SELECT analysisId FROM keywordAnalysisTasks WHERE id = {taskId:UUID} OR providerTaskId = {taskId:String} LIMIT 1`,
 			query_params: { taskId },
 			format: "JSON",
 		});

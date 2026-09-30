@@ -2,6 +2,7 @@
 	import Trend from "$lib/components/Trend.svelte";
 	import * as Chart from "$lib/components/ui/chart/index.js";
 	import { chartColors } from "$lib/charts/chartColors";
+	import { findDomainRow } from "$lib/keywords/findDomainRow";
 	import { defineContent } from "$lib/i18n/locale.svelte";
 	import { formatPercent } from "$lib/numbers/formatPercent";
 	import type { ClickhouseTable } from "$lib/server/clickhouse/migrations";
@@ -63,7 +64,7 @@
 		const pieChartConfig: Chart.ChartConfig = {};
 
 		for (const domain of visibleDomains) {
-			const domainData = data.find((item) => item.domain === domain);
+			const domainData = findDomainRow(data, domain);
 			const volumePercent = domainData
 				? (domainData.volume / (totalTraffic || 1)) * 100
 				: 0;

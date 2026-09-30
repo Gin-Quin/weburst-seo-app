@@ -2,6 +2,7 @@
 	import Loader from "$lib/components/Loader.svelte";
 	import { defineContent } from "$lib/i18n/locale.svelte";
 	import { getDefaultVisibleDomains } from "$lib/keywords/getDefaultVisibleDomains";
+	import { findDomainRow } from "$lib/keywords/findDomainRow";
 	import { extractHost } from "$lib/keywords/serpAnalytics";
 	import type { AggregatedKeywordAnalysisData } from "$lib/server/clickhouse/services/keywords";
 	import { context } from "$lib/stores/context.svelte";
@@ -11,15 +12,18 @@
 	import SectionLeaders from "./SectionLeaders.svelte";
 	import SectionPotential from "./SectionPotential.svelte";
 	import SectionShareOfVoice from "./SectionShareOfVoice.svelte";
+	import FailedKeywordsNotice from "./FailedKeywordsNotice.svelte";
 
 	const content = defineContent({
 		en: {
+			loadFailed: "Unable to load analysis results. Please try again later.",
 			startAnalysis: "Start new Analysis",
 			confirmStartAnalysis: "Do you want to start a new analysis?",
 			noAnalysisResults:
 				"No data available. Add keywords and start an analysis.",
 		},
 		fr: {
+			loadFailed: "Impossible de charger les résultats de l’analyse. Veuillez réessayer ultérieurement.",
 			startAnalysis: "Lancer une analyse",
 			confirmStartAnalysis: "Voulez-vous lancer une nouvelle analyse&nbsp;?",
 			noAnalysisResults:
@@ -38,15 +42,19 @@
 			{$content.noAnalysisResults}
 		</div>
 	{:else}
+		<FailedKeywordsNotice
+			keywords={analysisResultsWithTrend.failedKeywords}
+			completedCount={analysisResultsWithTrend.keywordCount}
+			totalCount={analysisResultsWithTrend.requestedKeywordCount}
+		/>
+		{@const clientRow = findDomainRow(analysisResultsWithTrend.data, projectDomain)}
 		{@const visibleDomains = new SvelteSet(
 			getDefaultVisibleDomains(
 				analysisResultsWithTrend.data.map(({ domain }) => domain),
-				projectDomain,
+				clientRow?.domain ?? projectDomain,
 			),
 		)}
-		{@const client: AggregatedKeywordAnalysisData = analysisResultsWithTrend.data.find(
-			(item) => item.domain === projectDomain,
-		) ?? {
+		{@const client: AggregatedKeywordAnalysisData = clientRow ?? {
 			domain: projectDomain,
 			topThreeKeywordCount: 0,
 			topTenKeywordCount: 0,
@@ -77,7 +85,7 @@
 	{/if}
 {:catch error}
 	<div class="text-error bold">
-		{String(error)}
+		{$content.loadFailed}
 	</div>
 {/await}
 
@@ -90,6 +98,10 @@
 
 	.DashboardGridPrimary {
 		grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+	}
+
+	.DashboardGridPrimary:has(:global(.ClusterChart)) {
+		min-height: 32rem;
 	}
 
 	.DashboardGridSecondary {
@@ -108,6 +120,11 @@
 
 		.DashboardGridPrimary > :global(.card) {
 			height: 32rem;
+		}
+
+		.DashboardGridPrimary > :global(.ShareOfVoiceCard) {
+			height: auto;
+			min-height: 32rem;
 		}
 
 		.DashboardGridSecondary > :global(.card:last-child) {

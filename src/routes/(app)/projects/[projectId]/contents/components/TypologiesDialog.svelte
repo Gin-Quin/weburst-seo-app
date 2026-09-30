@@ -23,6 +23,7 @@
 		try {
 			const saved = await saveTypology({ projectId, id: id || undefined, name, instructions });
 			id = saved.id;
+			dialog.close();
 			toast.success("Typologie enregistrée pour ce client.");
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : "Enregistrement impossible.");

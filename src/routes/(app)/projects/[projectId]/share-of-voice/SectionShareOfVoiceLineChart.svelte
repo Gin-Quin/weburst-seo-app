@@ -32,7 +32,9 @@
 		selectedClusterName?: string;
 	} = $props();
 
-	const content = defineContent({ en: { clusters: "Filter clusters", all: "All clusters", empty: "No analysis available." }, fr: { clusters: "Filtrer les clusters", all: "Tous les clusters", empty: "Aucune analyse disponible." } });
+	const content = defineContent({ en: {
+			loadFailed: "Unable to load analysis results. Please try again later.", clusters: "Filter clusters", all: "All clusters", empty: "No analysis available." }, fr: {
+			loadFailed: "Impossible de charger les résultats de l’analyse. Veuillez réessayer ultérieurement.", clusters: "Filtrer les clusters", all: "Tous les clusters", empty: "Aucune analyse disponible." } });
 	const query = $derived(getAllAggregatedAnalysisResults({
 		projectId: context.project!.id,
 		...(selectedClusterName ? { clusterNames: [selectedClusterName] } : {}),
@@ -143,6 +145,6 @@
 			</Chart.Container>
 		{/if}
 	{:catch error}
-		<p class="text-error">{String(error)}</p>
+		<p class="text-error">{$content.loadFailed}</p>
 	{/await}
 </div>
