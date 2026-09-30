@@ -44,6 +44,15 @@
 		groupSimilarityResultsByCluster(clusters, clusterNames),
 	);
 
+	function shortUrl(url: string): string {
+		try {
+			const { pathname, hostname } = new URL(url);
+			return pathname.split("/").filter(Boolean).pop() ?? hostname;
+		} catch {
+			return url;
+		}
+	}
+
 	function getClusterColor(clusterName: string): string {
 		const index = clusterNames.indexOf(clusterName);
 		return getChartColor(Math.max(0, index));
@@ -58,6 +67,33 @@
 	>
 		<span class="ClusterChipLabel">{clusterName}</span>
 	</span>
+{/snippet}
+
+{#snippet urlLink(url: string, className: string)}
+	<Tooltip.Root delayDuration={0}>
+		<Tooltip.Trigger>
+			{#snippet child({ props })}
+				<a
+					{...props}
+					class="link block max-w-full truncate {className}"
+					href={url}
+					target="_blank"
+					rel="noopener noreferrer"
+				>
+					{shortUrl(url)}
+				</a>
+			{/snippet}
+		</Tooltip.Trigger>
+		<Tooltip.Portal>
+			<Tooltip.Content
+				sideOffset={6}
+				collisionPadding={8}
+				class="z-50 max-w-[480px] break-all rounded-[8px] border border-border bg-base-100 p-2 text-[13px] shadow-lg"
+			>
+				{url}
+			</Tooltip.Content>
+		</Tooltip.Portal>
+	</Tooltip.Root>
 {/snippet}
 
 {#snippet secondaryKeywordsTooltip(cluster: KeywordCluster)}
@@ -182,23 +218,14 @@
 										? "max-w-[500px] whitespace-normal py-3 text-center text-[13px]"
 										: "max-w-[500px] py-3 text-center text-[13px]"}
 								>
-									<div class="col items-center gap-1">
+									<div class="col w-full items-center gap-1">
 										{#if items.length < 2}
 											<div class="center text-[#777] w-full">-</div>
 										{:else}
 											{#each items as item}
-												<div class="center text-center gap-1">
-													<a
-														class={showClusterColumn
-															? "link break-all text-warning"
-															: "link text-warning"}
-														href={item.url}
-														target="_blank"
-														rel="noopener noreferrer"
-													>
-														{item.url}
-													</a>
-												</div>
+												<div class="center w-full min-w-0">
+														{@render urlLink(item.url, "text-warning")}
+													</div>
 											{/each}
 										{/if}
 									</div>
@@ -208,23 +235,14 @@
 										? "whitespace-normal text-center text-[13px]"
 										: "text-center text-[13px]"}
 								>
-									<div class="col items-center gap-1">
+									<div class="col w-full items-center gap-1">
 										{#if items.length == 0}
 											<div class="center text-[#777] w-full">-</div>
 										{:else}
 											{#each items as item}
-												<div class="center text-center gap-1">
-													<a
-														class={showClusterColumn
-															? "link break-all"
-															: "link"}
-														href={item.url}
-														target="_blank"
-														rel="noopener noreferrer"
-													>
-														{item.url}
-													</a>
-												</div>
+												<div class="center w-full min-w-0">
+														{@render urlLink(item.url, "")}
+													</div>
 											{/each}
 										{/if}
 									</div>
